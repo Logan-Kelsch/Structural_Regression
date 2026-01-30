@@ -30,7 +30,7 @@ the data modeling function to adjust the probabilities of structural development
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 For stock market data, we also will need to come up with a more robust method for solution representation other than halfkelly.
-examples: maybe stdvs going out, stdevs of moving averages, some kind of stdev exponential mass??, maybe a volume target instead?
+examples: maybe stdvs going out, stdevs of moving averages, some kind of stdev exponential mass??, maybe a volume target instead? p value of >0 of results?
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 We also need to come up with other candidate methods of model interpretation, other than exact evaluation.

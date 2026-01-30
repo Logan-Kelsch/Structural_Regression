@@ -288,39 +288,218 @@ def _DOE_out(x, af, aslow, out):
 # (copy current window into a scratch and np.partition -> fast for small/medium windows)
 # ---------------------------
 
-@njit(parallel=True)
-def _MDN_core(src, wins, mc, dst):
+# ------ Some heap helpers -------
+
+@njit(inline='always')
+def _key(v):
+    # Mimic NumPy's tendency to push NaNs to the end in ordering-like ops:
+    # treat NaN as +inf so they behave as "largest".
+    return np.inf if np.isnan(v) else v
+
+@njit(inline='always')
+def _swap(vals, idxs, a, b):
+    tv = vals[a]; vals[a] = vals[b]; vals[b] = tv
+    ti = idxs[a]; idxs[a] = idxs[b]; idxs[b] = ti
+
+@njit(inline='always')
+def _push_min(vals, idxs, size, v, i):
+    # min-heap by _key(value)
+    vals[size] = v
+    idxs[size] = i
+    k = size
+    size += 1
+    while k > 0:
+        p = (k - 1) // 2
+        if _key(vals[p]) <= _key(vals[k]):
+            break
+        _swap(vals, idxs, p, k)
+        k = p
+    return size
+
+@njit(inline='always')
+def _push_max(vals, idxs, size, v, i):
+    # max-heap by _key(value)
+    vals[size] = v
+    idxs[size] = i
+    k = size
+    size += 1
+    while k > 0:
+        p = (k - 1) // 2
+        if _key(vals[p]) >= _key(vals[k]):
+            break
+        _swap(vals, idxs, p, k)
+        k = p
+    return size
+
+@njit(inline='always')
+def _pop_min(vals, idxs, size):
+    # returns (v, i, new_size)
+    v0 = vals[0]
+    i0 = idxs[0]
+    size -= 1
+    if size > 0:
+        vals[0] = vals[size]
+        idxs[0] = idxs[size]
+        k = 0
+        while True:
+            l = 2 * k + 1
+            if l >= size:
+                break
+            r = l + 1
+            c = l
+            if r < size and _key(vals[r]) < _key(vals[l]):
+                c = r
+            if _key(vals[k]) <= _key(vals[c]):
+                break
+            _swap(vals, idxs, k, c)
+            k = c
+    return v0, i0, size
+
+@njit(inline='always')
+def _pop_max(vals, idxs, size):
+    # returns (v, i, new_size)
+    v0 = vals[0]
+    i0 = idxs[0]
+    size -= 1
+    if size > 0:
+        vals[0] = vals[size]
+        idxs[0] = idxs[size]
+        k = 0
+        while True:
+            l = 2 * k + 1
+            if l >= size:
+                break
+            r = l + 1
+            c = l
+            if r < size and _key(vals[r]) > _key(vals[l]):
+                c = r
+            if _key(vals[k]) >= _key(vals[c]):
+                break
+            _swap(vals, idxs, k, c)
+            k = c
+    return v0, i0, size
+
+@njit(inline='always')
+def _prune_heap_min(vals, idxs, size, start):
+    # lazily remove expired indices (idx < start)
+    while size > 0 and idxs[0] < start:
+        _, _, size = _pop_min(vals, idxs, size)
+    return size
+
+@njit(inline='always')
+def _prune_heap_max(vals, idxs, size, start):
+    while size > 0 and idxs[0] < start:
+        _, _, size = _pop_max(vals, idxs, size)
+    return size
+
+
+# ---------- core rolling median ----------
+
+@njit(parallel=True, fastmath=False)
+def _MDN_core_heaps(src, wins, mc, dst):
+    """
+    Rolling median per column using two heaps (O(m log w)).
+    - src: (m,n) float32/float64 contiguous
+    - wins: (n,) int64 window size
+    - mc: (n,) int64 min_count
+    - dst: (m,n) float32/float64, NaN where not enough points
+    """
     m, n = src.shape
+
     for j in prange(n):
         w = wins[j]
         mcount = mc[j]
-        if mcount < 1: mcount = 1
-        # work buffer once per column (max window)
-        work = np.empty(w, src.dtype)
+        if mcount < 1:
+            mcount = 1
+        if w < 1:
+            w = 1
+
+        # Heaps store (value, index). Capacity w is enough (active window <= w).
+        low_vals  = np.empty(w, src.dtype)   # max-heap (lower half)
+        low_idxs  = np.empty(w, np.int64)
+        high_vals = np.empty(w, src.dtype)   # min-heap (upper half)
+        high_idxs = np.empty(w, np.int64)
+
+        low_size = 0
+        high_size = 0
+
+        # side[t] tells where index t was placed while active: 0=low, 1=high
+        # (used to decrement counts on expiration without searching heaps)
+        side = np.empty(m, np.int8)
+
+        low_count = 0   # active element count logically in low
+        high_count = 0  # active element count logically in high
+
         for t in range(m):
-            # window bounds
-            s = t - w + 1
-            if s < 0:
-                L = t + 1
-                # fill prefix of work
-                for k in range(L):
-                    work[k] = src[k, j]
-            else:
-                L = w
-                # copy window into work
-                start = s
-                for k in range(L):
-                    work[k] = src[start + k, j]
-            if L >= mcount:
-                mid = L // 2
-                # partition to median
-                np.partition(work[:L], mid, axis=0)
-                if (L & 1) == 1:
-                    dst[t, j] = work[mid]
+            start = t - w + 1  # window includes indices [start..t]
+
+            # Expire the element that just left the window
+            if t >= w:
+                old = t - w
+                if side[old] == 0:
+                    low_count -= 1
                 else:
-                    # average the two middle values
-                    np.partition(work[:L], mid-1, axis=0)
-                    dst[t, j] = (work[mid] + work[mid-1]) * 0.5
+                    high_count -= 1
+
+            # Insert new element
+            v = src[t, j]
+            if low_size == 0:
+                low_size = _push_max(low_vals, low_idxs, low_size, v, t)
+                side[t] = 0
+                low_count += 1
+            else:
+                # Compare vs current low top (max of lower half)
+                # Ensure low top is valid before using it
+                low_size = _prune_heap_max(low_vals, low_idxs, low_size, start)
+                if low_size == 0:
+                    low_size = _push_max(low_vals, low_idxs, low_size, v, t)
+                    side[t] = 0
+                    low_count += 1
+                else:
+                    low_top = low_vals[0]
+                    if _key(v) <= _key(low_top):
+                        low_size = _push_max(low_vals, low_idxs, low_size, v, t)
+                        side[t] = 0
+                        low_count += 1
+                    else:
+                        high_size = _push_min(high_vals, high_idxs, high_size, v, t)
+                        side[t] = 1
+                        high_count += 1
+
+            # Prune expired from heap tops (physical cleanup)
+            low_size = _prune_heap_max(low_vals, low_idxs, low_size, start)
+            high_size = _prune_heap_min(high_vals, high_idxs, high_size, start)
+
+            # Rebalance so that low_count == high_count or low_count == high_count+1
+            # (median is always from top of low, and optionally top of high)
+            while low_count > high_count + 1:
+                low_size = _prune_heap_max(low_vals, low_idxs, low_size, start)
+                vmove, imove, low_size = _pop_max(low_vals, low_idxs, low_size)
+                high_size = _push_min(high_vals, high_idxs, high_size, vmove, imove)
+                side[imove] = 1
+                low_count -= 1
+                high_count += 1
+                high_size = _prune_heap_min(high_vals, high_idxs, high_size, start)
+
+            while low_count < high_count:
+                high_size = _prune_heap_min(high_vals, high_idxs, high_size, start)
+                vmove, imove, high_size = _pop_min(high_vals, high_idxs, high_size)
+                low_size = _push_max(low_vals, low_idxs, low_size, vmove, imove)
+                side[imove] = 0
+                high_count -= 1
+                low_count += 1
+                low_size = _prune_heap_max(low_vals, low_idxs, low_size, start)
+
+            # Output
+            L = t + 1 if t + 1 < w else w  # active window length ignoring NaN notion
+            if L >= mcount:
+                low_size = _prune_heap_max(low_vals, low_idxs, low_size, start)
+                if low_count > high_count:
+                    dst[t, j] = low_vals[0]
+                else:
+                    high_size = _prune_heap_min(high_vals, high_idxs, high_size, start)
+                    # even window: average of two middle values
+                    dst[t, j] = (low_vals[0] + high_vals[0]) * 0.5
             else:
                 dst[t, j] = np.nan
 

@@ -1,0 +1,128 @@
+{
+  "TimingMethod": 0,
+  "Splits": [
+    {
+      "Time": null,
+      "Name": "T_func op"
+    },
+    {
+      "Time": null,
+      "Name": "Real data op"
+    },
+    {
+      "Time": null,
+      "Name": "MEP Structure"
+    },
+    {
+      "Time": null,
+      "Name": "Init Grammar Structure"
+    },
+    {
+      "Time": null,
+      "Name": "GP Init Initialization Mod"
+    },
+    {
+      "Time": null,
+      "Name": "Standard Visualize Lib"
+    },
+    {
+      "Time": null,
+      "Name": "GP Init Evaluation Mod"
+    },
+    {
+      "Time": null,
+      "Name": "GP Init Parent Sel Mod"
+    },
+    {
+      "Time": null,
+      "Name": "GP Init Reprod Mod"
+    },
+    {
+      "Time": null,
+      "Name": "GP Self Test Run"
+    },
+    {
+      "Time": null,
+      "Name": "WF Test Run"
+    },
+    {
+      "Time": null,
+      "Name": "Init Grammar Iter Mod"
+    },
+    {
+      "Time": null,
+      "Name": "Grammar Self Test"
+    },
+    {
+      "Time": null,
+      "Name": "WF Grammar Test"
+    },
+    {
+      "Time": null,
+      "Name": "Grammar Types Full"
+    },
+    {
+      "Time": null,
+      "Name": "Initialization Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Evaluation Full"
+    },
+    {
+      "Time": null,
+      "Name": "Parent Sel Full"
+    },
+    {
+      "Time": null,
+      "Name": "Reprod Full"
+    },
+    {
+      "Time": null,
+      "Name": "Serialization"
+    },
+    {
+      "Time": null,
+      "Name": "GP Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Shallow Model Hunt"
+    },
+    {
+      "Time": null,
+      "Name": "Init Interface Design"
+    },
+    {
+      "Time": null,
+      "Name": "Init Live Model perf Viz"
+    },
+    {
+      "Time": null,
+      "Name": "Init Live Structure Viz"
+    },
+    {
+      "Time": null,
+      "Name": "Verbosity & Timing"
+    },
+    {
+      "Time": null,
+      "Name": "Interface Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Grammar Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Various Symbol Val"
+    },
+    {
+      "Time": null,
+      "Name": "Deep Model Hunt"
+    }
+  ],
+  "CurrentSplitIndex": 0,
+  "CurrentSplitTime": null,
+  "CurrentTime": "00:53:23.3581649"
+}

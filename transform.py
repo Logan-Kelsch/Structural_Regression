@@ -387,7 +387,7 @@ def t_RNG(
 	delta_min,
 	min_count	:	int	=	1,
 	out	=	None,
-	in_place	:	bool	=	True
+	in_place	:	bool	=	False
 ):	
 	#taking this option away
 	fdt = np.float32
@@ -422,7 +422,7 @@ def t_HKP(
 	x:	np.ndarray,
 	kappa,
 	out	:	np.ndarray	|	None	=	None,
-	in_place	:	bool	=	True
+	in_place	:	bool	=	False
 ):
 	"""
 	Hawkes-like process (per column):
@@ -478,7 +478,7 @@ def t_HKP(
 	return out
 
 #ID 14
-def t_EMA(x, delta, out=None, in_place=True):
+def t_EMA(x, delta, out=None, in_place=False):
 	if x.ndim != 2: raise ValueError("x must be (m,n)")
 	m, n = x.shape
 	# normalize delta -> (n,)
@@ -508,7 +508,8 @@ def t_EMA(x, delta, out=None, in_place=True):
 	return out
 
 #ID 15
-def t_DOE(x, delta1, delta2, out=None, in_place=True):
+def t_DOE(x, delta1, delta2, out=None, in_place=False): 
+	'''Difference of Exponential Averages'''
 	if x.ndim != 2: 
 		raise ValueError("x must be (m,n)")
 	m, n = x.shape
@@ -541,36 +542,46 @@ def t_DOE(x, delta1, delta2, out=None, in_place=True):
 
 #ID 16
 def t_MDN(x, window, min_count=1, out=None, in_place=False):
-	# NOTE: median cannot be updated from overwritten values; in_place defaults False.
-	if x.ndim != 2: 
-		raise ValueError("x must be (m,n)")
-	m, n = x.shape
-	# windows & min_count -> (n,)
-	if np.isscalar(window): 
-		wins = np.full(n, int(window), np.int64)
-	else:
-		wins = np.asarray(window, np.int64)
-		if wins.shape != (n,): 
-			raise ValueError("window must be scalar or (n,)")
-	if np.any(wins < 1): 
-		raise ValueError("window >= 1")
-	if np.isscalar(min_count): 
-		mc = np.full(n, int(min_count), np.int64)
-	else:
-		mc = np.asarray(min_count, np.int64)
-		if mc.shape != (n,): 
-			raise ValueError("min_count must be scalar or (n,)")
-	fdt = np.float32
-	if out is None: 
-		out = np.empty(x.shape, dtype=(x.dtype if np.issubdtype(x.dtype, np.floating) else fdt))
-	elif out.shape != x.shape: 
-		raise ValueError("out wrong shape")
-	if not np.issubdtype(out.dtype, np.floating): 
-		raise TypeError("out must be float for NaNs")
-	t_jit._MDN_core(x if x.flags.c_contiguous else np.ascontiguousarray(x), wins, mc, out)
-	if in_place: 
-		return out  # caller can assign back if desired
-	return out
+    """
+    Rolling median on (m,n) array, column-wise.
+    window & min_count can be scalar or shape (n,).
+    """
+    if x.ndim != 2:
+        raise ValueError("x must be (m,n)")
+    m, n = x.shape
+
+    if np.isscalar(window):
+        wins = np.full(n, int(window), np.int64)
+    else:
+        wins = np.asarray(window, np.int64)
+        if wins.shape != (n,):
+            raise ValueError("window must be scalar or (n,)")
+    if np.any(wins < 1):
+        raise ValueError("window >= 1")
+
+    if np.isscalar(min_count):
+        mc = np.full(n, int(min_count), np.int64)
+    else:
+        mc = np.asarray(min_count, np.int64)
+        if mc.shape != (n,):
+            raise ValueError("min_count must be scalar or (n,)")
+
+    fdt = np.float32
+    if out is None:
+        out = np.empty(x.shape, dtype=(x.dtype if np.issubdtype(x.dtype, np.floating) else fdt))
+    elif out.shape != x.shape:
+        raise ValueError("out wrong shape")
+    if not np.issubdtype(out.dtype, np.floating):
+        raise TypeError("out must be float for NaNs")
+
+    src = x
+    if not src.flags.c_contiguous:
+        src = np.ascontiguousarray(src)
+    if not np.issubdtype(src.dtype, np.floating):
+        src = src.astype(fdt, copy=False)
+
+    t_jit._MDN_core_heaps(src, wins, mc, out)
+    return out if not in_place else out
 
 #ID 17
 def t_ZSC(x, window, min_count=2, out=None, in_place=True):
