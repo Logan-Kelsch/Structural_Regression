@@ -584,7 +584,7 @@ def t_MDN(x, window, min_count=1, out=None, in_place=False):
     return out if not in_place else out
 
 #ID 17
-def t_ZSC(x, window, min_count=2, out=None, in_place=True):
+def t_ZSC(x, window, min_count=2, out=None, in_place=False):
 	if x.ndim != 2: 
 		raise ValueError("x must be (m,n)")
 	m, n = x.shape
@@ -606,7 +606,7 @@ def t_ZSC(x, window, min_count=2, out=None, in_place=True):
 	return out
 
 #ID 18
-def t_STD(x, window, min_count=1, out=None, in_place=True):
+def t_STD(x, window, min_count=1, out=None, in_place=False):
 	if x.ndim != 2: 
 		raise ValueError("x must be (m,n)")
 	m, n = x.shape
@@ -644,14 +644,14 @@ def t_SSN(x, out=None):
 	return dst
 
 #ID 20
-def t_AGR(x, a, window, min_count=1, out=None, in_place=True, prefer_float32=True):
+def t_AGR(x, a, window, min_count=1, out=None, in_place=False, prefer_float32=True):
     if x.shape != a.shape or x.ndim != 2:
         raise ValueError("x and a must be same shape (m,n)")
     m, n = x.shape
     wins = t_jit._norm_vec(window, n); mc = t_jit._norm_vec(min_count, n)
     fdt = np.float32 if prefer_float32 else np.float64
     if in_place:
-        if not np.issubdtape(x.dtype, np.floating): x = x.astype(fdt, copy=True)
+        if not np.issubdtype(x.dtype, np.floating): x = x.astype(fdt, copy=True)
         t_jit._AGR_inp(x if x.flags.c_contiguous else np.ascontiguousarray(x),
                  a if a.flags.c_contiguous else np.ascontiguousarray(a),
                  wins, mc)
