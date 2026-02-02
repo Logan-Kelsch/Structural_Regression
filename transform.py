@@ -664,7 +664,7 @@ def t_AGR(x, a, window, min_count=1, out=None, in_place=False, prefer_float32=Tr
     return out
 
 #ID 21
-def t_COR(x, a, window, min_count=2, out=None, in_place=True, prefer_float32=True):
+def t_COR(x, a, window, min_count=2, out=None, in_place=False, prefer_float32=True):
     if x.shape != a.shape or x.ndim != 2:
         raise ValueError("x and a must be same shape (m,n)")
     m, n = x.shape
