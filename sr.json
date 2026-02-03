@@ -2,7 +2,7 @@
   "TimingMethod": 0,
   "Splits": [
     {
-      "Time": null,
+      "Time": "01:35:48.4905668",
       "Name": "T_func op"
     },
     {
@@ -122,7 +122,7 @@
       "Name": "Deep Model Hunt"
     }
   ],
-  "CurrentSplitIndex": 0,
+  "CurrentSplitIndex": 1,
   "CurrentSplitTime": null,
-  "CurrentTime": "01:34:55.5318147"
+  "CurrentTime": "02:43:43.3512427"
 }
