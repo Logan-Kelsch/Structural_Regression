@@ -100,7 +100,7 @@
           <Settings>
             <Version>1.5</Version>
             <Name>Time</Name>
-            <Type>SplitTime</Type>
+            <Type>SegmentTime</Type>
             <Comparison>Current Comparison</Comparison>
             <TimingMethod>Current Timing Method</TimingMethod>
           </Settings>

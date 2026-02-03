@@ -58,16 +58,16 @@ class gene:
 	def __init__(
 		self,
 		exp	:	str	=	''
-	)	->	None:
-		self.exp = exp
+	):
+		self._exp = exp
 
 	@property
 	def exp(self):
-		return self.exp
+		return self._exp
 	
 	@exp.setter
 	def exp(self, new:str):
-		self.exp = new
+		self._exp = new
 
 #for hover referencing
 t.F_IDS()
