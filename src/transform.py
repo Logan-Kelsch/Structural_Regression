@@ -65,6 +65,51 @@ def F_WITH(
 	}
 	return [k for k, v in f_p.items() if param in v]
 
+def F_AS(id: int):
+	f_p = {
+		0:['x'],#ID 0
+		1:['x', 'd'],#ID 1
+		2:['x', 'd'],#ID 2
+		3:['x', 'd'],#ID 3
+		4:['x'],#ID 4
+		5:['x', 'a'],#ID 5
+		6:['x', 'a'],#ID 6
+		7:['x'],#ID 7
+		8:['x'],#ID 8
+		9:['x'],#ID 9
+		10:['x'],#ID 10
+		11:['x'],#ID 11
+		12:['x', 'd', 'dd'],#ID 12
+		13:['x', 'k'],#ID 13
+		14:['x', 'd'],#ID 14
+		15:['x', 'd', 'dd'],#ID 15
+		16:['x', 'd'],#ID 16
+		17:['x', 'd'],#ID 17
+		18:['x', 'd'],#ID 18
+		19:['x'],#ID 19
+		20:['x', 'a', 'd'],#ID 20
+		21:['x', 'a', 'd'],#ID 21
+	}
+	return f_p.get(id, [])
+
+def V_to_LOC(vals):
+	# Order: x, a, d, dd, k  ->  2, 3, 4, 5, 6
+	m = {'x': 2, 'a': 3, 'd': 4, 'dd': 5, 'k': 6}
+	return [m[v] for v in vals if v in m]
+
+def VLOC_to_FLAG(vlocs):
+	"""
+	Takes a list like [2,3,4,5,6] (any subset, any order) and returns a single
+	int bit-flag value, preserving the 2..6 location values by mapping:
+	2->bit2, 3->bit3, 4->bit4, 5->bit5, 6->bit6.
+	"""
+	flags = 0
+	for loc in vlocs:
+		if 2 <= loc <= 6:
+			flags |= (1 << loc)
+	return flags
+
+
 #ID 1
 def t_MAX(
 	x: np.ndarray,
