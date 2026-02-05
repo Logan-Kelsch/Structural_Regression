@@ -109,6 +109,104 @@ def VLOC_to_FLAG(vlocs):
 			flags |= (1 << loc)
 	return flags
 
+import numpy as np
+
+def fill_const_ITS(arr, where_idx, rate=1.0, rng=None, inplace=True):
+    """
+    Fill locations specified by a np.where result with samples drawn from the
+    negative side of an exponential curve (x <= 0) via inverse transform sampling,
+    then flipped to be positive.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Target array to fill.
+    where_idx : tuple of np.ndarray
+        Output of np.where(...), e.g. (rows, cols, ...).
+    rate : float
+        Exponential rate λ (> 0). Mean of final positive values is 1/λ.
+    rng : np.random.Generator or None
+        Random generator. If None, uses np.random.default_rng().
+    inplace : bool
+        If True, modify arr in-place and return it. If False, return a copy.
+
+    Returns
+    -------
+    np.ndarray
+        Array with filled values.
+    """
+    if rate <= 0:
+        raise ValueError("rate must be > 0")
+
+    if rng is None:
+        rng = np.random.default_rng()
+
+    out = arr if inplace else np.array(arr, copy=True)
+
+    n = np.size(where_idx[0])
+    if n == 0:
+        return out
+
+    u = rng.random(n)
+    u = np.clip(u, np.finfo(float).tiny, 1.0)
+
+    neg_samples = (1.0 / rate) * np.log(u)  # <= 0
+    out[where_idx] = -neg_samples           # flip sign -> >= 0
+    return out
+
+def fill_const_STES(n, base_max=2.0, base_rate=2.0, size=None, rng=None):
+    """
+    Samples integers in {1,2,...,n} using a stretched version of a truncated exponential.
+
+    1) Sample Y ~ TruncatedExponential(rate=base_rate) on (0, base_max]
+       via inverse-CDF.
+    2) Stretch to X = Y * (n/base_max) so support becomes (0, n]
+    3) Return ceil(X) to get ints in {1,...,n}.
+
+    Parameters
+    ----------
+    n : int
+        Upper bound (inclusive). Output is in {1,...,n}.
+    base_max : float
+        The original upper bound you're "stretching" from (default 2.0).
+    base_rate : float
+        Exponential rate λ controlling aggressiveness (default 2.0).
+    size : int or tuple, optional
+        Number/shape of samples.
+    rng : np.random.Generator, optional
+        RNG to use.
+
+    Returns
+    -------
+    np.ndarray of int
+    """
+    if not (isinstance(n, (int, np.integer)) and n >= 1):
+        raise ValueError("n must be an integer >= 1")
+    if base_max <= 0:
+        raise ValueError("base_max must be > 0")
+    if base_rate <= 0:
+        raise ValueError("base_rate must be > 0")
+    if rng is None:
+        rng = np.random.default_rng()
+
+    # U in (0,1) (avoid endpoints)
+    u = rng.random(size)
+    u = np.clip(u, np.finfo(float).tiny, 1.0 - np.finfo(float).eps)
+
+    # Truncated exponential on (0, base_max]:
+    # CDF(x) = (1 - exp(-λ x)) / (1 - exp(-λ base_max))
+    # Inverse: x = -(1/λ) * ln(1 - u*(1 - exp(-λ base_max)))
+    z = 1.0 - np.exp(-base_rate * base_max)
+    y = -(1.0 / base_rate) * np.log(1.0 - u * z)
+
+    # Stretch to (0, n]
+    x = y * (n / base_max)
+
+    # Round up to int in [1, n]
+    k = np.ceil(x).astype(int)
+    k = np.clip(k, 1, n)
+    return k
+
 
 #ID 1
 def t_MAX(
