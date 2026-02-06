@@ -94,35 +94,48 @@ def F_AS(id: int):
 
 def V_to_LOC(vals):
 	# Order: x, a, d, dd, k  ->  2, 3, 4, 5, 6
-	m = {'x': 2, 'a': 3, 'd': 4, 'dd': 5, 'k': 6}
+	# took out x
+	m = {'a': 3, 'd': 4, 'dd': 5, 'k': 6}
 	return [m[v] for v in vals if v in m]
 
 def VLOC_to_FLAG(vlocs):
 	"""
-	Takes a list like [2,3,4,5,6] (any subset, any order) and returns a single
+	Takes a list like [3,4,5,6] (any subset, any order) and returns a single
 	int bit-flag value, preserving the 2..6 location values by mapping:
-	2->bit2, 3->bit3, 4->bit4, 5->bit5, 6->bit6.
+	23->bit3, 4->bit4, 5->bit5, 6->bit6.
 	"""
 	flags = 0
 	for loc in vlocs:
-		if 2 <= loc <= 6:
+		if 3 <= loc <= 6:
 			flags |= (1 << loc)
 	return flags
 
-import numpy as np
 
-def fill_const_ITS(arr, where_idx, rate=1.0, rng=None, inplace=True):
+def fill_const_ITS(arr: np.ndarray,
+                       rows: np.ndarray,
+                       col: int,
+                       rate: float = 1.0,
+                       rng: np.random.Generator | None = None,
+                       inplace: bool = True) -> np.ndarray:
     """
-    Fill locations specified by a np.where result with samples drawn from the
-    negative side of an exponential curve (x <= 0) via inverse transform sampling,
-    then flipped to be positive.
+    Column-specialized version of fill_const_ITS.
+
+    Fill arr[rows, col] with samples drawn from the negative side of an
+    exponential curve via inverse transform sampling, then flipped positive.
+
+    Equivalent to the original:
+      where_idx = (rows, np.full_like(rows, col))
+      fill_const_ITS(arr, where_idx, rate, rng, inplace)
 
     Parameters
     ----------
     arr : np.ndarray
         Target array to fill.
-    where_idx : tuple of np.ndarray
-        Output of np.where(...), e.g. (rows, cols, ...).
+    rows : np.ndarray
+        1D integer row indices (like where_idx[0] for a single column),
+        OR any array broadcastable to 1D indices.
+    col : int
+        Column index to fill.
     rate : float
         Exponential rate λ (> 0). Mean of final positive values is 1/λ.
     rng : np.random.Generator or None
@@ -137,48 +150,63 @@ def fill_const_ITS(arr, where_idx, rate=1.0, rng=None, inplace=True):
     """
     if rate <= 0:
         raise ValueError("rate must be > 0")
-
     if rng is None:
         rng = np.random.default_rng()
 
     out = arr if inplace else np.array(arr, copy=True)
 
-    n = np.size(where_idx[0])
+    rows = np.asarray(rows)
+    n = rows.size
     if n == 0:
         return out
 
-    u = rng.random(n)
-    u = np.clip(u, np.finfo(float).tiny, 1.0)
+    # U in (0,1], avoid log(0)
+    u = rng.random(n, dtype=np.float64)
+    u = np.clip(u, np.finfo(np.float64).tiny, 1.0)
 
-    neg_samples = (1.0 / rate) * np.log(u)  # <= 0
-    out[where_idx] = -neg_samples           # flip sign -> >= 0
+    # Original did: neg_samples = (1/rate)*log(u) (<=0); out[...] = -neg_samples
+    # So final is: -(1/rate)*log(u) = -log(u)/rate  (>=0)
+    out[rows, col] = (-np.log(u) / rate).astype(out.dtype, copy=False)
     return out
 
-def fill_const_STES(n, base_max=2.0, base_rate=2.0, size=None, rng=None):
+def fill_const_STEIS(n: int,
+                         rows: np.ndarray,
+                         arr: np.ndarray,
+                         col: int,
+                         base_max: float = 2.0,
+                         base_rate: float = 2.0,
+                         rng: np.random.Generator | None = None,
+                         inplace: bool = True) -> np.ndarray:
     """
-    Samples integers in {1,2,...,n} using a stretched version of a truncated exponential.
+    Column-specialized writer for the STEIS integer sampler.
 
-    1) Sample Y ~ TruncatedExponential(rate=base_rate) on (0, base_max]
-       via inverse-CDF.
-    2) Stretch to X = Y * (n/base_max) so support becomes (0, n]
-    3) Return ceil(X) to get ints in {1,...,n}.
+    This preserves the exact distribution from fill_const_STEIS (stretched
+    truncated exponential -> ceil -> clip to [1,n]), but writes the resulting
+    integers into arr[rows, col].
 
     Parameters
     ----------
     n : int
-        Upper bound (inclusive). Output is in {1,...,n}.
+        Upper bound (inclusive). Sampled integers are in {1,...,n}.
+    rows : np.ndarray
+        1D integer row indices to fill.
+    arr : np.ndarray
+        Target array to fill.
+    col : int
+        Column index to fill.
     base_max : float
-        The original upper bound you're "stretching" from (default 2.0).
+        Original upper bound being stretched from.
     base_rate : float
-        Exponential rate λ controlling aggressiveness (default 2.0).
-    size : int or tuple, optional
-        Number/shape of samples.
-    rng : np.random.Generator, optional
+        Exponential rate λ controlling aggressiveness.
+    rng : np.random.Generator or None
         RNG to use.
+    inplace : bool
+        If True, modify arr in-place and return it. If False, return a copy.
 
     Returns
     -------
-    np.ndarray of int
+    np.ndarray
+        Array with arr[rows, col] filled with sampled ints (cast to arr.dtype).
     """
     if not (isinstance(n, (int, np.integer)) and n >= 1):
         raise ValueError("n must be an integer >= 1")
@@ -189,9 +217,16 @@ def fill_const_STES(n, base_max=2.0, base_rate=2.0, size=None, rng=None):
     if rng is None:
         rng = np.random.default_rng()
 
+    out = arr if inplace else np.array(arr, copy=True)
+
+    rows = np.asarray(rows)
+    m = rows.size
+    if m == 0:
+        return out
+
     # U in (0,1) (avoid endpoints)
-    u = rng.random(size)
-    u = np.clip(u, np.finfo(float).tiny, 1.0 - np.finfo(float).eps)
+    u = rng.random(m, dtype=np.float64)
+    u = np.clip(u, np.finfo(np.float64).tiny, 1.0 - np.finfo(np.float64).eps)
 
     # Truncated exponential on (0, base_max]:
     # CDF(x) = (1 - exp(-λ x)) / (1 - exp(-λ base_max))
@@ -203,9 +238,54 @@ def fill_const_STES(n, base_max=2.0, base_rate=2.0, size=None, rng=None):
     x = y * (n / base_max)
 
     # Round up to int in [1, n]
-    k = np.ceil(x).astype(int)
+    k = np.ceil(x).astype(np.int64, copy=False)
     k = np.clip(k, 1, n)
-    return k
+
+    out[rows, col] = k.astype(out.dtype, copy=False)
+    return out
+
+import numpy as np
+
+def fill_const_UA0(arr: np.ndarray,
+                       rows: np.ndarray,
+                       col: int,
+                       rng: np.random.Generator | None = None,
+                       inplace: bool = True) -> np.ndarray:
+    """
+    Column-specialized filler: writes float32 samples ~ Uniform(-1, 1) into arr[rows, col].
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Target array to fill.
+    rows : np.ndarray
+        1D integer row indices to fill.
+    col : int
+        Column index to fill.
+    rng : np.random.Generator or None
+        RNG to use. If None, uses np.random.default_rng().
+    inplace : bool
+        If True, modify arr in-place and return it. If False, return a copy.
+
+    Returns
+    -------
+    np.ndarray
+        Array with filled values.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    out = arr if inplace else np.array(arr, copy=True)
+
+    rows = np.asarray(rows)
+    n = rows.size
+    if n == 0:
+        return out
+
+    # Uniform(-1, 1): 2*U - 1 with U ~ Uniform(0,1)
+    out[rows, col] = (rng.random(n, dtype=np.float32) * np.float32(2.0) - np.float32(1.0))
+    return out
+
 
 
 #ID 1
