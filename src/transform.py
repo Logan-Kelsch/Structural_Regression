@@ -110,6 +110,70 @@ def VLOC_to_FLAG(vlocs):
 			flags |= (1 << loc)
 	return flags
 
+import numpy as np
+
+def fill_sensor_UNIFORM(inst_inst, flags_u32, sensors, rng=None, inplace=True):
+    """
+    Fill *every* NON-flagged location in columns 2..6 with a random integer in [0, max_sensor_id).
+
+    - flags_u32 uses bits 2..6 to indicate whether that column is "flagged" for a given row
+    - inst_inst is float32, so ints will be stored as float32 (fine for IDs)
+
+    Returns the (possibly modified) inst_inst.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    out = inst_inst if inplace else inst_inst.copy()
+
+    flags = np.asarray(flags_u32, dtype=np.uint32).reshape(-1)
+    bits  = np.arange(2, 7, dtype=np.uint32)          # [2,3,4,5,6]
+    # flagged[r, j] == True if bit 'bits[j]' is set for row r
+    flagged = ((flags[:, None] >> bits[None, :]) & np.uint32(1)).astype(bool)
+
+    non_flagged_mask = ~flagged                       # True where we want to fill (cols 2..6)
+
+    # random ints for every cell in the 2..6 block; only write where non-flagged
+    r = rng.integers(0, sensors, size=non_flagged_mask.shape, dtype=np.int32)
+
+    block = out[:, 2:7]                               # view (contiguous slice)
+    block[non_flagged_mask] = r[non_flagged_mask].astype(out.dtype, copy=False)
+
+    return out
+
+
+def FUNC_TO_FULL_FLAGS_CANDFUNC(func_ids):
+    """
+    Map each function-id -> required variable locations (cols 3..6) -> uint32 bit-flag.
+    Uses the user-provided helpers: F_AS, V_to_LOC, VLOC_to_FLAG.
+
+    Parameters
+    ----------
+    func_ids : array-like (int)
+        Function IDs per row.
+
+    Returns
+    -------
+    flags_u32 : np.ndarray dtype=np.uint32
+        Same shape as func_ids. Bits 3..6 indicate presence of cols 3..6.
+    """
+    fids = np.asarray(func_ids, dtype=np.int32)
+
+    # Build a lookup table for ids 0..max_id seen in func_ids (fast, tiny)
+    max_id = int(fids.max()) if fids.size else 0
+    max_id = max(max_id, 0)
+
+    table = np.zeros(max_id + 1, dtype=np.uint32)
+    for i in range(max_id + 1):
+        vlocs = V_to_LOC(F_AS(i))          # e.g. ['a','d'] -> [3,4]
+        table[i] = np.uint32(VLOC_to_FLAG(vlocs))  # [3,4] -> (1<<3)|(1<<4)
+
+    # Default 0 for out-of-range / negative ids
+    out = np.zeros(fids.shape, dtype=np.uint32)
+    in_range = (fids >= 0) & (fids <= max_id)
+    out[in_range] = table[fids[in_range]]
+    return out
+
 
 def fill_const_ITS(arr: np.ndarray,
                        rows: np.ndarray,
