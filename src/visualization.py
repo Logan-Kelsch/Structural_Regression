@@ -46,7 +46,7 @@ def plot_flags(inst_inst: np.ndarray, cols=(2, 3, 4), bits=range(5, 10)):
 def plot_instruction_demo(inst_inst):
     #column 0
     plt.title('Histogram of Initialized Transformation Function IDs')
-    plt.hist(inst_inst[:, 1], bins=21)
+    plt.hist(inst_inst[:, 1], bins=22)
     plt.show()
     #column 5
     plt.title('Sensor Index for each $x$')

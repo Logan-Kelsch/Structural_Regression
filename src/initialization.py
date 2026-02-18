@@ -215,7 +215,7 @@ def fill_sensor_UNIFORM(inst_inst, flags_u32, legal_idx, rng=None, inplace=True)
     base = out[:, 0].astype(np.float32, copy=False)[:, None]
 
     #final vals written: base - generated
-    vals = r #r - base #shape is (N, 5)
+    vals = r - base #shape is (N, 5)
 
     block = out[:, 5:10]
     block[flagged_mask] = vals[flagged_mask].astype(out.dtype, copy=False)
@@ -490,8 +490,7 @@ def generate_genes(
     
     while(gen_size > 0):
 
-        print('need to self append x_inst to pop_prior at end of this while loop')
-
+        
         #match case different grammars
         match(grm_prior._type):
             #this case will not consider any form of grammar
@@ -508,8 +507,9 @@ def generate_genes(
                 #               gene location data or a constant data
 
                 #we will need to put the population indices in the first column
-                #go get the total length thus far
-                inst_inst[:, 0] = np.arange(pop_prior._X_inst.shape[1], pop_prior._X_inst.shape[1]+chunk_size, dtype=np.uint16)
+                #go get the total length of instructions thus far
+                start_idx = pop_prior._L_idx.max()
+                inst_inst[:, 0] = np.arange(start_idx+1, start_idx+1+chunk_size, dtype=np.uint16)
                 
                 #for this NO GRAMMAR generation we will randomly select each T function
                 inst_inst[:, 1] = np.random.randint(1, 22, size=inst_inst.shape[0], dtype=np.uint16)
@@ -520,8 +520,6 @@ def generate_genes(
                 #so we will have some sort of mask functionality for each instance being:
                 #   NEEDS MASK: EACH type of constant generation
                 #   NEEDS MASK: EACH type of sensor location generation (maybe for each T func type) 
-
-
                 func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
 
                 #used flags
@@ -575,7 +573,7 @@ def generate_genes(
                 #used indices of x_inst variable so that we can run these instantiations IN PLACE
                 #this will mean entire size of X_inst is allocated before even the first generation of genes
 
-                return inst_inst
+                #return inst_inst
             case _:
                 raise ValueError('Cannot interpret grammar prior in generate_genes. Illegal type.')
             
@@ -583,19 +581,240 @@ def generate_genes(
         #this starts with adding new gene instructions into gene and legal indices variables
         pop_prior._G_idx = np.union1d(pop_prior._G_idx, inst_inst[:, 0])
         pop_prior._L_idx = np.union1d(pop_prior._L_idx, pop_prior._G_idx)
+        #print(f'Lidx: {pop_prior._L_idx}')
+        #print(f'Gidx: {pop_prior._G_idx}')
+        #print(f'instinst0: {inst_inst[:, 0]}')
+                
         
-        #NOTE NOTE NOTE RESUME HERE NOTE NOTE NOTE
         #now we need to find where we will place newly generated instructions in the instruction array
         col0 = pop_prior._instructions[:, 0].astype(np.int32, copy=False)
-        i = np.arange(col0.size, dtype=np.int64)
-        break_idx = (col0 == 0).argmax()
-        pop_prior._instructions[]
-        #NOTE NOTE NOTE RESUME HERE NOTE NOTE NOTE
+        empty = (col0 == 0)
+        empty[0] = False
+        break_idx = (empty == 1).argmax()
+        #print(break_idx, empty[:10])
 
         #then we will actually bring in the new instantiation instructions into correct memory locations
-
-        #we would instantiate here and stack onto X_inst if possible, 
+        #this should place the instructions correctly into the population prior that was provided
+        pop_prior._instructions[ break_idx : break_idx+chunk_size , : ] = inst_inst
             
         gen_size -= chunk_size
         if(gen_size>0):
             print(f'{gen_size} Generations Remaining.')
+
+
+
+from collections import deque
+
+# bits 5..9 correspond to sensor slots x,a,d,dd,k stored in cols 5..9
+_BITS_5_9 = np.arange(5, 10, dtype=np.uint32)   # [5,6,7,8,9]
+_COLS_5_9 = np.arange(5, 10, dtype=np.int64)    # [5,6,7,8,9]
+
+import numpy as np
+
+_BITS_5_9 = np.arange(5, 10, dtype=np.uint32)   # sensor flag bit positions
+_COLS_5_9 = np.arange(5, 10, dtype=np.int64)    # x,a,d,dd,k columns
+
+
+def apply_index_map_axis0(arr: np.ndarray, old_to_new: np.ndarray, *, fill_value=0):
+    """
+    Apply an old->new index map to any array whose axis 0 matches the gene axis.
+
+    - old_to_new: length G, values in [0..G-1] or -1 for removed
+    - returns: new array same shape as arr, with rows moved, removed rows filled with fill_value
+    """
+    G = old_to_new.shape[0]
+    if arr.shape[0] != G:
+        raise ValueError(f"arr.shape[0]={arr.shape[0]} must match mapping length G={G}")
+
+    out = np.full_like(arr, fill_value)
+    keep_old = np.flatnonzero(old_to_new >= 0)
+    out[old_to_new[keep_old]] = arr[keep_old]
+    return out
+
+import numpy as np
+
+_BITS_5_9 = np.arange(5, 10, dtype=np.uint32)   # sensor-flag bit positions
+_COLS_5_9 = np.arange(5, 10, dtype=np.int64)    # x,a,d,dd,k columns
+
+
+def flush_population(X, keep_idx):
+    """
+    In-place population compaction on:
+      - X._instructions : np.ndarray shape (G, 11)
+      - X._G_idx        : 1D np.ndarray of candidate-removal indices
+
+    keep_idx: 1D array-like of gene indices that must be preserved.
+
+    Behavior:
+      - Removes indices in X._G_idx that are not in keep_idx
+      - Packs kept indices from X._G_idx into the lowest indices of the original X._G_idx
+      - Updates parent displacement references in cols 5..9 using SENSOR_FLAGS bits 5..9
+      - Clears removed rows to all zeros (no gaps)
+      - Updates X._G_idx to the new candidate indices after compaction
+      - Returns old_to_new mapping (len G, -1 for removed)
+
+    Returns
+    -------
+    old_to_new : np.ndarray[int64] shape (G,)
+        Mapping old gene index -> new gene index, -1 for removed.
+    """
+    instructions = X._instructions
+    if instructions.ndim != 2 or instructions.shape[1] != 11:
+        raise ValueError("X._instructions must have shape (G, 11).")
+
+    G = instructions.shape[0]
+
+    G_idx = np.asarray(X._G_idx, dtype=np.int64).reshape(-1)
+    keep_idx = np.asarray(keep_idx, dtype=np.int64).reshape(-1)
+
+    # keep only in-range
+    G_idx = G_idx[(G_idx >= 0) & (G_idx < G)]
+    keep_idx = keep_idx[(keep_idx >= 0) & (keep_idx < G)]
+
+    G_sorted = np.unique(G_idx)
+    keep_sorted = np.unique(keep_idx)
+
+    # candidates in G_idx that must be preserved
+    kept_in_G = np.intersect1d(G_sorted, keep_sorted, assume_unique=True)
+    removed   = np.setdiff1d(G_sorted, kept_in_G, assume_unique=True)
+
+    # pack kept genes into lowest indices of original G_idx
+    target_positions = G_sorted[:kept_in_G.size]
+
+    # build old->new mapping (identity unless remapped/removed)
+    old_to_new = np.arange(G, dtype=np.int64)
+    if removed.size:
+        old_to_new[removed] = -1
+    for old_i, new_i in zip(kept_in_G.tolist(), target_positions.tolist()):
+        old_to_new[old_i] = new_i
+
+    # ---- build compacted instructions (needs a new array; then write back) ----
+    out = np.zeros_like(instructions)
+    source_old_for_new = np.full(G, -1, dtype=np.int64)
+
+    keep_old = np.flatnonzero(old_to_new >= 0)
+    out[old_to_new[keep_old]] = instructions[keep_old]
+    source_old_for_new[old_to_new[keep_old]] = keep_old
+
+    # rewrite pop_idx for non-empty rows
+    non_empty = np.any(out != 0, axis=1)
+    out[non_empty, 0] = np.arange(G, dtype=out.dtype)[non_empty]
+
+    # ---- fix parent displacements for preserved rows ----
+    sensor_flags = out[:, 4].astype(np.uint32, copy=False)
+
+    for new_child in np.flatnonzero(non_empty):
+        old_child = int(source_old_for_new[new_child])
+        if old_child < 0:
+            continue
+
+        sf = sensor_flags[new_child]
+        slot_mask = ((sf >> _BITS_5_9) & np.uint32(1)).astype(bool)
+        if not np.any(slot_mask):
+            continue
+
+        cols = _COLS_5_9[slot_mask]
+        disp = out[new_child, cols].astype(np.int64, copy=False)
+
+        for col, d in zip(cols.tolist(), disp.tolist()):
+            if d >= 0:
+                continue  # only negative displacements are parents
+
+            old_parent = old_child + int(d)
+            if not (0 <= old_parent < G):
+                raise ValueError(
+                    f"Invalid parent: old_child={old_child}, disp={d} -> old_parent={old_parent}"
+                )
+
+            new_parent = int(old_to_new[old_parent])
+            if new_parent < 0:
+                raise ValueError(
+                    f"Kept gene {old_child} depends on removed parent {old_parent}. "
+                    f"Include {old_parent} in keep_idx (or keep closure of ancestors)."
+                )
+
+            new_disp = new_parent - new_child  # should remain negative
+            out[new_child, col] = np.array(new_disp, dtype=out.dtype)
+
+    # ---- update X in-place ----
+    X._instructions = out
+
+    mapped = old_to_new[G_sorted]
+    X._G_idx = np.unique(mapped[mapped >= 0]).astype(np.int64, copy=False)
+    X._L_idx = np.union1d(X._G_idx, X._T_idx)
+
+    return old_to_new
+
+
+def family_tree_indices(instructions: np.ndarray, gene_idxs, *, include_self: bool = True) -> np.ndarray:
+    """
+    Collect the full ancestor set ("family tree" of parent nodes) for one or many genes.
+
+    instructions: shape (G, 11), rows are genes and columns are:
+      [pop_idx, func_id, USED_FLAGS, CONST_FLAGS, SENSOR_FLAGS, x, a, d, dd, k]
+       col:  0       1        2          3           4         5  6  7  8   9
+
+    gene_idxs: int OR list/array of ints (gene row indices).
+      NOTE: pop_idx is assumed to be the same as the gene row index.
+
+    Parent rule:
+      For each node g, decode SENSOR_FLAGS bits 5..9.
+      For each active slot among cols 5..9, read displacement value (negative int),
+      compute parent index: parent = pop_idx + displacement.
+      Recurse until no new parents.
+
+    Returns: sorted unique np.ndarray[int64] of all ancestor gene indices
+             (and optionally the starting genes).
+    """
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("instructions must be 2D with 11 columns (need at least cols 0..9).")
+
+    G = instructions.shape[0]
+
+    # normalize input to 1D int64 array
+    if np.isscalar(gene_idxs):
+        seeds = np.array([int(gene_idxs)], dtype=np.int64)
+    else:
+        seeds = np.asarray(gene_idxs, dtype=np.int64).reshape(-1)
+
+    # keep valid seeds
+    seeds = seeds[(seeds >= 0) & (seeds < G)]
+    if seeds.size == 0:
+        return np.empty(0, dtype=np.int64)
+
+    # pre-cast sensor flags once (may be stored as float32)
+    sensor_flags = instructions[:, 4].astype(np.uint32, copy=False)
+
+    visited = np.zeros(G, dtype=np.bool_)
+    q = deque()
+
+    for s in seeds.tolist():
+        if include_self and not visited[s]:
+            visited[s] = True
+        q.append(s)
+
+    while q:
+        g = q.pop()
+
+        pop_idx = g  # pop_idx == gene row index (per your note)
+        sf = sensor_flags[g]
+
+        # mask over the 5 sensor slots (cols 5..9) based on bits 5..9
+        slot_mask = ((sf >> _BITS_5_9) & np.uint32(1)).astype(bool)
+        if not np.any(slot_mask):
+            continue
+
+        # grab displacement values from cols 5..9 where slot_mask True
+        disp = instructions[g, _COLS_5_9[slot_mask]].astype(np.int64, copy=False)
+        disp = disp[disp < 0]  # only negative displacements per your spec
+        if disp.size == 0:
+            continue
+
+        parents = pop_idx + disp  # disp negative => parent < pop_idx
+
+        for p in parents.tolist():
+            if 0 <= p < G and not visited[p]:
+                visited[p] = True
+                q.append(p)
+
+    return np.flatnonzero(visited).astype(np.int64, copy=False)
