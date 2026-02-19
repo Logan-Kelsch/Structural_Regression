@@ -457,12 +457,13 @@ def fill_const_UA0(arr: np.ndarray,
     return out
 
 
-def generate_genes(
+def generate_instructions(
     pop_prior   :   Population,
     grm_prior   :   Grammar,
     n           :   int,
     chunk_size  :   int =   0,
     seed        :   int =   None,
+    verbose     :   bool=   False
 ):
     '''
     early dev notes
@@ -489,6 +490,12 @@ def generate_genes(
         chunk_size = gen_size
     
     while(gen_size > 0):
+
+        #quick fix for if the final chunk generated is ill-shaped
+        #really only going to happen as I am making vizualizations for 
+        #instantiation operation list efficiency vizualizations
+        if(gen_size < chunk_size):
+            chunk_size = gen_size
 
         
         #match case different grammars
@@ -598,7 +605,7 @@ def generate_genes(
         pop_prior._instructions[ break_idx : break_idx+chunk_size , : ] = inst_inst
             
         gen_size -= chunk_size
-        if(gen_size>0):
+        if(gen_size>0 and verbose):
             print(f'{gen_size} Generations Remaining.')
 
 
@@ -818,3 +825,155 @@ def family_tree_indices(instructions: np.ndarray, gene_idxs, *, include_self: bo
                 q.append(p)
 
     return np.flatnonzero(visited).astype(np.int64, copy=False)
+
+
+from collections import deque, defaultdict
+
+_BITS_5_9 = np.arange(5, 10, dtype=np.uint32)   # sensor flag bits
+_COLS_5_9 = np.arange(5, 10, dtype=np.int64)    # x,a,d,dd,k columns
+
+
+
+def build_operation_list(instructions: np.ndarray,
+                         *,
+                         func_col: int = 1,
+                         sensor_flag_col: int = 4,
+                         displacement_cols: np.ndarray = _COLS_5_9,
+                         sensor_bits: np.ndarray = _BITS_5_9,
+                         only_negative_parents: bool = True,
+                         prefer_last: bool = True,
+                         last_bonus: float = 1.20,
+                         max_ops: int | None = None):
+    """
+    Build an execution plan that is as parallel as possible subject to parent dependencies.
+
+    instructions: shape (G, 11), columns:
+      [pop_idx, func_id, USED_FLAGS, CONST_FLAGS, SENSOR_FLAGS, x, a, d, dd, k]
+    Assumptions:
+      - pop_idx == row index (gene index)
+      - parent references are stored as (usually negative) displacements in cols 5..9
+      - SENSOR_FLAGS bits 5..9 indicate which of cols 5..9 are active sensor slots
+      - For each active slot, if value is a negative int displacement d, parent = child + d
+
+    Returns
+    -------
+    op_list: list of (func_id:int, gene_indices:np.ndarray[int64])
+        Each item is one parallel "kernel" call: run func_id for all indices in gene_indices.
+        Covers every gene exactly once.
+
+    Notes
+    -----
+    - This is a topological batching scheduler with a cheap heuristic to reduce func switches.
+    - Solve time is roughly O(G + E) where E is #dependency edges discovered.
+    """
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("instructions must be 2D with at least 10 columns (expected 11).")
+
+    G = instructions.shape[0]
+    if G == 0:
+        return []
+
+    # func ids (int)
+    func_ids = instructions[:, func_col].astype(np.int32, copy=False)
+
+    # sensor flags (uint32)
+    sensor_flags = instructions[:, sensor_flag_col].astype(np.uint32, copy=False)
+
+    # ---- Build dependency graph: parent -> child ----
+    # We'll construct:
+    #   children[parent] = list of children
+    #   indegree[child] = #parents
+    children = [[] for _ in range(G)]
+    indegree = np.zeros(G, dtype=np.int32)
+
+    # Iterate genes; decode parents from SENSOR_FLAGS and displacement cols
+    for child in range(G):
+        sf = sensor_flags[child]
+        slot_mask = ((sf >> sensor_bits) & np.uint32(1)).astype(bool)
+        if not np.any(slot_mask):
+            continue
+
+        cols = displacement_cols[slot_mask]
+        disp = instructions[child, cols].astype(np.int64, copy=False)
+
+        if only_negative_parents:
+            disp = disp[disp < 0]
+        if disp.size == 0:
+            continue
+
+        # parent indices
+        parents = child + disp  # disp negative => parent < child in typical case
+
+        # validate and add edges
+        for p in parents.tolist():
+            if p < 0 or p >= G:
+                raise ValueError(f"Invalid parent index computed for child={child}: parent={p}")
+            children[p].append(child)
+            indegree[child] += 1
+
+    # ---- Ready buckets keyed by func_id ----
+    # ready_by_func[f] = deque/list of ready gene indices
+    ready_by_func = defaultdict(deque)
+
+    # initial ready nodes
+    ready_nodes = np.flatnonzero(indegree == 0).astype(np.int64, copy=False)
+    for g in ready_nodes.tolist():
+        ready_by_func[int(func_ids[g])].append(g)
+
+    # Helper: choose next func to execute
+    last_func = None
+    op_list = []
+    processed = 0
+
+    def pick_next_func():
+        nonlocal last_func
+
+        if not ready_by_func:
+            return None
+
+        # Remove empty keys lazily
+        empty_keys = [k for k, q in ready_by_func.items() if len(q) == 0]
+        for k in empty_keys:
+            del ready_by_func[k]
+        if not ready_by_func:
+            return None
+
+        # Compute current best by ready count
+        best_func, best_q = max(ready_by_func.items(), key=lambda kv: len(kv[1]))
+        best_n = len(best_q)
+
+        if prefer_last and last_func is not None and last_func in ready_by_func:
+            last_n = len(ready_by_func[last_func])
+            if last_n * last_bonus >= best_n:
+                return last_func
+
+        return best_func
+
+
+    # ---- Kahn scheduler with batching by func ----
+    while processed < G:
+        f = pick_next_func()
+        if f is None:
+            # cycle or missing dependency resolution
+            # (shouldn't happen if your system is acyclic)
+            raise ValueError("No ready nodes but not all processed: dependency cycle or invalid graph.")
+
+        q = ready_by_func[f]
+        batch = np.fromiter(q, dtype=np.int64, count=len(q))  # take all ready for this func
+        q.clear()
+
+        op_list.append((int(f), batch))
+        last_func = int(f)
+
+        # mark processed; release children
+        for g in batch.tolist():
+            processed += 1
+            for ch in children[g]:
+                indegree[ch] -= 1
+                if indegree[ch] == 0:
+                    ready_by_func[int(func_ids[ch])].append(ch)
+
+        if max_ops is not None and len(op_list) >= max_ops:
+            break
+
+    return op_list

@@ -11,31 +11,19 @@
     },
     {
       "Time": null,
-      "Name": "Real data test instantiate"
+      "Name": "Instantiate & Null G"
     },
     {
       "Time": null,
-      "Name": "Init Grammar Structure"
+      "Name": "GP Mod Initialization"
     },
     {
       "Time": null,
-      "Name": "GP Init Initialization Mod"
+      "Name": "GP Mod Evaluation"
     },
     {
       "Time": null,
-      "Name": "Standard Visualize Lib"
-    },
-    {
-      "Time": null,
-      "Name": "GP Init Evaluation Mod"
-    },
-    {
-      "Time": null,
-      "Name": "GP Init Parent Sel Mod"
-    },
-    {
-      "Time": null,
-      "Name": "GP Init Reprod Mod"
+      "Name": "GP Mod Reproduction"
     },
     {
       "Time": null,
@@ -43,11 +31,19 @@
     },
     {
       "Time": null,
+      "Name": "Standard Viz Library"
+    },
+    {
+      "Time": null,
       "Name": "WF Test Run"
     },
     {
       "Time": null,
-      "Name": "Init Grammar Iter Mod"
+      "Name": "Init G Structure"
+    },
+    {
+      "Time": null,
+      "Name": "Init G Iterable"
     },
     {
       "Time": null,
@@ -55,11 +51,7 @@
     },
     {
       "Time": null,
-      "Name": "WF Grammar Test"
-    },
-    {
-      "Time": null,
-      "Name": "Grammar Types Full"
+      "Name": "WF Init Grammar Test"
     },
     {
       "Time": null,
@@ -67,15 +59,19 @@
     },
     {
       "Time": null,
-      "Name": "Evaluation Full"
+      "Name": "Evaluation Fin"
     },
     {
       "Time": null,
-      "Name": "Parent Sel Full"
+      "Name": "Reproduction Fin"
     },
     {
       "Time": null,
-      "Name": "Reprod Full"
+      "Name": "GP Fin & Shallow Hunt"
+    },
+    {
+      "Time": null,
+      "Name": "More G Structures"
     },
     {
       "Time": null,
@@ -83,11 +79,11 @@
     },
     {
       "Time": null,
-      "Name": "GP Fin"
+      "Name": "Shallow G Hunt"
     },
     {
       "Time": null,
-      "Name": "Shallow Model Hunt"
+      "Name": "Verbosity & Timing"
     },
     {
       "Time": null,
@@ -95,15 +91,11 @@
     },
     {
       "Time": null,
-      "Name": "Init Live Model perf Viz"
+      "Name": "Init Live Model Perf Viz"
     },
     {
       "Time": null,
       "Name": "Init Live Structure Viz"
-    },
-    {
-      "Time": null,
-      "Name": "Verbosity & Timing"
     },
     {
       "Time": null,
@@ -115,14 +107,22 @@
     },
     {
       "Time": null,
+      "Name": "Deep Model Hunt"
+    },
+    {
+      "Time": null,
+      "Name": "Methods Survey"
+    },
+    {
+      "Time": null,
       "Name": "Various Symbol Val"
     },
     {
       "Time": null,
-      "Name": "Deep Model Hunt"
+      "Name": "Compile Results"
     }
   ],
   "CurrentSplitIndex": 2,
   "CurrentSplitTime": null,
-  "CurrentTime": "13:31:36.0813401"
+  "CurrentTime": "15:52:29.8274921"
 }
