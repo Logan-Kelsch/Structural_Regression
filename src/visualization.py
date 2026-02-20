@@ -73,3 +73,135 @@ def plot_instruction_demo(inst_inst):
         plt.hist(vals, bins=bins)
         plt.grid(True)
         plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_grouped_by_scale(X, N_sample: int = 100):
+    """
+    Plot the first N_sample rows of a (N, G) array, automatically splitting columns
+    into stacked subplots so that within each subplot, every column has a robust
+    vertical span of at least ~1/4 of that subplot's y-range.
+
+    Grouping is greedy on a magnitude key; y-ranges are based on robust percentiles
+    (5th..95th) to avoid single outliers blowing up the scale.
+
+    Parameters
+    ----------
+    X : array-like, shape (N, G) or (N,)
+    N_sample : int, number of rows to plot from the start
+
+    Returns
+    -------
+    fig, axes, groups
+        groups is a list of lists of column indices per subplot.
+    """
+    X = np.asarray(X)
+    if X.ndim == 1:
+        X = X.reshape(-1, 1)
+    if X.ndim != 2:
+        raise ValueError(f"X must be 2D (N, G). Got shape {X.shape}")
+
+    N = X.shape[0]
+    G = X.shape[1]
+    M = int(min(max(N_sample, 1), N))
+    Y = X[:M, :]
+
+    # Robust per-column bounds (ignore NaNs). Fall back to 0 for all-NaN columns.
+    all_nan = np.all(np.isnan(Y), axis=0)
+    p5 = np.empty(G, dtype=float)
+    p95 = np.empty(G, dtype=float)
+
+    if np.any(~all_nan):
+        p5[~all_nan] = np.nanpercentile(Y[:, ~all_nan], 5, axis=0)
+        p95[~all_nan] = np.nanpercentile(Y[:, ~all_nan], 95, axis=0)
+    p5[all_nan] = 0.0
+    p95[all_nan] = 0.0
+
+    span = p95 - p5
+    # Epsilon to avoid zero-span columns wrecking grouping math
+    pos = span[span > 0]
+    eps = (np.nanmedian(pos) * 1e-3) if pos.size else 1e-12
+    eps = max(eps, 1e-12)
+    span_safe = np.where(span > eps, span, eps)
+
+    center = 0.5 * (p5 + p95)
+
+    # Sort columns by an overall magnitude proxy, then by span
+    mag_key = np.log10(np.abs(center) + span_safe + 1e-12)
+    span_key = np.log10(span_safe + 1e-12)
+    order = np.lexsort((span_key, mag_key))
+
+    # Greedy grouping enforcing: group_range <= 4 * min_span_in_group
+    groups = []
+    current = []
+    g_low = np.inf
+    g_high = -np.inf
+    g_min_span = np.inf
+
+    for c in order:
+        low_c, high_c, span_c = float(p5[c]), float(p95[c]), float(span_safe[c])
+
+        if not current:
+            current = [int(c)]
+            g_low, g_high = low_c, high_c
+            g_min_span = span_c
+            continue
+
+        new_low = min(g_low, low_c)
+        new_high = max(g_high, high_c)
+        new_range = new_high - new_low
+        new_min_span = min(g_min_span, span_c)
+
+        if new_range <= 4.0 * new_min_span:
+            current.append(int(c))
+            g_low, g_high = new_low, new_high
+            g_min_span = new_min_span
+        else:
+            groups.append(current)
+            current = [int(c)]
+            g_low, g_high = low_c, high_c
+            g_min_span = span_c
+
+    if current:
+        groups.append(current)
+
+    # Plot
+    fig, axes = plt.subplots(
+        nrows=len(groups),
+        ncols=1,
+        sharex=True,
+        figsize=(12, 2.8 * len(groups)),
+        constrained_layout=True
+    )
+    if len(groups) == 1:
+        axes = [axes]
+
+    x = np.arange(M)
+
+    for ax, cols in zip(axes, groups):
+        cols_sorted = sorted(cols)
+        for c in cols_sorted:
+            ax.plot(x, Y[:, c], label=f"col {c}")
+
+        low = float(np.min(p5[cols_sorted]))
+        high = float(np.max(p95[cols_sorted]))
+        rng = high - low
+        pad = 0.05 * (rng if rng > 0 else 1.0)
+        ax.set_ylim(low - pad, high + pad)
+
+        ax.grid(True, alpha=0.3)
+
+        if len(cols_sorted) <= 10:
+            ax.legend(loc="upper right", fontsize=8, ncol=min(3, len(cols_sorted)))
+        else:
+            ax.set_title(f"{len(cols_sorted)} columns (legend hidden)", fontsize=10)
+
+    axes[-1].set_xlabel("sample index")
+    axes[0].set_title(
+        f"Grouped plot (first {M} samples) — {G} columns split into {len(groups)} subplot(s)",
+        fontsize=11
+    )
+
+    plt.show()
+    return fig, axes, groups

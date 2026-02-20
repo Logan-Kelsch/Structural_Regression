@@ -977,3 +977,704 @@ def build_operation_list(instructions: np.ndarray,
             break
 
     return op_list
+
+
+import numpy as np
+import transform_ops as _OPS
+import transform_jit as t_jit  # whatever module contains _MDN_core_heaps
+
+def warmup_numba():
+    # tiny shapes so compile happens fast
+    m, n = 32, 8
+    x = np.random.rand(m, n).astype(np.float32)
+    wins = np.ones(n, dtype=np.int64)
+    mc = np.ones(n, dtype=np.int64)
+
+    out = np.empty((m, n), dtype=np.float32)
+
+    # Call the exact JIT kernel directly if possible (best)
+    t_jit._MDN_core_heaps(x, wins, mc, out)
+
+
+import numpy as np
+import time
+import os
+
+_VAR_TO_COL = {"x": 5, "a": 6, "d": 7, "dd": 8, "k": 9}
+_VAR_TO_BIT = {"x": 5, "a": 6, "d": 7, "dd": 8, "k": 9}
+
+_FUNC_ID_TO_NAME = {
+    0: None,
+    1: "t_MAX",  2: "t_MIN",  3: "t_AVG",  4: "t_NEG",  5: "t_DIF",
+    6: "t_ADD",  7: "t_SQR",  8: "t_SIN",  9: "t_COS", 10: "t_ASN",
+   11: "t_ACS", 12: "t_RNG", 13: "t_HKP", 14: "t_EMA", 15: "t_DOE",
+   16: "t_MDN", 17: "t_ZSC", 18: "t_STD", 19: "t_SSN", 20: "t_AGR",
+   21: "t_COR",
+}
+
+
+def instantiate_from_ops_chunked_debug(
+    op_list,
+    instructions: np.ndarray,   # (G,11)
+    X_out: np.ndarray,          # (N,G) preallocated
+    *,
+    transform_ops,              # unified API: transform_ops.apply(...)
+    chunk_B: int = 512,
+    verbosity: int = 1,          # 0 silent, 1 per-op, 2 per-chunk, 3 very chatty
+    check_nans: bool = True,
+    check_dtypes: bool = True,
+    fail_fast: bool = True,      # if False, continues and records failures
+    max_failures: int = 3,
+):
+    """
+    Debug-friendly batched instantiation with bounded scratch (<= (N,chunk_B) per buffer).
+
+    Parent rule (your rule):
+      If a var is SENSOR flagged, instruction holds negative displacement `disp` (int-like),
+      parent index is: parent = gene_idx + disp
+
+    Uses F_AS(func_id) to determine which variables are needed.
+
+    Returns
+    -------
+    X_out : np.ndarray
+        Instantiated in-place (and also returned).
+    failures : list[dict]
+        Debug records if fail_fast=False.
+    """
+    #warmup_numba()
+    t0_all = time.perf_counter()
+
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("instructions must be shape (G,11) (need cols 0..9).")
+    if X_out.ndim != 2:
+        raise ValueError("X_out must be 2D (N,G).")
+    if X_out.shape[1] != instructions.shape[0]:
+        raise ValueError(f"X_out.shape[1]={X_out.shape[1]} must equal G={instructions.shape[0]}")
+
+    G = instructions.shape[0]
+    N = X_out.shape[0]
+    Bmax = int(chunk_B)
+
+    # Cast flags once (handles float-stored flags safely)
+    # NOTE: If instructions[:,3] or [:,4] were float32 with big values, casting to uint32 preserves bits
+    const_flags  = instructions[:, 3].astype(np.uint32, copy=False)
+    sensor_flags = instructions[:, 4].astype(np.uint32, copy=False)
+
+    # Scratch buffers (bounded)
+    x_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+    a_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+    y_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+    # one extra buffer used if you later want to gather something else;
+    # keeping it here for debugging flexibility
+    s_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+
+    failures = []
+
+    def log(level, msg):
+        if verbosity >= level:
+            print(msg)
+
+    def est_bytes(shape, dtype):
+        return int(np.prod(shape)) * np.dtype(dtype).itemsize
+
+    # Rough memory footprint of scratch (not counting X_out)
+    scratch_bytes = (
+        est_bytes((N, Bmax), X_out.dtype) * 4  # x_buf, a_buf, y_buf, s_buf
+    )
+    log(1, f"[instantiate] N={N}, G={G}, chunk_B={Bmax}, dtype={X_out.dtype}, scratch≈{scratch_bytes/1e6:.1f} MB")
+
+    # Optional: set OMP threads (sometimes crashes come from oversubscription)
+    # You can uncomment to clamp threads during debugging:
+    # os.environ.setdefault("OMP_NUM_THREADS", "1")
+    # os.environ.setdefault("MKL_NUM_THREADS", "1")
+    # os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
+    def _fill_series_var(var_code: str, idx_chunk: np.ndarray, buf: np.ndarray):
+        """
+        Fill buf[:, :B] with resolved SERIES for var_code ('x' or 'a').
+
+        - CONST flag => broadcast scalar down N
+        - SENSOR flag => displacement -> parent column gather using parent = idx + disp
+
+        Returns dict of debug stats.
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        raw = instructions[idx_chunk, col]
+
+        # Fill with zeros first to avoid uninitialized garbage (important for debugging!)
+        out_view = buf[:, :B]
+        out_view.fill(0.0)
+
+        stats = {
+            "var": var_code,
+            "B": B,
+            "n_const": int(is_const.sum()),
+            "n_sensor": int(is_sensor.sum()),
+            "n_neither": int((~(is_const | is_sensor)).sum()),
+            "parents_min": None,
+            "parents_max": None,
+            "disp_min": None,
+            "disp_max": None,
+        }
+
+        # SENSOR gather
+        if np.any(is_sensor):
+            disp = raw[is_sensor].astype(np.int64, copy=False)
+
+            stats["disp_min"] = int(disp.min()) if disp.size else None
+            stats["disp_max"] = int(disp.max()) if disp.size else None
+
+            # Your spec says sensor displacements are negative.
+            # If this fails, it usually means the flags are wrong, or you accidentally wrote actual indices.
+            if np.any(disp >= 0):
+                bad = disp[disp >= 0][:10]
+                raise ValueError(
+                    f"[{var_code}] expected negative displacements for sensor slots, found non-negative: {bad}"
+                )
+
+            parents = idx_chunk[is_sensor] + disp  # <<< YOUR RULE
+
+            stats["parents_min"] = int(parents.min()) if parents.size else None
+            stats["parents_max"] = int(parents.max()) if parents.size else None
+
+            if np.any(parents < 0) or np.any(parents >= G):
+                bad = parents[(parents < 0) | (parents >= G)][:10]
+                raise ValueError(
+                    f"[{var_code}] parent out of bounds. "
+                    f"parents(min,max)=({stats['parents_min']},{stats['parents_max']}), "
+                    f"showing first bad: {bad}"
+                )
+
+            # Fancy indexing => copy into our bounded buffer (expected)
+            out_view[:, is_sensor] = X_out[:, parents]
+
+        # CONST broadcast
+        if np.any(is_const):
+            cvals = raw[is_const].astype(X_out.dtype, copy=False)
+            out_view[:, is_const] = cvals[None, :]
+
+        return stats
+
+    def _get_param_vec(var_code: str, idx_chunk: np.ndarray, cast, default):
+        """
+        Get a per-gene parameter vector of length B (delta1, delta2, kappa).
+        We *expect these to be constants*, not sensor time-series.
+
+        If SENSOR-flagged, we raise — because rolling kernels typically need per-column constant params.
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        if np.any(is_sensor):
+            raise ValueError(
+                f"[{var_code}] is sensor-flagged in this chunk, but expected a constant per-gene parameter. "
+                f"This usually means you set SENSOR_FLAGS bits for d/dd/k by mistake."
+            )
+
+        raw = instructions[idx_chunk, col]
+        out = np.empty(B, dtype=cast)
+        out[:] = cast(default)
+        if np.any(is_const):
+            out[is_const] = raw[is_const].astype(cast, copy=False)
+
+        return out, {
+            "var": var_code,
+            "B": B,
+            "n_const": int(is_const.sum()),
+            "n_default": int((~is_const).sum()),
+            "min": float(out.min()) if out.size else None,
+            "max": float(out.max()) if out.size else None,
+        }
+
+    # --- Main loop over op-list ---
+    processed_total = 0
+    for op_i, (func_id, gene_idx) in enumerate(op_list):
+        func_id = int(func_id)
+        if func_id == 0:
+            continue
+
+        fname = _FUNC_ID_TO_NAME.get(func_id)
+        if fname is None:
+            raise ValueError(f"Unknown func_id={func_id}")
+
+        gene_idx = np.asarray(gene_idx, dtype=np.int64).reshape(-1)
+        if gene_idx.size == 0:
+            continue
+
+        used_vars = F_AS(func_id)  # <-- your map
+        # sanity: always must include 'x' for non-zero ops in your design
+        if verbosity >= 3:
+            log(3, f"[op {op_i}] func_id={func_id} ({fname}), genes={gene_idx.size}, used_vars={used_vars}")
+
+        t0_op = time.perf_counter()
+
+        # chunking
+        for start in range(0, gene_idx.size, Bmax):
+            idx_chunk = gene_idx[start:start + Bmax]
+            B = idx_chunk.size
+            t0_chunk = time.perf_counter()
+
+            # For reproducibility in debugging, ensure sorted order (optional)
+            # idx_chunk = np.sort(idx_chunk)
+
+            # --- Build x series ---
+            try:
+                x_stats = _fill_series_var("x", idx_chunk, x_buf)
+                if verbosity >= 2:
+                    log(2, f"  [chunk {start//Bmax}] x_stats={x_stats}")
+            except Exception as e:
+                ctx = {
+                    "where": "fill_x",
+                    "func_id": func_id,
+                    "fname": fname,
+                    "chunk_start": start,
+                    "B": B,
+                    "idx_chunk_head": idx_chunk[:10].tolist(),
+                    "error": repr(e),
+                }
+                failures.append(ctx)
+                log(1, f"[FAIL] {ctx}")
+                if fail_fast or len(failures) >= max_failures:
+                    raise
+                else:
+                    continue
+
+            # --- Build optional alpha series ---
+            alpha_arg = None
+            a_stats = None
+            if "a" in used_vars:
+                try:
+                    a_stats = _fill_series_var("a", idx_chunk, a_buf)
+                    alpha_arg = a_buf[:, :B]
+                    if verbosity >= 2:
+                        log(2, f"  [chunk {start//Bmax}] a_stats={a_stats}")
+                except Exception as e:
+                    ctx = {
+                        "where": "fill_a",
+                        "func_id": func_id,
+                        "fname": fname,
+                        "chunk_start": start,
+                        "B": B,
+                        "idx_chunk_head": idx_chunk[:10].tolist(),
+                        "error": repr(e),
+                    }
+                    failures.append(ctx)
+                    log(1, f"[FAIL] {ctx}")
+                    if fail_fast or len(failures) >= max_failures:
+                        raise
+                    else:
+                        continue
+
+            # --- Params (delta1, delta2, kappa) ---
+            # only build if used by this func_id (per your F_AS)
+            delta1_vec = None
+            delta2_vec = None
+            kappa_vec  = None
+            d_stats = dd_stats = k_stats = None
+
+            try:
+                if "d" in used_vars:
+                    delta1_vec, d_stats = _get_param_vec("d", idx_chunk, cast=np.int64, default=1)
+                    if verbosity >= 2:
+                        log(2, f"  [chunk {start//Bmax}] d_stats={d_stats}")
+                if "dd" in used_vars:
+                    delta2_vec, dd_stats = _get_param_vec("dd", idx_chunk, cast=np.int64, default=1)
+                    if verbosity >= 2:
+                        log(2, f"  [chunk {start//Bmax}] dd_stats={dd_stats}")
+                if "k" in used_vars:
+                    kappa_vec, k_stats = _get_param_vec("k", idx_chunk, cast=np.float32, default=1.0)
+                    if verbosity >= 2:
+                        log(2, f"  [chunk {start//Bmax}] k_stats={k_stats}")
+            except Exception as e:
+                ctx = {
+                    "where": "params",
+                    "func_id": func_id,
+                    "fname": fname,
+                    "chunk_start": start,
+                    "B": B,
+                    "idx_chunk_head": idx_chunk[:10].tolist(),
+                    "error": repr(e),
+                }
+                failures.append(ctx)
+                log(1, f"[FAIL] {ctx}")
+                if fail_fast or len(failures) >= max_failures:
+                    raise
+                else:
+                    continue
+
+            # --- Compute ---
+            y_view = y_buf[:, :B]
+
+            # Optionally prefill output buffer to detect partial writes
+            if verbosity >= 3:
+                y_view.fill(np.nan)
+
+            try:
+                transform_ops.apply(
+                    func_id,
+                    x_buf[:, :B],
+                    alpha=alpha_arg,
+                    delta1=delta1_vec,
+                    delta2=delta2_vec,
+                    kappa=kappa_vec,
+                    out=y_view,
+                    in_place=False,
+                )
+            except Exception as e:
+                # Print maximal useful context to diagnose kernel crashes
+                ctx = {
+                    "where": "apply",
+                    "func_id": func_id,
+                    "fname": fname,
+                    "chunk_start": start,
+                    "B": B,
+                    "idx_chunk_head": idx_chunk[:10].tolist(),
+                    "used_vars": used_vars,
+                    "x_stats": x_stats,
+                    "a_stats": a_stats,
+                    "d_stats": d_stats,
+                    "dd_stats": dd_stats,
+                    "k_stats": k_stats,
+                    "error": repr(e),
+                }
+                failures.append(ctx)
+                log(1, f"[FAIL] {ctx}")
+                if fail_fast or len(failures) >= max_failures:
+                    raise
+                else:
+                    continue
+
+            # --- Post checks ---
+            if check_nans:
+                if not np.isfinite(y_view).all():
+                    bad = np.flatnonzero(~np.isfinite(y_view))
+                    ctx = {
+                        "where": "postcheck_nonfinite",
+                        "func_id": func_id,
+                        "fname": fname,
+                        "chunk_start": start,
+                        "B": B,
+                        "first_bad_flat_index": int(bad[0]) if bad.size else None,
+                    }
+                    failures.append(ctx)
+                    log(1, f"[FAIL] {ctx}")
+                    if fail_fast or len(failures) >= max_failures:
+                        raise ValueError(f"Non-finite output detected: {ctx}")
+
+            # Write back
+            X_out[:, idx_chunk] = y_view
+            processed_total += B
+
+            t1_chunk = time.perf_counter()
+            if verbosity >= 2:
+                log(2, f"  [chunk {start//Bmax}] wrote B={B} in {(t1_chunk - t0_chunk)*1000:.1f} ms")
+
+        t1_op = time.perf_counter()
+        if verbosity >= 1:
+            log(1, f"[op {op_i}] func_id={func_id:2d} ({fname}) genes={gene_idx.size} time={(t1_op - t0_op):.3f}s")
+
+    t1_all = time.perf_counter()
+    log(1, f"[instantiate] done processed≈{processed_total} gene-cols, total time={(t1_all - t0_all):.3f}s")
+
+    return X_out, failures
+
+
+import numpy as np
+import time
+from collections import defaultdict
+
+_VAR_TO_COL = {"x": 5, "a": 6, "d": 7, "dd": 8, "k": 9}
+_VAR_TO_BIT = {"x": 5, "a": 6, "d": 7, "dd": 8, "k": 9}
+
+_FUNC_ID_TO_NAME = {
+    0: "NOP",
+    1: "t_MAX",  2: "t_MIN",  3: "t_AVG",  4: "t_NEG",  5: "t_DIF",
+    6: "t_ADD",  7: "t_SQR",  8: "t_SIN",  9: "t_COS", 10: "t_ASN",
+   11: "t_ACS", 12: "t_RNG", 13: "t_HKP", 14: "t_EMA", 15: "t_DOE",
+   16: "t_MDN", 17: "t_ZSC", 18: "t_STD", 19: "t_SSN", 20: "t_AGR",
+   21: "t_COR",
+}
+
+def instantiate_from_ops_chunked_sanitize(
+    op_list,
+    instructions: np.ndarray,     # (G,11)
+    X_out: np.ndarray,            # (N,G)
+    *,
+    transform_ops,                # unified apply(func_id,...)
+    chunk_B: int = 16,
+    verbosity: int = 1,
+    sanitize_final: bool = True,
+):
+    """
+    Batched instantiation with aggressive NaN/Inf -> 0 sanitization and replacement tracking.
+
+    Parent rule (YOUR RULE):
+      For sensor-series slots, instruction stores negative displacement 'disp' (int-like),
+      parent = gene_idx + disp.
+
+    Verbosity:
+      0: silent
+      1: per-op timing
+      2: per-op timing + replacement tracking output (standard)
+      3: adds per-chunk timing + extra stats
+      4: very chatty (debug details)
+    """
+    t0_all = time.perf_counter()
+
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("instructions must be shape (G,11) (need cols 0..9).")
+    if X_out.ndim != 2:
+        raise ValueError("X_out must be 2D (N,G).")
+
+    G = instructions.shape[0]
+    N = X_out.shape[0]
+    if X_out.shape[1] != G:
+        raise ValueError(f"X_out.shape[1]={X_out.shape[1]} must equal G={G}")
+
+    Bmax = int(chunk_B)
+
+    # Cast flags once (allows flags stored as float32 in instructions)
+    const_flags  = instructions[:, 3].astype(np.uint32, copy=False)
+    sensor_flags = instructions[:, 4].astype(np.uint32, copy=False)
+
+    # Scratch buffers (bounded)
+    x_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+    a_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+    y_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+
+    # Replacement tracking
+    # counts keyed by ("stage", func_id) where stage in {"input_x","input_a","output","final"}
+    rep_nan = defaultdict(int)
+    rep_inf = defaultdict(int)
+
+    def _log(level: int, msg: str):
+        if verbosity >= level:
+            print(msg)
+
+    def _sanitize_inplace(arr: np.ndarray, key):
+        """
+        Replace NaN/Inf -> 0 in-place.
+        Update counters for this key.
+        """
+        # Count first to avoid double-counting after modification
+        nan_mask = np.isnan(arr)
+        if nan_mask.any():
+            rep_nan[key] += int(nan_mask.sum())
+
+        # inf includes +inf/-inf; use isfinite to count
+        fin_mask = np.isfinite(arr)
+        if (~fin_mask).any():
+            # non-finite includes NaNs too; subtract NaNs to get inf count
+            rep_inf[key] += int((~fin_mask).sum() - nan_mask.sum())
+
+        # replace
+        np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+
+    def _fill_series(var_code: str, idx_chunk: np.ndarray, buf: np.ndarray, func_id: int):
+        """
+        Fill buf[:, :B] with resolved series for var_code ('x' or 'a'):
+          - CONST flag => broadcast scalar down N
+          - SENSOR flag => gather parent series using parent = idx + disp
+          - else => 0.0
+        Then sanitize NaN/Inf -> 0 (in case parents already contain non-finite)
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        raw = instructions[idx_chunk, col]
+
+        out_view = buf[:, :B]
+        out_view.fill(0.0)
+
+        # sensor gather
+        if np.any(is_sensor):
+            disp = raw[is_sensor].astype(np.int64, copy=False)
+
+            # spec: negative offsets
+            if np.any(disp >= 0):
+                bad = disp[disp >= 0][:10]
+                raise ValueError(f"{var_code}: expected negative displacement for sensor slots; got {bad}")
+
+            parents = idx_chunk[is_sensor] + disp  # <<< YOUR RULE
+            if np.any(parents < 0) or np.any(parents >= G):
+                bad = parents[(parents < 0) | (parents >= G)][:10]
+                raise ValueError(f"{var_code}: parent out of bounds (first bad: {bad})")
+
+            out_view[:, is_sensor] = X_out[:, parents]
+
+        # const broadcast
+        if np.any(is_const):
+            cvals = raw[is_const].astype(X_out.dtype, copy=False)
+            out_view[:, is_const] = cvals[None, :]
+
+        # sanitize and track
+        stage = "input_x" if var_code == "x" else "input_a"
+        _sanitize_inplace(out_view, (stage, func_id))
+
+        if verbosity >= 4:
+            _log(4, f"    [{stage}] B={B} const={int(is_const.sum())} sensor={int(is_sensor.sum())}")
+
+        return out_view
+
+    def _param_vec(var_code: str, idx_chunk: np.ndarray, cast, default, clamp_min=None):
+        """
+        Per-gene parameter vector (delta/kappa).
+        If sensor-flagged, this indicates a bug; raise.
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        if np.any(is_sensor):
+            raise ValueError(f"{var_code}: unexpectedly sensor-flagged for param vector")
+
+        raw = instructions[idx_chunk, col]
+        out = np.empty(B, dtype=cast)
+        out[:] = cast(default)
+        if np.any(is_const):
+            out[is_const] = raw[is_const].astype(cast, copy=False)
+
+        if clamp_min is not None:
+            # force 1 -> 2 behavior for windows etc.
+            out = np.maximum(out, cast(clamp_min))
+
+        return out
+
+    # Timing stats
+    op_times = defaultdict(float)
+    op_counts = defaultdict(int)
+
+    # Main schedule loop
+    for op_i, (func_id, gene_idx) in enumerate(op_list):
+        fid = int(func_id)
+        if fid == 0:
+            continue
+
+        name = _FUNC_ID_TO_NAME.get(fid, f"fid_{fid}")
+        used_vars = F_AS(fid)
+
+        gene_idx = np.asarray(gene_idx, dtype=np.int64).reshape(-1)
+        if gene_idx.size == 0:
+            continue
+
+        t0_op = time.perf_counter()
+
+        for start in range(0, gene_idx.size, Bmax):
+            idx_chunk = gene_idx[start:start + Bmax]
+            B = idx_chunk.size
+
+            t0_chunk = time.perf_counter()
+
+            # inputs
+            x_view = _fill_series("x", idx_chunk, x_buf, fid)
+
+            alpha_arg = None
+            if "a" in used_vars:
+                a_view = _fill_series("a", idx_chunk, a_buf, fid)
+                alpha_arg = a_view  # (N,B)
+
+            # params
+            delta1_vec = None
+            delta2_vec = None
+            kappa_vec  = None
+
+            if "d" in used_vars:
+                # window-like params: clamp to >=2 to avoid w=1 weirdness
+                delta1_vec = _param_vec("d", idx_chunk, cast=np.int64, default=2, clamp_min=2)
+            if "dd" in used_vars:
+                delta2_vec = _param_vec("dd", idx_chunk, cast=np.int64, default=2, clamp_min=2)
+            if "k" in used_vars:
+                kappa_vec = _param_vec("k", idx_chunk, cast=np.float32, default=1.0, clamp_min=None)
+
+            # compute
+            y_view = y_buf[:, :B]
+            transform_ops.apply(
+                fid,
+                x_view,
+                alpha=alpha_arg,
+                delta1=delta1_vec,
+                delta2=delta2_vec,
+                kappa=kappa_vec,
+                out=y_view,
+                in_place=False,
+            )
+
+            # sanitize output and track
+            _sanitize_inplace(y_view, ("output", fid))
+
+            # write back
+            X_out[:, idx_chunk] = y_view
+
+            if verbosity >= 3:
+                _log(3, f"  [chunk] {name} fid={fid} start={start} B={B} dt={(time.perf_counter()-t0_chunk)*1000:.1f}ms")
+
+        dt_op = time.perf_counter() - t0_op
+        op_times[fid] += dt_op
+        op_counts[fid] += int(gene_idx.size)
+
+        if verbosity >= 1:
+            _log(1, f"[op] {name:5s} fid={fid:2d} genes={gene_idx.size:6d} time={dt_op:.3f}s")
+
+        # Standard replacement report in verbosity >= 2
+        if verbosity >= 2:
+            nan_in_x = rep_nan.get(("input_x", fid), 0)
+            inf_in_x = rep_inf.get(("input_x", fid), 0)
+            nan_in_a = rep_nan.get(("input_a", fid), 0)
+            inf_in_a = rep_inf.get(("input_a", fid), 0)
+            nan_out  = rep_nan.get(("output", fid), 0)
+            inf_out  = rep_inf.get(("output", fid), 0)
+
+            if (nan_in_x or inf_in_x or nan_in_a or inf_in_a or nan_out or inf_out):
+                _log(2, f"    [repl] fid={fid:2d} {name}: "
+                        f"x(nan={nan_in_x},inf={inf_in_x}) "
+                        f"a(nan={nan_in_a},inf={inf_in_a}) "
+                        f"out(nan={nan_out},inf={inf_out})")
+
+    if sanitize_final:
+        _sanitize_inplace(X_out, ("final", -1))
+
+    t1_all = time.perf_counter()
+    stats = {
+        "total_time_s": float(t1_all - t0_all),
+        "op_times_s": dict(op_times),
+        "op_gene_counts": dict(op_counts),
+        "replaced_nan": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_nan.items()},
+        "replaced_inf": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_inf.items()},
+    }
+
+    if verbosity >= 2:
+        total_nan = sum(rep_nan.values())
+        total_inf = sum(rep_inf.values())
+        _log(2, f"[sanitize] total replaced: NaN={total_nan}, Inf={total_inf}")
+        if sanitize_final:
+            _log(2, f"[sanitize] final pass replaced: "
+                    f"NaN={rep_nan.get(('final', -1), 0)}, Inf={rep_inf.get(('final', -1), 0)}")
+
+    return X_out, stats

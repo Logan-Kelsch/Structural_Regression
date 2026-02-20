@@ -63,7 +63,7 @@ def _MAX_col(col, w, mc, out):
             out[i] = np.nan
 
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _MAX_out(x, windows, mc_scalar, mc_vec, out):
     m, n = x.shape
     for j in prange(n):
@@ -72,7 +72,7 @@ def _MAX_out(x, windows, mc_scalar, mc_vec, out):
         _MAX_col(x[:, j], w, mc, out[:, j])
 
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _MAX_inp(x, windows, mc_scalar, mc_vec):
     """
     In-place: makes one per-column scratch copy for the read path.
@@ -135,7 +135,7 @@ def _MIN_col(col, w, mc, out):
             out[i] = np.nan
 
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _MIN_out(x, windows, mc_scalar, mc_vec, out):
     m, n = x.shape
     for j in prange(n):
@@ -144,7 +144,7 @@ def _MIN_out(x, windows, mc_scalar, mc_vec, out):
         _MIN_col(x[:, j], w, mc, out[:, j])
 
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _MIN_inp(x, windows, mc_scalar, mc_vec):
     m, n = x.shape
     for j in prange(n):
@@ -178,7 +178,7 @@ def _AVG_col(col, w, mc, out):
             out[i] = np.nan
 
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _AVG_out(x, windows, mc_scalar, mc_vec, out):
     m, n = x.shape
     for j in prange(n):
@@ -187,7 +187,7 @@ def _AVG_out(x, windows, mc_scalar, mc_vec, out):
         _AVG_col(x[:, j], w, mc, out[:, j])
 
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _AVG_inp(x, windows, mc_scalar, mc_vec):
     m, n = x.shape
     for j in prange(n):
@@ -200,7 +200,7 @@ def _AVG_inp(x, windows, mc_scalar, mc_vec):
 
 # --- HKP (exponentiated hawkes process kernel version with independent kappa per column) ---
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _HKP_inp(x, decays):
     m, n = x.shape
     for j in prange(n):
@@ -209,7 +209,7 @@ def _HKP_inp(x, decays):
         for t in range(1, m):
             x[t, j] = d * x[t-1, j] + x[t, j]
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _HKP_out(x, decays, out):
     m, n = x.shape
     for j in prange(n):
@@ -224,7 +224,7 @@ def _HKP_out(x, decays, out):
 # a = 2/(delta+1)  with delta >= 1 (scalar or (n,))
 # ---------------------------
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _EMA_inp(x, alphas):
     m, n = x.shape
     for j in prange(n):
@@ -234,7 +234,7 @@ def _EMA_inp(x, alphas):
         for t in range(1, m):
             x[t, j] = om * x[t-1, j] + a * x[t, j]
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _EMA_out(x, alphas, out):
     m, n = x.shape
     for j in prange(n):
@@ -249,7 +249,7 @@ def _EMA_out(x, alphas, out):
 # delta_fast, delta_slow: scalar or (n,)
 # ---------------------------
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _DOE_inp(x, af, aslow):
     m, n = x.shape
     for j in prange(n):
@@ -268,7 +268,7 @@ def _DOE_inp(x, af, aslow):
             y1_prev = y1
             y2_prev = y2
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _DOE_out(x, af, aslow, out):
     m, n = x.shape
     for j in prange(n):
@@ -395,7 +395,7 @@ def _prune_heap_max(vals, idxs, size, start):
 
 # ---------- core rolling median ----------
 
-@njit(parallel=True, fastmath=False)
+@njit(parallel=False, fastmath=False)
 def _MDN_core_heaps(src, wins, mc, dst):
     """
     Rolling median per column using two heaps (O(m log w)).
@@ -503,13 +503,76 @@ def _MDN_core_heaps(src, wins, mc, dst):
             else:
                 dst[t, j] = np.nan
 
+import numpy as np
+from numba import njit, prange
+
+@njit(parallel=True, fastmath=False, cache=True)
+def _MDN_core_sort(src, wins, mc, dst):
+    """
+    Rolling median per column by sorting the active window each time.
+
+    src: (m,n) float32/float64 contiguous
+    wins: (n,) int64 window sizes
+    mc: (n,) int64 min_count
+    dst: (m,n) float32/float64
+    """
+    m, n = src.shape
+
+    for j in prange(n):
+        w = wins[j]
+        mcount = mc[j]
+        if mcount < 1:
+            mcount = 1
+        if w < 1:
+            w = 1
+
+        # ring buffer holds last w values
+        ring = np.empty(w, dtype=src.dtype)
+
+        # temp window for sorting (max size w)
+        tmp = np.empty(w, dtype=src.dtype)
+
+        filled = 0
+        pos = 0
+
+        for t in range(m):
+            # insert new value into ring
+            ring[pos] = src[t, j]
+            pos += 1
+            if pos == w:
+                pos = 0
+
+            if filled < w:
+                filled += 1
+
+            # active window length
+            L = filled  # <= w
+            if L < mcount:
+                dst[t, j] = np.nan
+                continue
+
+            # copy active values into tmp[0:L]
+            # ring is not in chronological order; doesn't matter for median
+            for k in range(L):
+                tmp[k] = ring[k]
+
+            # sort only the active part
+            tmp_slice = tmp[:L]
+            tmp_slice.sort()
+
+            mid = L >> 1
+            if (L & 1) == 1:
+                dst[t, j] = tmp_slice[mid]
+            else:
+                dst[t, j] = (tmp_slice[mid - 1] + tmp_slice[mid]) * 0.5
+
 # ---------------------------
 # ZSC: rolling z-score (x - mean)/std over window
 # STD: rolling std over window
 # O(1) updates via running sum & sumsq; per-column; min_count
 # ---------------------------
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _ZSC_inp(x, wins, mc):
     m, n = x.shape
     for j in prange(n):
@@ -536,7 +599,7 @@ def _ZSC_inp(x, wins, mc):
             else:
                 x[t, j] = np.nan
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _ZSC_out(x, wins, mc, out):
     m, n = x.shape
     for j in prange(n):
@@ -560,7 +623,7 @@ def _ZSC_out(x, wins, mc, out):
             else:
                 out[t, j] = np.nan
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _STD_inp(x, wins, mc):
     m, n = x.shape
     for j in prange(n):
@@ -586,7 +649,7 @@ def _STD_inp(x, wins, mc):
             else:
                 x[t, j] = np.nan
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _STD_out(x, wins, mc, out):
     m, n = x.shape
     for j in prange(n):
@@ -620,7 +683,7 @@ def _norm_vec(v, n):
 # 1) t_AGR : ULTRA-FAST agreement pulse (rolling mean of sign products)
 #     agr[t] = mean_{window}( sign(X)*sign(Y) )  in [-1, 1]
 # ================================================================
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _AGR_inp(X, Y, wins, mc):
     m, n = X.shape
     for j in prange(n):
@@ -653,7 +716,7 @@ def _AGR_inp(X, Y, wins, mc):
             else:
                 X[t, j] = np.nan
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _AGR_out(X, Y, wins, mc, OUT):
     m, n = X.shape
     for j in prange(n):
@@ -683,7 +746,7 @@ def _AGR_out(X, Y, wins, mc, OUT):
 # 2) t_CORR : Rolling Pearson correlation per column
 #     r = cov(x,y) / (stdx*stdy), computed with O(1) updates
 # ================================================================
-@njit(parallel=True, fastmath=True)
+@njit(parallel=False, fastmath=True)
 def _COR_inp(X, Y, wins, mc):
     m, n = X.shape
     for j in prange(n):
@@ -718,33 +781,73 @@ def _COR_inp(X, Y, wins, mc):
             else:
                 X[t, j] = np.nan
 
-@njit(parallel=True, fastmath=True)
+import numpy as np
+from numba import njit, prange
+
+@njit(parallel=False, fastmath=True, cache=True)
 def _COR_out(X, Y, wins, mc, OUT):
+    """
+    Rolling correlation with:
+      - w forced to >= 2 (so any 1 becomes 2)
+      - mcount forced to >= 2
+      - non-finite x/y treated as 0.0 (prevents NaN propagation)
+
+    OUT is NaN until L >= mcount; after that, finite values (or 0.0 if degenerate).
+    """
     m, n = X.shape
     for j in prange(n):
-        w = wins[j]; mcount = mc[j]
-        if mcount < 2: mcount = 2
-        sx = 0.0; sy = 0.0; sxx = 0.0; syy = 0.0; sxy = 0.0
+        w = wins[j]
+        if w < 2:
+            w = 2  # <-- force 1s/0s to 2
+        mcount = mc[j]
+        if mcount < 2:
+            mcount = 2
+
+        sx = 0.0
+        sy = 0.0
+        sxx = 0.0
+        syy = 0.0
+        sxy = 0.0
+
         for t in range(m):
-            x = X[t, j]; y = Y[t, j]
+            x = X[t, j]
+            y = Y[t, j]
+
+            # sanitize inputs (NaN/Inf -> 0)
+            if not np.isfinite(x):
+                x = 0.0
+            if not np.isfinite(y):
+                y = 0.0
+
             sx += x; sy += y
             sxx += x*x; syy += y*y
             sxy += x*y
+
             if t >= w:
-                xo = X[t - w, j]; yo = Y[t - w, j]
+                xo = X[t - w, j]
+                yo = Y[t - w, j]
+                if not np.isfinite(xo):
+                    xo = 0.0
+                if not np.isfinite(yo):
+                    yo = 0.0
                 sx -= xo; sy -= yo
                 sxx -= xo*xo; syy -= yo*yo
                 sxy -= xo*yo
                 L = w
             else:
                 L = t + 1
+
             if L >= mcount:
-                cov = sxy - (sx*sy)/L
-                vx  = sxx - (sx*sx)/L
-                vy  = syy - (sy*sy)/L
+                cov = sxy - (sx * sy) / L
+                vx  = sxx - (sx * sx) / L
+                vy  = syy - (sy * sy) / L
+
+                # If variance collapsed, correlation undefined -> 0
                 if vx <= 0.0 or vy <= 0.0:
                     OUT[t, j] = 0.0
                 else:
-                    OUT[t, j] = cov / np.sqrt(vx*vy + 1e-18)
+                    # add small epsilon to keep denom safe
+                    denom = np.sqrt(vx * vy + 1e-18)
+                    OUT[t, j] = cov / denom
             else:
                 OUT[t, j] = np.nan

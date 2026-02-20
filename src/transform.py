@@ -1,4 +1,4 @@
-
+#the _jit file simply has code for faster computation on passed variables using numba
 import transform_jit as t_jit
 
 import numpy as np
@@ -6,20 +6,23 @@ import numpy as np
 
 #ID 1
 def t_MAX(
-	x: np.ndarray,
-	window,
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,
 	min_count=1,
 	out: np.ndarray | None = None,
 	in_place: bool = False
 ):
 	"""
-	Rolling max down axis=0 with per-column windows and min_count.
+	Rolling max down axis=0 with per-column delta1s and min_count.
 
 	Parameters
 	----------
 	x : (m, n) array. If integers are passed and min_count causes NaNs,
 		we'll upcast to float (float32 by default) to hold NaNs.
-	window : int or (n,) int
+	delta1 : int or (n,) int
 		Size per column (>=1). If scalar, same for all columns.
 	min_count : int or (n,) int
 		Required valid count before emitting a max (else NaN).
@@ -42,13 +45,13 @@ def t_MAX(
 
 	m, n = x.shape
 
-	# Normalize window -> (n,)
-	if np.isscalar(window):
-		windows = np.full(n, int(window), dtype=np.int64)
+	# Normalize delta1 -> (n,)
+	if np.isscalar(delta1):
+		delta1s = np.full(n, int(delta1), dtype=np.int64)
 	else:
-		windows = np.asarray(window, dtype=np.int64)
-		if windows.shape != (n,):
-			raise ValueError("window must be scalar or shape (n,)")
+		delta1s = np.asarray(delta1, dtype=np.int64)
+		if delta1s.shape != (n,):
+			raise ValueError("delta1 must be scalar or shape (n,)")
 
 	# Normalize min_count -> use scalar fast path when possible
 	if np.isscalar(min_count):
@@ -65,7 +68,7 @@ def t_MAX(
 		x = np.ascontiguousarray(x)
 
 	# If we will produce NaNs for warm-up rows, output dtype must be float
-	needs_nan = True  # rolling windows with min_count generally emit NaN at the top
+	needs_nan = True  # rolling delta1s with min_count generally emit NaN at the top
 	#was going to make this an option but changed my mind
 	float_dtype = np.float32
 
@@ -75,7 +78,7 @@ def t_MAX(
 			# upcast integers -> float to carry NaNs
 			x = x.astype(float_dtype, copy=True)
 		# run kernel
-		t_jit._MAX_inp(x, windows, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64))
+		t_jit._MAX_inp(x, delta1s, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64))
 		return x
 
 	# out-of-place path
@@ -94,32 +97,35 @@ def t_MAX(
 	if not out.flags.c_contiguous:
 		out = np.ascontiguousarray(out)
 
-	t_jit._MAX_out(x, windows, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64), out)
+	t_jit._MAX_out(x, delta1s, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64), out)
 	return out
 
 #ID 2
 def t_MIN(
-	x: np.ndarray,
-	window,
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,
 	min_count=1,
 	out: np.ndarray | None = None,
 	in_place: bool = False
 ):
 	"""
-	Rolling min down axis=0 with per-column windows and min_count.
+	Rolling min down axis=0 with per-column delta1s and min_count.
 	Mirrors t_MAX API/behavior.
 	"""
 	if x.ndim != 2:
 		raise ValueError("x must be 2D (m, n)")
 	m, n = x.shape
 
-	# window -> (n,)
-	if np.isscalar(window):
-		windows = np.full(n, int(window), dtype=np.int64)
+	# delta1 -> (n,)
+	if np.isscalar(delta1):
+		delta1s = np.full(n, int(delta1), dtype=np.int64)
 	else:
-		windows = np.asarray(window, dtype=np.int64)
-		if windows.shape != (n,):
-			raise ValueError("window must be scalar or shape (n,)")
+		delta1s = np.asarray(delta1, dtype=np.int64)
+		if delta1s.shape != (n,):
+			raise ValueError("delta1 must be scalar or shape (n,)")
 
 	# min_count -> scalar fast path or vector
 	if np.isscalar(min_count):
@@ -141,7 +147,7 @@ def t_MIN(
 	if in_place:
 		if not np.issubdtype(x.dtype, np.floating):
 			x = x.astype(float_dtype, copy=True)
-		t_jit._MIN_inp(x, windows, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64))
+		t_jit._MIN_inp(x, delta1s, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64))
 		return x
 
 	if out is None:
@@ -158,32 +164,35 @@ def t_MIN(
 	if not out.flags.c_contiguous:
 		out = np.ascontiguousarray(out)
 
-	t_jit._MIN_out(x, windows, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64), out)
+	t_jit._MIN_out(x, delta1s, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64), out)
 	return out
 
 #ID 3
 def t_AVG(
-	x: np.ndarray,
-	window,
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,
 	min_count=1,
 	out: np.ndarray | None = None,
 	in_place: bool = False
 ):
 	"""
-	Rolling mean down axis=0 with per-column windows and min_count.
+	Rolling mean down axis=0 with per-column delta1s and min_count.
 	Uses a running-sum O(m) kernel; emits NaN until min_count is met.
 	"""
 	if x.ndim != 2:
 		raise ValueError("x must be 2D (m, n)")
 	m, n = x.shape
 
-	# window -> (n,)
-	if np.isscalar(window):
-		windows = np.full(n, int(window), dtype=np.int64)
+	# delta1 -> (n,)
+	if np.isscalar(delta1):
+		delta1s = np.full(n, int(delta1), dtype=np.int64)
 	else:
-		windows = np.asarray(window, dtype=np.int64)
-		if windows.shape != (n,):
-			raise ValueError("window must be scalar or shape (n,)")
+		delta1s = np.asarray(delta1, dtype=np.int64)
+		if delta1s.shape != (n,):
+			raise ValueError("delta1 must be scalar or shape (n,)")
 
 	# min_count
 	if np.isscalar(min_count):
@@ -206,7 +215,7 @@ def t_AVG(
 		# averages must be floating for non-integer divisions and NaNs
 		if not np.issubdtype(x.dtype, np.floating):
 			x = x.astype(float_dtype, copy=True)
-		t_jit._AVG_inp(x, windows, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64))
+		t_jit._AVG_inp(x, delta1s, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64))
 		return x
 
 	if out is None:
@@ -224,49 +233,68 @@ def t_AVG(
 	if not out.flags.c_contiguous:
 		out = np.ascontiguousarray(out)
 
-	t_jit._AVG_out(x, windows, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64), out)
+	t_jit._AVG_out(x, delta1s, mc_scalar, mc_vec if mc_scalar < 0 else np.empty(1, np.int64), out)
 	return out
 
 #ID 4
 def t_NEG(
-	x	:	np.ndarray, 
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,
 	out	=	None
 ):
 	np.negative(x, out=(x if out is None else out))
 	return x if out is None else out
 
 #ID 5
-def t_DIF(
-	x	:	np.ndarray,
-	a	:	np.ndarray,
-	out	=	None
-):
-	a = np.asanyarray(a)
-	a = a.reshape(1, -1) if a.ndim == 1 else a
-	np.subtract(x, a, out=(x if out is None else out))
-	return x if out is None else out
+def t_DIF(x, alpha, delta1, delta2, kappa, out=None):
+    """
+    y = x - alpha
+    alpha can be scalar, (n,), or (m,n)
+    """
+    dst = x if out is None else out
+    a = np.asanyarray(alpha)
+    if a.ndim == 1:
+        a = a.reshape(1, -1)  # broadcast over rows
+    np.subtract(x, a, out=dst)
+    return dst
 
 #ID 6
-def t_ADD(
-	x	:	np.ndarray,
-	a	:	np.ndarray,
-	out	=	None
-):
-	a = np.asanyarray(a)
-	a = a.reshape(1, -1) if a.ndim == 1 else a
-	np.add(x, a, out=(x if out is None else out))
-	return x if out is None else out
+def t_ADD(x, alpha, delta1, delta2, kappa, out=None):
+    """
+    y = x + alpha
+    alpha can be scalar, (n,), or (m,n)
+    """
+    dst = x if out is None else out
+    a = np.asanyarray(alpha)
+    if a.ndim == 1:
+        a = a.reshape(1, -1)
+    np.add(x, a, out=dst)
+    return dst
 
 #ID 7
 def t_SQR(
-	x	:	np.ndarray,
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,
 	out	=	None
 ):
 	np.square(x, out=(x if out is None else out))
 	return x if out is None else out
 
 #ID 8
-def t_SIN(x, out=None):
+def t_SIN(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,
+	out=None
+):
 	dst = x if out is None else out
 	if not np.issubdtype(dst.dtype, np.floating):
 		if out is None: 
@@ -280,7 +308,13 @@ def t_SIN(x, out=None):
 	return dst
 
 #ID 9
-def t_COS(x, out=None):
+def t_COS(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,
+	out=None):
 	dst = x if out is None else out
 	if not np.issubdtype(dst.dtype, np.floating):
 		if out is None: 
@@ -294,7 +328,12 @@ def t_COS(x, out=None):
 	return dst
 
 #ID 10
-def t_ASN(x, out=None):
+def t_ASN(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,out=None):
 	dst = x if out is None else out
 	if not np.issubdtype(dst.dtype, np.floating):
 		if out is None: 
@@ -307,7 +346,12 @@ def t_ASN(x, out=None):
 	return dst
 
 #ID 11
-def t_ACS(x, out=None):
+def t_ACS(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,out=None):
 	dst = x if out is None else out
 	if not np.issubdtype(dst.dtype, np.floating):
 		if out is None: 
@@ -320,45 +364,44 @@ def t_ACS(x, out=None):
 	return dst
 
 #ID 12
-def t_RNG(
-	x	:	np.ndarray,
-	delta_max,
-	delta_min,
-	min_count	:	int	=	1,
-	out	=	None,
-	in_place	:	bool	=	False
-):	
-	#taking this option away
-	fdt = np.float32
+def t_RNG(x, alpha, delta1, delta2, kappa, min_count: int = 1, out=None, in_place: bool = False):
+    """
+    Range-normalize using rolling max/min.
+    Uses delta1 for max window and delta2 for min window.
+    """
+    fdt = np.float32
+    m, n = x.shape
 
-	mx = np.empty(x.shape, dtype=np.float32)
-	mn = np.empty(x.shape, dtype=np.float32)
+    mx = np.empty((m, n), dtype=np.float32)
+    mn = np.empty((m, n), dtype=np.float32)
 
-	t_MAX(x, delta_max, min_count=min_count, out=mx, in_place=False)
-	t_MIN(x, delta_min, min_count=min_count, out=mn, in_place=False)
+    # Call with full signature (alpha/delta2/kappa are unused in MAX/MIN but required)
+    t_MAX(x, alpha, delta1, delta2, kappa, min_count=min_count, out=mx, in_place=False)
+    t_MIN(x, alpha, delta1, delta2, kappa, min_count=min_count, out=mn, in_place=False)
 
-	# choose destination
-	if in_place:
-		if not np.issubdtype(x.dtype, np.floating):
-			x = x.astype(fdt, copy=True)      # upcast ints so we can store NaN/real ratios
-		dst = x
-	else:
-		if out is None:
-			out = np.empty(x.shape, dtype=(x.dtype if np.issubdtype(x.dtype, np.floating) else fdt))
-		dst = out
+    if in_place:
+        if not np.issubdtype(x.dtype, np.floating):
+            x = x.astype(fdt, copy=True)
+        dst = x
+    else:
+        if out is None:
+            out = np.empty((m, n), dtype=(x.dtype if np.issubdtype(x.dtype, np.floating) else fdt))
+        dst = out
 
-	# dst = 2 * (x - mn) / (mx - mn) - 1   (no extra temporaries; safe where range<=0)
-	np.subtract(x, mn, out=dst)
-	np.subtract(mx, mn, out=mx)                  # reuse mx as the range
-	np.divide(dst, mx, out=dst, where=(mx > 0))  # leaves NaNs where mn was NaN; leaves prev where range<=0
-	np.multiply(dst, 2.0, out=dst)
-	np.subtract(dst, 1.0, out=dst)
-
-	return dst
+    # dst = 2 * (x - mn) / (mx - mn) - 1
+    np.subtract(x, mn, out=dst)
+    np.subtract(mx, mn, out=mx)                 # reuse mx as range
+    np.divide(dst, mx, out=dst, where=(mx > 0))
+    np.multiply(dst, 2.0, out=dst)
+    np.subtract(dst, 1.0, out=dst)
+    return dst
 
 #ID 13
 def t_HKP(
-	x:	np.ndarray,
+	x,
+	alpha,
+	delta1,
+	delta2,
 	kappa,
 	out	:	np.ndarray	|	None	=	None,
 	in_place	:	bool	=	False
@@ -417,37 +460,47 @@ def t_HKP(
 	return out
 
 #ID 14
-def t_EMA(x, delta, out=None, in_place=False):
+def t_EMA(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,out=None, in_place=False):
 	if x.ndim != 2: raise ValueError("x must be (m,n)")
 	m, n = x.shape
-	# normalize delta -> (n,)
-	if np.isscalar(delta): 
-		d = np.full(n, int(delta), np.int64)
+	# normalize delta1 -> (n,)
+	if np.isscalar(delta1): 
+		d = np.full(n, int(delta1), np.int64)
 	else:
-		d = np.asarray(delta, np.int64)
+		d = np.asarray(delta1, np.int64)
 		if d.shape != (n,): 
-			raise ValueError("delta must be scalar or (n,)")
+			raise ValueError("delta1 must be scalar or (n,)")
 	if np.any(d < 1): 
-		raise ValueError("delta must be >= 1")
+		raise ValueError("delta1 must be >= 1")
 	# alpha per column
-	a = (2.0 / (d.astype(np.float32) + 1.0)).astype(np.float32)
+	alpha = (2.0 / (d.astype(np.float32) + 1.0)).astype(np.float32)
 	if not x.flags.c_contiguous: 
 		x = np.ascontiguousarray(x)
 	fdt = np.float32
 	if in_place:
 		if not np.issubdtype(x.dtype, np.floating): 
 			x = x.astype(fdt, copy=True)
-		t_jit._EMA_inp(x, a)
+		t_jit._EMA_inp(x, alpha)
 		return x
 	if out is None: 
 		out = np.empty_like(x, dtype=(x.dtype if np.issubdtype(x.dtype, np.floating) else fdt))
 	elif out.shape != x.shape: 
 		raise ValueError("out wrong shape")
-	t_jit._EMA_out(x, a, out)
+	t_jit._EMA_out(x, alpha, out)
 	return out
 
 #ID 15
-def t_DOE(x, delta1, delta2, out=None, in_place=False): 
+def t_DOE(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,out=None, in_place=False): 
 	'''Difference of Exponential Averages'''
 	if x.ndim != 2: 
 		raise ValueError("x must be (m,n)")
@@ -458,9 +511,9 @@ def t_DOE(x, delta1, delta2, out=None, in_place=False):
 		else:
 			vv = np.asarray(v, np.int64)
 			if vv.shape != (n,): 
-				raise ValueError("delta must be scalar or (n,)")
+				raise ValueError("delta1 must be scalar or (n,)")
 		if np.any(vv < 1): 
-			raise ValueError("delta must be >= 1")
+			raise ValueError("delta1 must be >= 1")
 		return (2.0 / (vv.astype(np.float32) + 1.0)).astype(np.float32)
 	af = _norm(delta1)
 	aslow = _norm(delta2)
@@ -480,23 +533,28 @@ def t_DOE(x, delta1, delta2, out=None, in_place=False):
 	return out
 
 #ID 16
-def t_MDN(x, window, min_count=1, out=None, in_place=False):
+def t_MDN(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,min_count=1, out=None, in_place=False):
     """
     Rolling median on (m,n) array, column-wise.
-    window & min_count can be scalar or shape (n,).
+    delta1 & min_count can be scalar or shape (n,).
     """
     if x.ndim != 2:
         raise ValueError("x must be (m,n)")
     m, n = x.shape
 
-    if np.isscalar(window):
-        wins = np.full(n, int(window), np.int64)
+    if np.isscalar(delta1):
+        wins = np.full(n, int(delta1), np.int64)
     else:
-        wins = np.asarray(window, np.int64)
+        wins = np.asarray(delta1, np.int64)
         if wins.shape != (n,):
-            raise ValueError("window must be scalar or (n,)")
+            raise ValueError("delta1 must be scalar or (n,)")
     if np.any(wins < 1):
-        raise ValueError("window >= 1")
+        raise ValueError("delta1 >= 1")
 
     if np.isscalar(min_count):
         mc = np.full(n, int(min_count), np.int64)
@@ -523,11 +581,16 @@ def t_MDN(x, window, min_count=1, out=None, in_place=False):
     return out if not in_place else out
 
 #ID 17
-def t_ZSC(x, window, min_count=2, out=None, in_place=False):
+def t_ZSC(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,min_count=2, out=None, in_place=False):
 	if x.ndim != 2: 
 		raise ValueError("x must be (m,n)")
 	m, n = x.shape
-	wins = t_jit._norm_vec(window, n)
+	wins = t_jit._norm_vec(delta1, n)
 	mc = t_jit._norm_vec(min_count, n)
 	fdt = np.float32
 	if in_place:
@@ -545,11 +608,16 @@ def t_ZSC(x, window, min_count=2, out=None, in_place=False):
 	return out
 
 #ID 18
-def t_STD(x, window, min_count=1, out=None, in_place=False):
+def t_STD(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,min_count=1, out=None, in_place=False):
 	if x.ndim != 2: 
 		raise ValueError("x must be (m,n)")
 	m, n = x.shape
-	wins = t_jit._norm_vec(window, n)
+	wins = t_jit._norm_vec(delta1, n)
 	mc = t_jit._norm_vec(min_count, n)
 	fdt = np.float32
 	if in_place:
@@ -567,7 +635,12 @@ def t_STD(x, window, min_count=1, out=None, in_place=False):
 	return out
 
 #ID 19
-def t_SSN(x, out=None):
+def t_SSN(
+	x,
+	alpha,
+	delta1,
+	delta2,
+	kappa,out=None):
 	dst = x if out is None else out
 	# ensure float (avoid integer division)
 	if not np.issubdtype((dst.dtype if out is not None else x.dtype), np.floating):
@@ -583,43 +656,50 @@ def t_SSN(x, out=None):
 	return dst
 
 #ID 20
-def t_AGR(x, a, window, min_count=1, out=None, in_place=False, prefer_float32=True):
-    if x.shape != a.shape or x.ndim != 2:
-        raise ValueError("x and a must be same shape (m,n)")
+def t_AGR(x, alpha, delta1, delta2, kappa, min_count=1, out=None, in_place=False, prefer_float32=True):
+    if x.shape != alpha.shape or x.ndim != 2:
+        raise ValueError("x and alpha must be same shape (m,n)")
     m, n = x.shape
-    wins = t_jit._norm_vec(window, n); mc = t_jit._norm_vec(min_count, n)
-    fdt = np.float32 if prefer_float32 else np.float64
+    wins = t_jit._norm_vec(delta1, n)
+    mc   = t_jit._norm_vec(min_count, n)
+    fdt  = np.float32 if prefer_float32 else np.float64
+
+    x_c = x if x.flags.c_contiguous else np.ascontiguousarray(x)
+    a_c = alpha if alpha.flags.c_contiguous else np.ascontiguousarray(alpha)
+
     if in_place:
-        if not np.issubdtype(x.dtype, np.floating): x = x.astype(fdt, copy=True)
-        t_jit._AGR_inp(x if x.flags.c_contiguous else np.ascontiguousarray(x),
-                 a if a.flags.c_contiguous else np.ascontiguousarray(a),
-                 wins, mc)
-        return x
+        if not np.issubdtype(x_c.dtype, np.floating):
+            x_c = x_c.astype(fdt, copy=True)
+        t_jit._AGR_inp(x_c, a_c, wins, mc)
+        return x_c
+
     if out is None:
-        out = np.empta(x.shape, dtape=(x.dtype if np.issubdtype(x.dtype, np.floating) else fdt))
-    t_jit._AGR_out(x if x.flags.c_contiguous else np.ascontiguousarray(x),
-             a if a.flags.c_contiguous else np.ascontiguousarray(a),
-             wins, mc, out if out.flags.c_contiguous else np.ascontiguousarray(out))
-    return out
+        out = np.empty((m, n), dtype=(x_c.dtype if np.issubdtype(x_c.dtype, np.floating) else fdt))
+    out_c = out if out.flags.c_contiguous else np.ascontiguousarray(out)
+    t_jit._AGR_out(x_c, a_c, wins, mc, out_c)
+    return out_c
 
 #ID 21
-def t_COR(x, a, window, min_count=2, out=None, in_place=False, prefer_float32=True):
-    if x.shape != a.shape or x.ndim != 2:
-        raise ValueError("x and a must be same shape (m,n)")
+def t_COR(x, alpha, delta1, delta2, kappa, min_count=2, out=None, in_place=False, prefer_float32=True):
+    if x.shape != alpha.shape or x.ndim != 2:
+        raise ValueError("x and alpha must be same shape (m,n)")
     m, n = x.shape
-    wins = t_jit._norm_vec(window, n); mc = t_jit._norm_vec(min_count, n)
-    fdt = np.float32 if prefer_float32 else np.float64
+    wins = t_jit._norm_vec(delta1, n)
+    mc   = t_jit._norm_vec(min_count, n)
+    fdt  = np.float32 if prefer_float32 else np.float64
+
+    x_c = x if x.flags.c_contiguous else np.ascontiguousarray(x)
+    a_c = alpha if alpha.flags.c_contiguous else np.ascontiguousarray(alpha)
+
     if in_place:
-        if not np.issubdtype(x.dtype, np.floating): x = x.astype(fdt, copy=True)
-        t_jit._COR_inp(x if x.flags.c_contiguous else np.ascontiguousarray(x),
-                  a if a.flags.c_contiguous else np.ascontiguousarray(a),
-                  wins, mc)
-        return x
+        if not np.issubdtype(x_c.dtype, np.floating):
+            x_c = x_c.astype(fdt, copy=True)
+        t_jit._COR_inp(x_c, a_c, wins, mc)
+        return x_c
+
     if out is None:
-        out = np.empty(x.shape, dtype=(x.dtype if np.issubdtype(x.dtype, np.floating) else fdt))
-    t_jit._COR_out(x if x.flags.c_contiguous else np.ascontiguousarray(x),
-              a if a.flags.c_contiguous else np.ascontiguousarray(a),
-              wins, mc,
-              out if out.flags.c_contiguous else np.ascontiguousarray(out))
-    return out
+        out = np.empty((m, n), dtype=(x_c.dtype if np.issubdtype(x_c.dtype, np.floating) else fdt))
+    out_c = out if out.flags.c_contiguous else np.ascontiguousarray(out)
+    t_jit._COR_out(x_c, a_c, wins, mc, out_c)
+    return out_c
 
