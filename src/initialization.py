@@ -43,12 +43,18 @@ class Population:
         self, X_inst: np.ndarray,
         terminal_idx: np.ndarray | list,
         excluded_idx: np.ndarray | list,
-        max_size    : int   =   20000
+        max_size    : int   =   20000,
+        include_time: bool  =   False,
+        structure   : str   =   'Continuous'
     ):
         self._X_inst = X_inst
         self._T_idx = np.asarray(terminal_idx, dtype=np.int64)
         self._E_idx = np.asarray(excluded_idx, dtype=np.int64)
         self._max_size = max_size
+        self._structure= structure
+
+        if(include_time):
+            raise NotImplementedError('include_time not yet implemented. For development, we will generate day of week, time of day sensor variables and adjust legal and terminal indices')
 
         #allocating entire space of possible instructions
         self._instructions = np.zeros((max_size, 11), dtype=np.float32)
@@ -501,7 +507,7 @@ def generate_instructions(
         #match case different grammars
         match(grm_prior._type):
             #this case will not consider any form of grammar
-            case 'None':
+            case 'Null':
                 #first thing will be to allocate some memory for instructions
                 #instruction format will be along the lines of
 
@@ -1678,3 +1684,74 @@ def instantiate_from_ops_chunked_sanitize(
                     f"NaN={rep_nan.get(('final', -1), 0)}, Inf={rep_inf.get(('final', -1), 0)}")
 
     return X_out, stats
+
+import pandas as pd
+
+def initialize(
+    structure   :   str =   'Continuous',
+    incl_time   :   bool=   False,
+    data_file   :   str =   '../data/spy5m.csv',
+    epoch_idx   :   list=   [0],
+    hlocv_idx   :   list=   [1,2,3,4],
+    pop_size    :   int =   1000,
+    grmr_type   :   str =   'Null',
+    grmr_mdl    :   int | tuple =   240,
+    gen_chunk   :   float   =   0.1,
+    verbose     :   int =   0
+):
+    '''
+    The all in one function for initialization
+    this function should be usable as a one liner, ending at instantated genes
+    '''
+
+    #read in data first
+    x_raw = pd.read_csv(data_file)
+    if(verbose>1):print('Data loaded')
+
+    #generate our population variable and pass all parameters
+    X = Population(
+        X_inst=x_raw.values,
+        terminal_idx=hlocv_idx,
+        excluded_idx=epoch_idx,
+        max_size=pop_size,
+        include_time=incl_time,
+        structure=structure
+    )
+    if(verbose>1):print('Population initialized')
+    
+    #generate our grammar variable and pass all parameters
+    grammar = Grammar(
+        type=grmr_type,
+        max_delta_lookback=grmr_mdl
+    )
+    if(verbose>1):print('Grammar Initialized')
+
+    if(verbose>0):print('Initializations complete')
+
+    #clarify gen_chunk format
+    #gen_chunk can be fraction of generating space, or actual integer
+    if(gen_chunk<0):
+        raise ValueError(f'gen_chunk came in as negative ({gen_chunk}). Must be positive.')
+    elif(gen_chunk<1):
+        chunk_size = int(np.ceil(pop_size * gen_chunk))
+    elif(gen_chunk>pop_size):
+        chunk_size = pop_size
+    else:
+        chunk_size = gen_chunk
+    if(verbose>0):print(f'Chunk Sizes: {chunk_size}')
+    
+    #generate instructions (in place, resides in X)
+    generate_instructions(
+        pop_prior=X,
+        grm_prior=grammar,
+        #a little clunky but maybe easiest,
+        #this is the open space not used so far
+        #so total size - excluded space and legal existing space
+        n=(pop_size - X._E_idx.size - X._L_idx.size),
+        chunk_size=chunk_size
+    )
+    if(verbose>0):print(f'Instructions generated.')
+    if(verbose>0):print(f'Initialization complete.')
+
+    #this functions returns the initial population (has instructions) and grammar
+    return X, grammar

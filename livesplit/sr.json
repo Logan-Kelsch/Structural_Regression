@@ -10,11 +10,11 @@
       "Name": "MEP Structure"
     },
     {
-      "Time": null,
+      "Time": "16:27:12.8292304",
       "Name": "Instantiate & Null G"
     },
     {
-      "Time": null,
+      "Time": "17:20:38.4590822",
       "Name": "GP Mod Initialization"
     },
     {
@@ -122,7 +122,7 @@
       "Name": "Compile Results"
     }
   ],
-  "CurrentSplitIndex": 2,
+  "CurrentSplitIndex": 4,
   "CurrentSplitTime": null,
-  "CurrentTime": "15:52:29.8274921"
+  "CurrentTime": "17:20:44.5123937"
 }
