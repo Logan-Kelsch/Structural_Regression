@@ -599,27 +599,48 @@ def _ZSC_inp(x, wins, mc):
             else:
                 x[t, j] = np.nan
 
-@njit(parallel=False, fastmath=True)
+@njit(parallel=False, fastmath=True, cache=True)
 def _ZSC_out(x, wins, mc, out):
     m, n = x.shape
-    for j in prange(n):
-        w = wins[j]; mcount = mc[j]
-        if mcount < 1: mcount = 1
-        s = 0.0; ss = 0.0
+
+    for j in range(n):
+        w = int(wins[j])
+        mcount = int(mc[j])
+
+        if w < 1:
+            w = 1
+        elif w > m:
+            w = m
+
+        if mcount < 1:
+            mcount = 1
+        elif mcount > w:
+            mcount = w
+
+        s = 0.0
+        ss = 0.0
+
         for t in range(m):
             ct = x[t, j]
-            s += ct; ss += ct*ct
+            s += ct
+            ss += ct * ct
+
             if t >= w:
                 old = x[t - w, j]
-                s -= old; ss -= old*old
+                s -= old
+                ss -= old * old
                 L = w
             else:
                 L = t + 1
+
             if L >= mcount and L > 1:
                 mu = s / L
-                var = (ss / L) - mu*mu
-                if var < 0.0: var = 0.0
-                out[t, j] = (ct - mu) / np.sqrt(var + 1e-12)
+                var = (ss / L) - (mu * mu)
+
+                if var <= 0.0:
+                    out[t, j] = np.nan
+                else:
+                    out[t, j] = (ct - mu) / np.sqrt(var)
             else:
                 out[t, j] = np.nan
 
