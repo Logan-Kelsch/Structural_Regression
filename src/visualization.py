@@ -205,3 +205,77 @@ def plot_grouped_by_scale(X, N_sample: int = 100):
 
     plt.show()
     return fig, axes, groups
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_intraday_overlay(population, G: int, *, alpha: float = 0.08, linewidth: float = 0.8):
+    """
+    Overlay every intraday path for column G using the time-since-market-open column
+    at population._X_inst[:, population._T_idx[-2]].
+
+    Assumes:
+      - population._X_inst is 2D with shape (N, M)
+      - population._T_idx[-2] is the "minutes since market open" column
+      - each day starts where that column == 0
+
+    If exact zeros are not found reliably, it falls back to splitting whenever the
+    time column decreases from one row to the next.
+    """
+    if not hasattr(population, "_X_inst"):
+        raise AttributeError("population must have attribute '_X_inst'")
+    if not hasattr(population, "_T_idx"):
+        raise AttributeError("population must have attribute '_T_idx'")
+
+    X = population._X_inst
+    if not isinstance(X, np.ndarray):
+        raise TypeError("population._X_inst must be a numpy ndarray")
+    if X.ndim != 2:
+        raise ValueError("population._X_inst must be 2D")
+    if len(population._T_idx) < 2:
+        raise ValueError("population._T_idx must have at least two entries")
+    if G < 0 or G >= X.shape[1]:
+        raise ValueError(f"G={G} is out of bounds for X_inst with {X.shape[1]} columns")
+
+    t_col = int(population._T_idx[-2])
+    if t_col < 0 or t_col >= X.shape[1]:
+        raise ValueError(f"time column index {t_col} is out of bounds")
+
+    t = X[:, t_col]
+    y = X[:, G]
+
+    # Primary split rule: exact 0 means a new day start
+    day_starts = np.flatnonzero(t == 0)
+
+    # Fallback: if zeros are scarce/missing, split on wrap/decrease
+    if day_starts.size == 0:
+        day_starts = np.concatenate(([0], np.flatnonzero(np.diff(t) < 0) + 1))
+
+    # Ensure row 0 is included as a segment start
+    if day_starts[0] != 0:
+        day_starts = np.concatenate(([0], day_starts))
+
+    day_ends = np.empty_like(day_starts)
+    day_ends[:-1] = day_starts[1:]
+    day_ends[-1] = X.shape[0]
+
+    plt.figure(figsize=(10, 6))
+
+    days_plotted = 0
+    for s, e in zip(day_starts, day_ends):
+        if e - s <= 1:
+            continue
+
+        x_day = t[s:e]
+        y_day = y[s:e]
+
+        # sort by x within day just in case
+        order = np.argsort(x_day)
+        plt.plot(x_day[order], y_day[order], alpha=alpha, linewidth=linewidth)
+        days_plotted += 1
+
+    plt.title(f"Intraday Overlay for Column {G} ({days_plotted} days)")
+    plt.xlabel("Minutes Since Market Open")
+    plt.ylabel(f"X_inst[:, {G}]")
+    plt.grid(True)
+    plt.show()

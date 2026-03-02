@@ -45,38 +45,75 @@ class Population:
         excluded_idx: np.ndarray | list,
         max_size    : int   =   20000,
         include_time: bool  =   False,
-        structure   : str   =   'Continuous'
+        structure   : str   =   'Continuous',
+        market_only : bool  =   True,
+        market_close: int   =   390
     ):
         self._X_inst = X_inst
         self._T_idx = np.asarray(terminal_idx, dtype=np.int64)
         self._E_idx = np.asarray(excluded_idx, dtype=np.int64)
+        self._G_idx = np.asarray([], dtype=np.int64)
+        
         self._max_size = max_size
         self._structure= structure
+        self._time_terminals = include_time
 
         if(include_time):
-            raise NotImplementedError('include_time not yet implemented. For development, we will generate day of week, time of day sensor variables and adjust legal and terminal indices')
+            #NOTE tentative must is that epoch time column is first in excluded idx array
+            #need to grab what index we are putting this in (will be terminal state)
+            next_idx = self._T_idx.max()
+            time_src_col = int(self._E_idx[0])
+
+            next_idx = int(self._T_idx.max())
+
+            # next_idx+1 -> minutes relative to market open
+            self._X_inst[:, next_idx + 1] = tod_minutes_from_dstaware(
+                self._X_inst[:, time_src_col],
+                mode='market_open'
+            )
+
+            # next_idx+2 -> day of week, DST-aware
+            self._X_inst[:, next_idx + 2] = dow_sun0_from_epoch(
+                self._X_inst[:, time_src_col]
+            )
+
+            self._T_idx = np.concatenate((self._T_idx, [next_idx + 1, next_idx + 2]))
+            
+
+            # optional regular-market-hours-only filter
+            if market_only and structure=='Intraday':
+                tod_col = next_idx + 1
+                tod_mkt = self._X_inst[:, tod_col]
+
+                # keep [0, market_close_min) by default
+                # if your timestamps are end-of-bar and you want 16:00 included,
+                # change < market_close_min to <= market_close_min
+                keep_mask = (tod_mkt >= 0) & (tod_mkt < market_close)
+
+                if not np.any(keep_mask):
+                    raise ValueError(
+                        "market_only=True produced zero kept rows. "
+                        "Check the market-open time column and timestamp convention."
+                    )
+
+                old_X = self._X_inst
+                self._X_inst = old_X[keep_mask].copy()
+
+                del old_X, keep_mask, tod_mkt
+
 
         #allocating entire space of possible instructions
         self._instructions = np.zeros((max_size, 11), dtype=np.float32)
 
         #writing in gene indices for our terminal or excluded columns
-        self._instructions[:self._X_inst.shape[1], 0] = np.arange(self._X_inst.shape[1], dtype=np.uint16)
+        self._instructions[self._T_idx, 0] = self._T_idx
 
         # throw error if any intersection
         overlap = np.intersect1d(self._T_idx, self._E_idx, assume_unique=False)
         if overlap.size:
             raise ValueError(f"terminal_idx and excluded_idx overlap at indices: {overlap.tolist()}")
-
-        # union (combined set to exclude from genes)
-        TE_idx = np.union1d(self._T_idx, self._E_idx)  # sorted unique
-
-        # mask over COLUMNS (features), not rows
-        mask = np.ones(self._X_inst.shape[1], dtype=np.bool_)
-        mask[TE_idx] = False
-        self._G_idx = np.flatnonzero(mask)
-
-        # legal indices = terminals + genes (already disjoint because G excludes T and E)
-        self._L_idx = np.union1d(self._T_idx, self._G_idx).astype(np.int64, copy=False)
+        
+        self._L_idx = np.asarray(self._T_idx, dtype=np.int64)
 
 
 
@@ -587,13 +624,15 @@ def generate_instructions(
                 #this will mean entire size of X_inst is allocated before even the first generation of genes
 
                 #return inst_inst
+
+                #print('adding indices to gidx:', inst_inst[:, 0])
             case _:
                 raise ValueError('Cannot interpret grammar prior in generate_genes. Illegal type.')
             
         #at this point, we are going to add our instructions into the population prior
         #this starts with adding new gene instructions into gene and legal indices variables
-        pop_prior._G_idx = np.union1d(pop_prior._G_idx, inst_inst[:, 0])
-        pop_prior._L_idx = np.union1d(pop_prior._L_idx, pop_prior._G_idx)
+        #pop_prior._G_idx = np.union1d(pop_prior._G_idx, inst_inst[:, 0])
+        #pop_prior._L_idx = np.union1d(pop_prior._L_idx, pop_prior._G_idx)
         #print(f'Lidx: {pop_prior._L_idx}')
         #print(f'Gidx: {pop_prior._G_idx}')
         #print(f'instinst0: {inst_inst[:, 0]}')
@@ -604,7 +643,8 @@ def generate_instructions(
         empty = (col0 == 0)
         empty[0] = False
         break_idx = (empty == 1).argmax()
-        #print(break_idx, empty[:10])
+        #print(break_idx, col0[:])
+        #print('adding them at:', break_idx)
 
         #then we will actually bring in the new instantiation instructions into correct memory locations
         #this should place the instructions correctly into the population prior that was provided
@@ -983,6 +1023,76 @@ def build_operation_list(instructions: np.ndarray,
             break
 
     return op_list
+
+import numpy as np
+
+def _epoch_to_seconds_i64(t_epoch) -> np.ndarray:
+    """
+    Convert epoch-like input to int64 seconds.
+    Auto-detects seconds vs milliseconds by magnitude.
+    """
+    t = np.asarray(t_epoch)
+
+    if np.issubdtype(t.dtype, np.floating):
+        t = np.rint(t)
+
+    t = t.astype(np.int64, copy=False)
+
+    if t.size == 0:
+        return t
+
+    # modern epoch seconds ~1e9, milliseconds ~1e12
+    if np.max(np.abs(t)) >= 10**11:
+        t = t // 1000
+
+    return t
+
+
+import pandas as pd
+
+def tod_minutes_from_dstaware(t_epoch, mode: str = "market_open") -> np.ndarray:
+    """
+    DST-aware minutes feature using America/New_York.
+
+    mode:
+      - 'time_of_day'  -> minutes into local day [0, 1439]
+      - 'market_open'  -> minutes relative to 9:30 local time
+                          (before open are negative)
+    """
+    t = np.asarray(t_epoch)
+
+    if np.issubdtype(t.dtype, np.floating):
+        t = np.rint(t)
+
+    t = t.astype(np.int64, copy=False)
+
+    if t.size == 0:
+        return np.empty(0, dtype=np.int32)
+
+    # auto-detect sec vs ms
+    unit = "ms" if np.max(np.abs(t)) >= 10**11 else "s"
+
+    dt_ny = pd.to_datetime(t, unit=unit, utc=True).tz_convert("America/New_York")
+
+    minutes_of_day = (dt_ny.hour * 60 + dt_ny.minute).astype(np.int32)
+
+    if mode == "time_of_day":
+        return minutes_of_day
+
+    if mode == "market_open":
+        return (minutes_of_day - 570).astype(np.int32)  # 9:30 = 570
+
+    raise ValueError(f"mode must be 'market_open' or 'time_of_day', got {mode!r}")
+
+
+def dow_sun0_from_epoch(t_epoch, tz_offset_seconds: int = 0) -> np.ndarray:
+    """
+    Convert Unix epoch (seconds or milliseconds) to day-of-week:
+    0,1,2,3,4,5,6 = Sun,Mon,Tue,Wed,Thu,Fri,Sat
+    """
+    t_sec = _epoch_to_seconds_i64(t_epoch)
+    days_since_epoch = (t_sec + np.int64(tz_offset_seconds)) // 86400
+    return np.mod(days_since_epoch + 4, 7).astype(np.int8)
 
 
 import numpy as np
@@ -1417,10 +1527,11 @@ _FUNC_ID_TO_NAME = {
    21: "t_COR",
 }
 
-def instantiate_from_ops_chunked_sanitize(
+def instantiate_from_ops_chunked_partialbuild_class(
     op_list,
     instructions: np.ndarray,     # (G,11)
     X_out: np.ndarray,            # (N,G)
+    population: Population,
     *,
     transform_ops,                # unified apply(func_id,...)
     chunk_B: int = 16,
@@ -1685,6 +1796,667 @@ def instantiate_from_ops_chunked_sanitize(
 
     return X_out, stats
 
+def instantiate_from_ops_chunked_contig(
+    population,
+    *,
+    transform_ops,
+    chunk_B: int = 16,
+    verbosity: int = 1,
+    sanitize_final: bool = True,
+):
+    """
+    Batched instantiation with aggressive NaN/Inf -> 0 sanitization and replacement tracking.
+
+    Uses:
+      - population._instructions
+      - population._X_inst
+      - op_list built internally via build_operation_list(population._instructions)
+
+    Parent rule:
+      For sensor-series slots, instruction stores negative displacement 'disp' (int-like),
+      parent = gene_idx + disp.
+
+    Verbosity:
+      0: silent
+      1: per-op timing
+      2: per-op timing + replacement tracking output
+      3: adds per-chunk timing + extra stats
+      4: very chatty
+    """
+    t0_all = time.perf_counter()
+
+    if not hasattr(population, "_instructions"):
+        raise AttributeError("population must have attribute '_instructions'")
+    if not hasattr(population, "_X_inst"):
+        raise AttributeError("population must have attribute '_X_inst'")
+
+    instructions = population._instructions
+    X_out = population._X_inst
+
+    if not isinstance(instructions, np.ndarray):
+        raise TypeError("population._instructions must be a numpy ndarray")
+    if not isinstance(X_out, np.ndarray):
+        raise TypeError("population._X_inst must be a numpy ndarray")
+
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("population._instructions must be shape (G,11) (need cols 0..9)")
+    if X_out.ndim != 2:
+        raise ValueError("population._X_inst must be 2D with shape (N, G)")
+
+    G = instructions.shape[0]
+    N = X_out.shape[0]
+
+    if X_out.shape[1] != G:
+        raise ValueError(f"population._X_inst.shape[1]={X_out.shape[1]} must equal G={G}")
+
+    op_list = build_operation_list(instructions)
+
+    Bmax = int(chunk_B)
+
+    const_flags  = instructions[:, 3].astype(np.uint32, copy=False)
+    sensor_flags = instructions[:, 4].astype(np.uint32, copy=False)
+
+    x_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+    a_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+    y_buf = np.empty((N, Bmax), dtype=X_out.dtype)
+
+    rep_nan = defaultdict(int)
+    rep_inf = defaultdict(int)
+
+    def _log(level: int, msg: str):
+        if verbosity >= level:
+            print(msg)
+
+    def _sanitize_inplace(arr: np.ndarray, key):
+        nan_mask = np.isnan(arr)
+        if nan_mask.any():
+            rep_nan[key] += int(nan_mask.sum())
+
+        fin_mask = np.isfinite(arr)
+        if (~fin_mask).any():
+            rep_inf[key] += int((~fin_mask).sum() - nan_mask.sum())
+
+        np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+
+    def _fill_series(var_code: str, idx_chunk: np.ndarray, buf: np.ndarray, func_id: int):
+        """
+        Fill buf[:, :B] with resolved series for var_code ('x' or 'a'):
+          - CONST flag  => broadcast scalar down N
+          - SENSOR flag => gather parent series using parent = idx + disp
+          - else        => 0.0
+        Then sanitize NaN/Inf -> 0.
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        raw = instructions[idx_chunk, col]
+
+        out_view = buf[:, :B]
+        out_view.fill(0.0)
+
+        if np.any(is_sensor):
+            disp = raw[is_sensor].astype(np.int64, copy=False)
+
+            if np.any(disp >= 0):
+                bad = disp[disp >= 0][:10]
+                raise ValueError(f"{var_code}: expected negative displacement for sensor slots; got {bad}")
+
+            parents = idx_chunk[is_sensor] + disp
+            if np.any(parents < 0) or np.any(parents >= G):
+                bad = parents[(parents < 0) | (parents >= G)][:10]
+                raise ValueError(f"{var_code}: parent out of bounds (first bad: {bad})")
+
+            out_view[:, is_sensor] = X_out[:, parents]
+
+        if np.any(is_const):
+            cvals = raw[is_const].astype(X_out.dtype, copy=False)
+            out_view[:, is_const] = cvals[None, :]
+
+        stage = "input_x" if var_code == "x" else "input_a"
+        _sanitize_inplace(out_view, (stage, func_id))
+
+        if verbosity >= 4:
+            _log(4, f"    [{stage}] B={B} const={int(is_const.sum())} sensor={int(is_sensor.sum())}")
+
+        return out_view
+
+    def _param_vec(var_code: str, idx_chunk: np.ndarray, cast, default, clamp_min=None):
+        """
+        Per-gene parameter vector (delta/kappa).
+        If sensor-flagged, this indicates a bug; raise.
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        if np.any(is_sensor):
+            raise ValueError(f"{var_code}: unexpectedly sensor-flagged for param vector")
+
+        raw = instructions[idx_chunk, col]
+        out = np.empty(B, dtype=cast)
+        out[:] = cast(default)
+
+        if np.any(is_const):
+            out[is_const] = raw[is_const].astype(cast, copy=False)
+
+        if clamp_min is not None:
+            out = np.maximum(out, cast(clamp_min))
+
+        return out
+
+    op_times = defaultdict(float)
+    op_counts = defaultdict(int)
+
+    for func_id, gene_idx in op_list:
+        fid = int(func_id)
+        if fid == 0:
+            continue
+
+        name = _FUNC_ID_TO_NAME.get(fid, f"fid_{fid}")
+        used_vars = F_AS(fid)
+
+        gene_idx = np.asarray(gene_idx, dtype=np.int64).reshape(-1)
+        if gene_idx.size == 0:
+            continue
+
+        t0_op = time.perf_counter()
+
+        for start in range(0, gene_idx.size, Bmax):
+            idx_chunk = gene_idx[start:start + Bmax]
+            B = idx_chunk.size
+
+            t0_chunk = time.perf_counter()
+
+            x_view = _fill_series("x", idx_chunk, x_buf, fid)
+
+            alpha_arg = None
+            if "a" in used_vars:
+                a_view = _fill_series("a", idx_chunk, a_buf, fid)
+                alpha_arg = a_view
+
+            delta1_vec = None
+            delta2_vec = None
+            kappa_vec  = None
+
+            if "d" in used_vars:
+                delta1_vec = _param_vec("d", idx_chunk, cast=np.int64, default=2, clamp_min=2)
+            if "dd" in used_vars:
+                delta2_vec = _param_vec("dd", idx_chunk, cast=np.int64, default=2, clamp_min=2)
+            if "k" in used_vars:
+                kappa_vec = _param_vec("k", idx_chunk, cast=np.float32, default=1.0, clamp_min=None)
+
+            y_view = y_buf[:, :B]
+            transform_ops.apply(
+                fid,
+                x_view,
+                alpha=alpha_arg,
+                delta1=delta1_vec,
+                delta2=delta2_vec,
+                kappa=kappa_vec,
+                out=y_view,
+                in_place=False,
+            )
+
+            _sanitize_inplace(y_view, ("output", fid))
+
+            X_out[:, idx_chunk] = y_view
+
+            if verbosity >= 3:
+                _log(
+                    3,
+                    f"  [chunk] {name} fid={fid} start={start} B={B} "
+                    f"dt={(time.perf_counter()-t0_chunk)*1000:.1f}ms"
+                )
+
+        dt_op = time.perf_counter() - t0_op
+        op_times[fid] += dt_op
+        op_counts[fid] += int(gene_idx.size)
+
+        if verbosity >= 1:
+            _log(1, f"[op] {name:5s} fid={fid:2d} genes={gene_idx.size:6d} time={dt_op:.3f}s")
+
+        if verbosity >= 2:
+            nan_in_x = rep_nan.get(("input_x", fid), 0)
+            inf_in_x = rep_inf.get(("input_x", fid), 0)
+            nan_in_a = rep_nan.get(("input_a", fid), 0)
+            inf_in_a = rep_inf.get(("input_a", fid), 0)
+            nan_out  = rep_nan.get(("output", fid), 0)
+            inf_out  = rep_inf.get(("output", fid), 0)
+
+            if (nan_in_x or inf_in_x or nan_in_a or inf_in_a or nan_out or inf_out):
+                _log(
+                    2,
+                    f"    [repl] fid={fid:2d} {name}: "
+                    f"x(nan={nan_in_x},inf={inf_in_x}) "
+                    f"a(nan={nan_in_a},inf={inf_in_a}) "
+                    f"out(nan={nan_out},inf={inf_out})"
+                )
+
+    if sanitize_final:
+        _sanitize_inplace(X_out, ("final", -1))
+
+    t1_all = time.perf_counter()
+    stats = {
+        "total_time_s": float(t1_all - t0_all),
+        "op_times_s": dict(op_times),
+        "op_gene_counts": dict(op_counts),
+        "replaced_nan": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_nan.items()},
+        "replaced_inf": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_inf.items()},
+    }
+
+    if verbosity >= 2:
+        total_nan = sum(rep_nan.values())
+        total_inf = sum(rep_inf.values())
+        _log(2, f"[sanitize] total replaced: NaN={total_nan}, Inf={total_inf}")
+        if sanitize_final:
+            _log(
+                2,
+                f"[sanitize] final pass replaced: "
+                f"NaN={rep_nan.get(('final', -1), 0)}, Inf={rep_inf.get(('final', -1), 0)}"
+            )
+
+    return stats
+
+import time
+from collections import defaultdict
+import numpy as np
+
+def instantiate_from_ops_chunked_intraday(
+    population,
+    *,
+    transform_ops,
+    chunk_B: int = 16,
+    verbosity: int = 1,
+    sanitize_final: bool = True,
+):
+    """
+    Intraday segmented instantiation on population._X_inst of shape (N, G).
+
+    Rules
+    -----
+    - population._time_terminals must be True
+    - population._structure must equal 'Intraday'
+    - time-of-day column is population._T_idx[-2]
+    - every exact zero in that time-of-day column is treated as the start of a new day/chunk
+    - instantiation is run separately on each chunk [zero_i : zero_{i+1}) or [zero_last : N)
+
+    This preserves intraday resets for:
+    - rolling / window-like transforms
+    - self-referencing behavior
+    - value initialization from t0 within each chunk
+
+    Verbosity
+    ---------
+    0 : silent
+    1 : print number of counted days (zero starts) + total timing
+    2 : add per-day timing + replacement summary
+    3 : add per-op timing
+    4 : add per-chunk timing / debug details
+
+    Returns
+    -------
+    stats : dict
+        Timing and replacement statistics.
+
+    Notes
+    -----
+    - population._X_inst is updated in place
+    - this function assumes the time-of-day column is already present in population._X_inst
+    - this function requires:
+        _VAR_TO_BIT
+        _VAR_TO_COL
+        _FUNC_ID_TO_NAME
+        F_AS
+        build_operation_list
+      to exist in scope
+    """
+    t0_all = time.perf_counter()
+
+    # ------------------------------------------------------------
+    # population validation
+    # ------------------------------------------------------------
+    if not hasattr(population, "_time_terminals"):
+        raise AttributeError("population must have attribute '_time_terminals'")
+    if population._time_terminals is not True:
+        raise ValueError("population._time_terminals must be True")
+
+    if not hasattr(population, "_structure"):
+        raise AttributeError("population must have attribute '_structure'")
+    if population._structure != "Intraday":
+        raise ValueError(
+            f"population._structure must be 'Intraday', got {population._structure!r}"
+        )
+
+    if not hasattr(population, "_instructions"):
+        raise AttributeError("population must have attribute '_instructions'")
+    if not hasattr(population, "_X_inst"):
+        raise AttributeError("population must have attribute '_X_inst'")
+    if not hasattr(population, "_T_idx"):
+        raise AttributeError("population must have attribute '_T_idx'")
+
+    instructions = population._instructions
+    X_out = population._X_inst
+
+    if not isinstance(instructions, np.ndarray):
+        raise TypeError("population._instructions must be a numpy ndarray")
+    if not isinstance(X_out, np.ndarray):
+        raise TypeError("population._X_inst must be a numpy ndarray")
+
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("population._instructions must be shape (G,11) or have cols 0..9")
+    if X_out.ndim != 2:
+        raise ValueError("population._X_inst must be 2D with shape (N, G)")
+
+    N, Gx = X_out.shape
+    G = instructions.shape[0]
+
+    if Gx != G:
+        raise ValueError(
+            f"population._X_inst.shape[1]={Gx} must equal number of instructions G={G}"
+        )
+
+    if len(population._T_idx) < 2:
+        raise ValueError("population._T_idx must have at least two entries so _T_idx[-2] exists")
+
+    tod_col = int(population._T_idx[-2])
+    if tod_col < 0 or tod_col >= G:
+        raise ValueError(
+            f"time-of-day column population._T_idx[-2]={tod_col} is out of bounds for G={G}"
+        )
+
+    def _log(level: int, msg: str):
+        if verbosity >= level:
+            print(msg)
+
+    # ------------------------------------------------------------
+    # detect day starts from exact zeros in TOD column
+    # ------------------------------------------------------------
+    tod = X_out[:, tod_col]
+    day_starts = np.flatnonzero(tod == 0)
+
+    if day_starts.size == 0:
+        raise ValueError(
+            f"No zeros were found in the time-of-day column at population._T_idx[-2]={tod_col}"
+        )
+
+    if day_starts[0] != 0:
+        raise ValueError(
+            f"First zero in the time-of-day column occurs at row {int(day_starts[0])}, not row 0. "
+            "This would leave leading rows outside any intraday reset chunk."
+        )
+
+    day_ends = np.empty_like(day_starts)
+    day_ends[:-1] = day_starts[1:]
+    day_ends[-1] = N
+
+    days_counted = int(day_starts.size)
+
+    if verbosity >= 1:
+        _log(1, f"[intraday] counted days={days_counted}")
+
+    # ------------------------------------------------------------
+    # build schedule once
+    # ------------------------------------------------------------
+    op_list = build_operation_list(instructions)
+    Bmax = int(chunk_B)
+
+    const_flags  = instructions[:, 3].astype(np.uint32, copy=False)
+    sensor_flags = instructions[:, 4].astype(np.uint32, copy=False)
+
+    rep_nan = defaultdict(int)
+    rep_inf = defaultdict(int)
+
+    op_times = defaultdict(float)
+    op_counts = defaultdict(int)
+    day_times = []
+
+    def _sanitize_inplace(arr: np.ndarray, key):
+        nan_mask = np.isnan(arr)
+        if nan_mask.any():
+            rep_nan[key] += int(nan_mask.sum())
+
+        fin_mask = np.isfinite(arr)
+        if (~fin_mask).any():
+            rep_inf[key] += int((~fin_mask).sum() - nan_mask.sum())
+
+        np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+
+    def _fill_series(X_seg: np.ndarray, var_code: str, idx_chunk: np.ndarray, buf: np.ndarray, func_id: int):
+        """
+        Fill buf[:, :B] using one day/segment slice X_seg of shape (Ns, G):
+          - CONST flag  => broadcast scalar down Ns
+          - SENSOR flag => gather parent series from X_seg[:, parents]
+          - else        => 0.0
+
+        Sanitizes NaN/Inf -> 0 in place.
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        raw = instructions[idx_chunk, col]
+
+        out_view = buf[:, :B]
+        out_view.fill(0.0)
+
+        if np.any(is_sensor):
+            disp = raw[is_sensor].astype(np.int64, copy=False)
+
+            if np.any(disp >= 0):
+                bad = disp[disp >= 0][:10]
+                raise ValueError(
+                    f"{var_code}: expected negative displacement for sensor slots; got {bad}"
+                )
+
+            parents = idx_chunk[is_sensor] + disp
+            if np.any(parents < 0) or np.any(parents >= G):
+                bad = parents[(parents < 0) | (parents >= G)][:10]
+                raise ValueError(
+                    f"{var_code}: parent out of bounds (first bad: {bad})"
+                )
+
+            # important: gather only from current segment to preserve intraday reset behavior
+            out_view[:, is_sensor] = X_seg[:, parents]
+
+        if np.any(is_const):
+            cvals = raw[is_const].astype(X_seg.dtype, copy=False)
+            out_view[:, is_const] = cvals[None, :]
+
+        stage = "input_x" if var_code == "x" else "input_a"
+        _sanitize_inplace(out_view, (stage, func_id))
+
+        if verbosity >= 4:
+            _log(
+                4,
+                f"    [{stage}] segN={X_seg.shape[0]} B={B} "
+                f"const={int(is_const.sum())} sensor={int(is_sensor.sum())}"
+            )
+
+        return out_view
+
+    def _param_vec(var_code: str, idx_chunk: np.ndarray, cast, default, clamp_min=None):
+        """
+        Per-gene parameter vector (delta/kappa).
+        Sensor-flagged params are invalid.
+        """
+        B = idx_chunk.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_chunk]
+        sf = sensor_flags[idx_chunk]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        if np.any(is_sensor):
+            raise ValueError(f"{var_code}: unexpectedly sensor-flagged for param vector")
+
+        raw = instructions[idx_chunk, col]
+        out = np.empty(B, dtype=cast)
+        out[:] = cast(default)
+
+        if np.any(is_const):
+            out[is_const] = raw[is_const].astype(cast, copy=False)
+
+        if clamp_min is not None:
+            out = np.maximum(out, cast(clamp_min))
+
+        return out
+
+    # ------------------------------------------------------------
+    # per-day segmented instantiation
+    # ------------------------------------------------------------
+    for day_i, (start_row, end_row) in enumerate(zip(day_starts, day_ends), start=1):
+        t0_day = time.perf_counter()
+
+        X_seg = X_out[start_row:end_row, :]
+        Ns = X_seg.shape[0]
+
+        if Ns <= 0:
+            continue
+
+        x_buf = np.empty((Ns, Bmax), dtype=X_seg.dtype)
+        a_buf = np.empty((Ns, Bmax), dtype=X_seg.dtype)
+        y_buf = np.empty((Ns, Bmax), dtype=X_seg.dtype)
+
+        for func_id, gene_idx in op_list:
+            fid = int(func_id)
+            if fid == 0:
+                continue
+
+            name = _FUNC_ID_TO_NAME.get(fid, f"fid_{fid}")
+            used_vars = F_AS(fid)
+
+            gene_idx = np.asarray(gene_idx, dtype=np.int64).reshape(-1)
+            if gene_idx.size == 0:
+                continue
+
+            t0_op = time.perf_counter()
+
+            for start in range(0, gene_idx.size, Bmax):
+                idx_chunk = gene_idx[start:start + Bmax]
+                B = idx_chunk.size
+
+                t0_chunk = time.perf_counter()
+
+                x_view = _fill_series(X_seg, "x", idx_chunk, x_buf, fid)
+
+                alpha_arg = None
+                if "a" in used_vars:
+                    a_view = _fill_series(X_seg, "a", idx_chunk, a_buf, fid)
+                    alpha_arg = a_view
+
+                delta1_vec = None
+                delta2_vec = None
+                kappa_vec  = None
+
+                if "d" in used_vars:
+                    delta1_vec = _param_vec("d", idx_chunk, cast=np.int64, default=2, clamp_min=2)
+                if "dd" in used_vars:
+                    delta2_vec = _param_vec("dd", idx_chunk, cast=np.int64, default=2, clamp_min=2)
+                if "k" in used_vars:
+                    kappa_vec = _param_vec("k", idx_chunk, cast=np.float32, default=1.0, clamp_min=None)
+
+                y_view = y_buf[:, :B]
+                transform_ops.apply(
+                    fid,
+                    x_view,
+                    alpha=alpha_arg,
+                    delta1=delta1_vec,
+                    delta2=delta2_vec,
+                    kappa=kappa_vec,
+                    out=y_view,
+                    in_place=False,
+                )
+
+                _sanitize_inplace(y_view, ("output", fid))
+
+                # write back only into this segment
+                X_seg[:, idx_chunk] = y_view
+
+                if verbosity >= 4:
+                    _log(
+                        4,
+                        f"  [day={day_i:4d}] [chunk] {name} fid={fid} "
+                        f"rows=[{start_row}:{end_row}) gene_start={start} B={B} "
+                        f"dt={(time.perf_counter()-t0_chunk)*1000:.1f}ms"
+                    )
+
+            dt_op = time.perf_counter() - t0_op
+            op_times[fid] += dt_op
+            op_counts[fid] += int(gene_idx.size)
+
+            if verbosity >= 3:
+                _log(
+                    3,
+                    f"[day={day_i:4d}] [op] {name:5s} fid={fid:2d} "
+                    f"genes={gene_idx.size:6d} seg_rows={Ns:6d} time={dt_op:.3f}s"
+                )
+
+        dt_day = time.perf_counter() - t0_day
+        day_times.append(float(dt_day))
+
+        if verbosity >= 2:
+            _log(
+                2,
+                f"[day={day_i:4d}] rows=[{int(start_row)}:{int(end_row)}) "
+                f"Nseg={Ns} time={dt_day:.3f}s"
+            )
+
+    # ------------------------------------------------------------
+    # final sanitize on whole instantiated matrix
+    # ------------------------------------------------------------
+    if sanitize_final:
+        _sanitize_inplace(X_out, ("final", -1))
+
+    total_time_s = time.perf_counter() - t0_all
+
+    stats = {
+        "days_counted": int(days_counted),
+        "time_of_day_col": int(tod_col),
+        "day_starts": day_starts.copy(),
+        "day_ends": day_ends.copy(),
+        "total_time_s": float(total_time_s),
+        "day_times_s": day_times,
+        "op_times_s": dict(op_times),
+        "op_gene_counts": dict(op_counts),
+        "replaced_nan": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_nan.items()},
+        "replaced_inf": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_inf.items()},
+    }
+
+    if verbosity >= 1:
+        _log(1, f"[intraday] total_time={total_time_s:.3f}s")
+
+    if verbosity >= 2:
+        total_nan = sum(rep_nan.values())
+        total_inf = sum(rep_inf.values())
+        _log(2, f"[sanitize] total replaced: NaN={total_nan}, Inf={total_inf}")
+        if sanitize_final:
+            _log(
+                2,
+                f"[sanitize] final pass replaced: "
+                f"NaN={rep_nan.get(('final', -1), 0)}, "
+                f"Inf={rep_inf.get(('final', -1), 0)}"
+            )
+
+    return stats
+
 import pandas as pd
 
 def initialize(
@@ -1706,11 +2478,23 @@ def initialize(
 
     #read in data first
     x_raw = pd.read_csv(data_file)
+
+    #temporary error thrower to ensure we are not working with different
+    #shapes just so these next few lines are made modular
+    if x_raw.shape[1] != 5:
+        raise ValueError('x_raw came in with NOT 5 columns. check top of instantate function, currently using non modular approach for very simple variable initialization.')
+    
+    X_initialized = np.zeros((x_raw.shape[0], pop_size), dtype=np.float32)
+    x_raw = x_raw.to_numpy(dtype=np.float32, copy=False)
+    X_initialized[:, :5] = x_raw
+    del x_raw
+    
+
     if(verbose>1):print('Data loaded')
 
     #generate our population variable and pass all parameters
     X = Population(
-        X_inst=x_raw.values,
+        X_inst=X_initialized,
         terminal_idx=hlocv_idx,
         excluded_idx=epoch_idx,
         max_size=pop_size,
@@ -1739,6 +2523,10 @@ def initialize(
     else:
         chunk_size = gen_chunk
     if(verbose>0):print(f'Chunk Sizes: {chunk_size}')
+    if(verbose>1):print(f'pop size: {pop_size, type(pop_size)}')
+    #if(verbose>1):print(f'Tidx size: {X._T_idx.size}')
+    #if(verbose>1):print(f'Lidx size: {X._L_idx.size}')
+    if(verbose>1):print(f'n size: {int(pop_size - X._E_idx.size - X._T_idx.size)}')
     
     #generate instructions (in place, resides in X)
     generate_instructions(
@@ -1747,9 +2535,10 @@ def initialize(
         #a little clunky but maybe easiest,
         #this is the open space not used so far
         #so total size - excluded space and legal existing space
-        n=(pop_size - X._E_idx.size - X._L_idx.size),
+        n=int(pop_size - X._E_idx.size - X._T_idx.size),
         chunk_size=chunk_size
     )
+    #print(X._instructions)
     if(verbose>0):print(f'Instructions generated.')
     if(verbose>0):print(f'Initialization complete.')
 
