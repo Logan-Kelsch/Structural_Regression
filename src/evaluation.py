@@ -112,20 +112,22 @@ class Solver:
 
 			#generate a mask for where we want to allow comparison to be done
 			#the default will be at all locations
-			solution_mask = np.full(raw_emission.shape, True, dtype=bool)
+			evaluation_mask = generate_evaluation_mask(Population)
 
+			#may find a better shape or type for this default of no use
+			anomaly_mask = False
 
 			if(self._tmode=='AD'):
 				
 				#then we need to make a boolean masking variable where raw emission is true under AD_cond parameter interpretation
-				solution_mask = generate_solution_mask(raw_emission, self._AD_cond)	
+				anomaly_mask = generate_anomaly_mask(raw_emission, self._AD_cond)	
 
 		else:
 			raise NotImplementedError(f'Target Mode of "{self._tmode}" is not supported at this moment.')
 		
 		#now we have successfully solved the target for the population
 		#returns returns read all about it
-		return raw_emission, solution_mask
+		return raw_emission, evaluation_mask, anomaly_mask
 
 		
 
@@ -134,7 +136,8 @@ class Solver:
 def evaluate(
 	population	:	_I.Population,
 	raw_emissions:	any,
-	solution_mask:	any	
+	evaluation_mask	:	any,
+	anomaly_mask	:	any	
 ):
 	#bring in population to be able to see the instantiated genes
 	#identify the column that has real data that the solution will be derived from
@@ -142,7 +145,7 @@ def evaluate(
 
 	#NOTE SOMETHING LIKE
 	#
-	#	x[solution_mask].sum() for cost based evaluation, as initial example?? not really just scrap comments at the moment.
+	#	x[evaluation_mask] for cost based evaluation, as initial example?? not really just scrap comments at the moment.
 	#
 	#
 
@@ -150,15 +153,363 @@ def evaluate(
 	return
 
 
-def generate_raw_emission(
-	Population	:	_I.Population,
-	target_idx	:	int,
-	emission	:	list,
-):
-	return #something
+import transform_ops
 
-def generate_solution_mask(
-	raw_emission:	any,
-	AD_cond		:	tuple
-):
-	return #something
+
+def generate_raw_emission(Population, target_idx, emissions, offset):
+    """
+    Build a future-peeking target vector from Population._X_inst[:, target_idx]
+    and apply a left-to-right emission pipeline using transform_ops.apply.
+
+    Parameters
+    ----------
+    Population : object
+        Must have attribute `_X_inst` of shape (N, G).
+    target_idx : int
+        Column index in Population._X_inst to use as the base series.
+    emissions : list[dict]
+        Left-to-right operation list, e.g.
+        [
+            {"ID": 6, "alpha": 1.34},
+            {"ID": 20, "alpha": 0.0, "delta1": 20}
+        ]
+
+        Accepted keys inside each dict:
+            - "ID"       : required function ID
+            - "alpha"    : constant only
+            - "delta1"   : constant int only
+            - "delta2"   : constant int only
+            - "kappa"    : constant float only
+            - "min_count": constant int only
+
+    offset : int
+        Forward-looking offset. Equivalent to aligning each row with the value
+        `offset` steps in the future.
+
+    Returns
+    -------
+    y : np.ndarray, shape (N,)
+        Emitted target vector. The final `offset` positions are NaN because they
+        do not have enough future data.
+    """
+    # ------------------ validate population / source ------------------
+    if not hasattr(Population, "_X_inst"):
+        raise AttributeError("Population must have attribute '_X_inst'")
+
+    X = Population._X_inst
+    if not isinstance(X, np.ndarray):
+        raise TypeError("Population._X_inst must be a numpy ndarray")
+    if X.ndim != 2:
+        raise ValueError("Population._X_inst must be 2D with shape (N, G)")
+
+    N, G = X.shape
+
+    target_idx = int(target_idx)
+    if target_idx < 0 or target_idx >= G:
+        raise IndexError(f"target_idx={target_idx} out of bounds for G={G}")
+
+    offset = int(offset)
+    if offset < 0:
+        raise ValueError("offset must be >= 0")
+
+    if emissions is None:
+        emissions = []
+    if not isinstance(emissions, (list, tuple)):
+        raise TypeError("emissions must be a list/tuple of dict operations")
+
+    # ------------------ build the future-aligned base target ------------------
+    base = np.asarray(X[:, target_idx], dtype=np.float32)
+
+    valid_len = N - offset
+    out_full = np.full(N, np.nan, dtype=np.float32)
+
+    # If offset is beyond the data length, nothing is valid.
+    if valid_len <= 0:
+        return out_full
+
+    # Important:
+    # instead of np.roll(..., -offset) with wraparound contamination,
+    # we explicitly slice the valid future-aligned portion.
+    work = np.ascontiguousarray(base[offset:].reshape(valid_len, 1), dtype=np.float32)
+    buf = np.empty_like(work)
+
+    # ------------------ helpers ------------------
+    allowed_keys = {"ID", "alpha", "delta1", "delta2", "kappa", "min_count"}
+
+    def _require_scalar(name, value):
+        arr = np.asarray(value)
+        if arr.ndim != 0:
+            raise TypeError(f"Emission parameter '{name}' must be a scalar constant")
+        return arr.item()
+
+    def _build_apply_kwargs(fid, op, x_shape, x_dtype):
+        extra = set(op.keys()) - allowed_keys
+        if extra:
+            raise KeyError(
+                f"Unsupported keys in emission {op}: {sorted(extra)}. "
+                f"Allowed keys are {sorted(allowed_keys)}"
+            )
+
+        kwargs = {}
+
+        if "delta1" in op:
+            kwargs["delta1"] = int(_require_scalar("delta1", op["delta1"]))
+        if "delta2" in op:
+            kwargs["delta2"] = int(_require_scalar("delta2", op["delta2"]))
+        if "kappa" in op:
+            kwargs["kappa"] = float(_require_scalar("kappa", op["kappa"]))
+        if "min_count" in op:
+            kwargs["min_count"] = int(_require_scalar("min_count", op["min_count"]))
+
+        if "alpha" in op:
+            alpha_const = float(_require_scalar("alpha", op["alpha"]))
+
+            # AGR / COR require alpha matrix same shape as x
+            if fid in (20, 21):
+                kwargs["alpha"] = np.full(x_shape, alpha_const, dtype=x_dtype)
+            else:
+                kwargs["alpha"] = alpha_const
+        else:
+            if fid in (20, 21):
+                raise ValueError(f"Emission ID {fid} requires an 'alpha' constant")
+
+        return kwargs
+
+    # ------------------ left-to-right emission application ------------------
+    for i, op in enumerate(emissions):
+        if not isinstance(op, dict):
+            raise TypeError(f"Each emission must be a dict, got {type(op).__name__} at position {i}")
+        if "ID" not in op:
+            raise KeyError(f"Emission at position {i} is missing required key 'ID'")
+
+        fid = int(op["ID"])
+        if fid == 0:
+            continue
+
+        kwargs = _build_apply_kwargs(fid, op, work.shape, work.dtype)
+
+        transform_ops.apply(
+            fid,
+            work,
+            out=buf,
+            in_place=False,
+            **kwargs,
+        )
+
+        # Mirror the instantiation pipeline's defensive sanitization behavior.
+        np.nan_to_num(buf, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # ping-pong buffers
+        work, buf = buf, work
+
+    out_full[:valid_len] = work[:, 0]
+    return out_full
+
+
+def generate_evaluation_mask(Population:_I.Population, offset):
+    """
+    Build a boolean mask showing which rows can be validly evaluated
+    for a forward-looking target with the given offset, without wrapping
+    across intraday day boundaries.
+
+    Uses the time-since-market-open vector at:
+        Population._X_inst[:, Population._T_idx[-2]]
+
+    Assumptions
+    -----------
+    - 0.0 means market open
+    - no negative values exist
+    - within a day, time-of-day is nondecreasing
+    - when a new day starts, time-of-day resets lower (typically to 0)
+
+    Parameters
+    ----------
+    Population : object
+        Must have:
+            - _X_inst : ndarray shape (N, G)
+            - _T_idx  : indexable with [-2]
+    offset : int
+        Forward lookahead in rows.
+
+    Returns
+    -------
+    mask : np.ndarray, shape (N,), dtype=bool
+        True where evaluation is allowed.
+        False where the forward offset would either:
+          - go out of bounds, or
+          - wrap into the next day.
+    """
+    if not hasattr(Population, "_X_inst"):
+        raise AttributeError("Population must have attribute '_X_inst'")
+    if not hasattr(Population, "_T_idx"):
+        raise AttributeError("Population must have attribute '_T_idx'")
+
+    X = Population._X_inst
+    if not isinstance(X, np.ndarray):
+        raise TypeError("Population._X_inst must be a numpy ndarray")
+    if X.ndim != 2:
+        raise ValueError("Population._X_inst must be 2D")
+
+    try:
+        if(Population._time_terminals):
+            tod_idx = int(Population._T_idx[-2])
+        else:
+            raise NotImplementedError(f'In generating evaluation mask, time terminals is not true in pop prior, cannot grab time of day.')
+    except Exception as e:
+        raise ValueError("Population._T_idx must be indexable and contain [-2]") from e
+
+    N, G = X.shape
+    if tod_idx < 0 or tod_idx >= G:
+        raise IndexError(f"time-of-day column index {tod_idx} out of bounds for G={G}")
+
+    offset = int(offset)
+    if offset < 0:
+        raise ValueError("offset must be >= 0")
+
+    tod = np.asarray(X[:, tod_idx])
+
+    # offset == 0 means no forward peeking, so everything is valid
+    if offset == 0:
+        return np.ones(N, dtype=bool)
+
+    # if offset exceeds data length, nothing can be evaluated
+    if offset >= N:
+        return np.zeros(N, dtype=bool)
+
+    mask = np.zeros(N, dtype=bool)
+
+    # valid only if:
+    #   1) i + offset is in bounds
+    #   2) time-of-day at i+offset is still >= time-of-day at i
+    #      (if it became smaller, we crossed into a new day)
+    mask[:-offset] = tod[offset:] >= tod[:-offset]
+
+    return mask
+
+import numpy as np
+
+
+def generate_anomaly_mask(raw_emission, AD_cond):
+    """
+    Generate a boolean anomaly mask from a raw emission vector and one or more
+    anomaly-detection conditions, with optional AND/OR chaining.
+
+    Parameters
+    ----------
+    raw_emission : array-like
+        1D vector of emitted values.
+
+    AD_cond : tuple or list[tuple]
+        Supported condition tuple formats:
+
+        1) Simple condition:
+            (comparator, value)
+
+        2) Condition with logical combiner:
+            (logic, comparator, value)
+
+        Allowed comparators:
+            'lt' : <
+            'gt' : >
+            'le' : <=
+            'ge' : >=
+
+        Allowed logic:
+            'and', 'or'
+
+        Notes
+        -----
+        - If AD_cond is a single 2-tuple, it is treated as one condition.
+        - If AD_cond is a list of tuples:
+            * the first tuple may be 2-tuple or 3-tuple
+            * later tuples may be 2-tuple (defaults to 'and') or 3-tuple
+        - Chaining is evaluated left-to-right with no grouping precedence.
+
+        Examples
+        --------
+        ('lt', 2)
+
+        [('ge', 0), ('and', 'lt', 5)]
+
+        [('lt', -2), ('or', 'gt', 2)]
+
+        [('ge', 0), ('and', 'lt', 5), ('or', 'gt', 10)]
+
+    Returns
+    -------
+    mask : np.ndarray, dtype=bool
+        Boolean mask of same shape as raw_emission.
+    """
+    x = np.asarray(raw_emission)
+
+    if x.ndim != 1:
+        raise ValueError("raw_emission must be a 1D vector")
+
+    def _eval_condition(arr, comp, val):
+        if comp == 'lt':
+            return arr < val
+        elif comp == 'gt':
+            return arr > val
+        elif comp == 'le':
+            return arr <= val
+        elif comp == 'ge':
+            return arr >= val
+        else:
+            raise ValueError(
+                f"Unsupported comparator '{comp}'. "
+                "Allowed comparators are: 'lt', 'gt', 'le', 'ge'"
+            )
+
+    def _parse_condition(cond, is_first=False):
+        if not isinstance(cond, tuple):
+            raise TypeError(f"Each condition must be a tuple, got {type(cond).__name__}")
+
+        if len(cond) == 2:
+            comp, val = cond
+            logic = 'and'
+        elif len(cond) == 3:
+            logic, comp, val = cond
+            if logic not in ('and', 'or'):
+                raise ValueError(
+                    f"Unsupported logic '{logic}'. Allowed logic values are 'and' and 'or'"
+                )
+        else:
+            raise ValueError(
+                f"Each condition must be either (comparator, value) or "
+                f"(logic, comparator, value), got {cond}"
+            )
+
+        if is_first:
+            logic = 'and'
+
+        return logic, comp, val
+
+    # allow one standalone condition like ('lt', 2)
+    if isinstance(AD_cond, tuple) and len(AD_cond) == 2 and isinstance(AD_cond[0], str):
+        logic, comp, val = _parse_condition(AD_cond, is_first=True)
+        return _eval_condition(x, comp, val)
+
+    if not isinstance(AD_cond, (list, tuple)):
+        raise TypeError("AD_cond must be a tuple or a list/tuple of condition tuples")
+
+    conds = list(AD_cond)
+    if len(conds) == 0:
+        raise ValueError("AD_cond cannot be empty")
+
+    logic, comp, val = _parse_condition(conds[0], is_first=True)
+    mask = _eval_condition(x, comp, val)
+
+    for cond in conds[1:]:
+        logic, comp, val = _parse_condition(cond, is_first=False)
+        current = _eval_condition(x, comp, val)
+
+        if logic == 'and':
+            mask &= current
+        elif logic == 'or':
+            mask |= current
+        else:
+            raise ValueError(
+                f"Unsupported logic '{logic}'. Allowed logic values are 'and' and 'or'"
+            )
+
+    return mask
