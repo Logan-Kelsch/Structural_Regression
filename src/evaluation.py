@@ -1044,3 +1044,209 @@ def generate_anomaly_mask(raw_emission, AD_cond):
 			)
 
 	return mask
+
+import numpy as np
+
+def evaluate_participation(m: float, n: float, p, q):
+    """
+    Vectorized evaluation of breadth b(p,q) and depth d(p) for arrays p and q.
+
+    Args:
+        m, n : positive constants with n >= m
+        p, q : array-like, same shape (G,). Must satisfy p >= q elementwise.
+        e    : Euler's number by default (np.e)
+
+    Returns:
+        b, d : np.ndarray, shape (G,)
+    """
+    e = np.e
+    # ---- basic validation ----
+    m = float(m); n = float(n)
+    if not (n >= m):
+        raise ValueError(f"Constraint violated: need n >= m, got n={n}, m={m}.")
+    if m <= 0 or n <= 0:
+        raise ValueError("m and n must be positive.")
+
+    p = np.asarray(p, dtype=float)
+    q = np.asarray(q, dtype=float)
+
+    if p.shape != q.shape:
+        raise ValueError(f"p and q must have the same shape. Got p={p.shape}, q={q.shape}.")
+    if p.ndim != 1:
+        raise ValueError(f"Expected 1D vectors for p and q (shape (G,)). Got p.ndim={p.ndim}.")
+
+    if np.any(p < 0) or np.any(q < 0):
+        raise ValueError("p and q must be nonnegative (counts-like).")
+    if np.any(p < q):
+        bad = np.where(p < q)[0][:10]
+        raise ValueError(f"Constraint violated: need p >= q elementwise. Example bad indices: {bad}.")
+
+    # ---- constants ----
+    f = m / n                # f = m/n
+    pf = p * f               # pf = p*m/n
+
+    # ---- depth d(p) ----
+    d = np.zeros_like(p, dtype=float)
+
+    mask_lo = p < m
+    d[mask_lo] = np.log(2.0 - (p[mask_lo] / m))**2
+
+    mask_hi = p > n
+    # For p>n branch, need 2 - p/n > 0 => p < 2n to stay in real logs
+    if np.any(mask_hi & (p >= 2.0 * n)):
+        bad = np.where(mask_hi & (p >= 2.0 * n))[0][:10]
+        raise ValueError(f"Depth log undefined for p >= 2n on the (p>n) branch. Example bad indices: {bad}.")
+    d[mask_hi] = np.log(2.0 - (p[mask_hi] / n))**2
+
+    # ---- breadth b(p,q) ----
+    b = np.zeros_like(p, dtype=float)
+
+    denom = p * f * e
+    if np.any(denom <= 0):
+        bad = np.where(denom <= 0)[0][:10]
+        raise ValueError(f"Breadth denominator p*f*e must be > 0. Example bad indices: {bad}.")
+
+    # Branch split: q < pf  vs  q >= pf
+    mask_b1 = q < pf
+    mask_b2 = ~mask_b1
+
+    # b1: ln(((e-1)q + f)/(p f e))^2
+    b[mask_b1] = np.log(((e - 1.0) * q[mask_b1] + f) / denom[mask_b1])**2
+
+    # b2: ln(((e-1)q + pf)/(p f e))^2 + C * ((q-pf)/(p(1-f)))^2
+    log_term = np.log(((e - 1.0) * q[mask_b2] + pf[mask_b2]) / denom[mask_b2])**2
+
+    # C = 1 - ln(((e-1)+f)/(f e))^2  (constant w.r.t p,q)
+    C = 1.0 - (np.log(((e - 1.0) + f) / (f * e))**2)
+
+    if np.isclose(1.0 - f, 0.0):
+        # Degenerate case m == n -> f == 1:
+        # pf == p, and mask_b2 implies q >= p, but with p >= q we must have q == p.
+        # The quadratic term becomes a 0/0 limit -> treat as 0.
+        if np.any(mask_b2 & (q != p)):
+            bad = np.where(mask_b2 & (q != p))[0][:10]
+            raise ValueError(f"When m==n, branch2 requires q==p. Example bad indices: {bad}.")
+        quad = np.zeros_like(q[mask_b2])
+    else:
+        quad = ((q[mask_b2] - pf[mask_b2]) / (p[mask_b2] * (1.0 - f)))**2
+
+    b[mask_b2] = log_term + C * quad
+
+    return b, d
+
+
+def visualize_participation_surfaces(
+    *,
+    m: float = 20.0,
+    n: float = 100.0,
+    num: int = 160,
+    e: float = np.e,
+    mode: str = "surface",          # "surface" or "imshow"
+    which: str = "all",             # "b", "d", "bd", or "all"
+    ceil: int = 0,
+    plot_mn: bool = False,          # NEW: plot m and n reference lines
+):
+    """
+    Visualize b(p,q), d(p), and combined (b+d) over a (p,q) grid, masking out invalid q>p.
+
+    If plot_mn=True:
+      - plot p = n (line perpendicular to p axis; i.e., vertical line in p-q plane)
+      - plot q = m (line perpendicular to q axis; i.e., horizontal line in p-q plane)
+    """
+    import matplotlib.pyplot as plt
+
+    if not (n >= m):
+        raise ValueError("Need n >= m.")
+
+    # Keep p < 2n to avoid depth-log domain issues on the p>n branch
+    p_vals = np.linspace(1.0, 1.9 * n, num)
+    q_vals = np.linspace(0.0, 1.9 * n, num)
+    P, Q = np.meshgrid(p_vals, q_vals)
+
+    valid = (Q <= P)
+
+    # Evaluate only valid points to respect p>=q
+    p_flat = P[valid].ravel()
+    q_flat = Q[valid].ravel()
+    B_flat, D_flat = evaluate_participation(m, n, p_flat, q_flat, e=e)
+
+    # Put results back into grids with NaNs elsewhere
+    B = np.full_like(P, np.nan, dtype=float)
+    D = np.full_like(P, np.nan, dtype=float)
+    BD = np.full_like(P, np.nan, dtype=float)
+
+    B[valid] = B_flat
+    D[valid] = D_flat
+    BD[valid] = B_flat + D_flat
+
+    if ceil > 0:
+        B = np.clip(B, None, ceil)
+        D = np.clip(D, None, ceil)
+        BD = np.clip(BD, None, ceil)
+
+    want_b = which in ("b", "all")
+    want_d = which in ("d", "all")
+    want_bd = which in ("bd", "all")
+
+    if mode not in ("surface", "imshow"):
+        raise ValueError("mode must be 'surface' or 'imshow'.")
+
+    if mode == "surface":
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+        def _surface(Z, title, zlab):
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection="3d")
+            ax.plot_surface(P, Q, Z, linewidth=0, antialiased=True)
+            ax.set_title(title)
+            ax.set_xlabel("p")
+            ax.set_ylabel("q")
+            ax.set_zlabel(zlab)
+
+            if plot_mn:
+                # p = n plane slice: line at p=n, varying q, at z=0 (reference)
+                ax.plot([n] * len(q_vals), q_vals, np.zeros_like(q_vals), linestyle="--")
+                # q = m plane slice: line at q=m, varying p, at z=0 (reference)
+                ax.plot(p_vals, [m] * len(p_vals), np.zeros_like(p_vals), linestyle="--")
+
+        if want_b:
+            _surface(B, f"b(p,q) (m={m:g}, n={n:g})", "b")
+        if want_d:
+            _surface(D, f"d(p) (m={m:g}, n={n:g})", "d")
+        if want_bd:
+            _surface(BD, f"b(p,q)+d(p) (m={m:g}, n={n:g})", "b+d")
+
+        plt.show()
+
+    else:  # mode == "imshow"
+        extent = [p_vals.min(), p_vals.max(), q_vals.min(), q_vals.max()]
+
+        def _imshow(Z, title):
+            fig, ax = plt.subplots()
+            im = ax.imshow(
+                Z, cmap="Reds",
+                origin="lower",
+                aspect="auto",
+                extent=extent,
+                interpolation="nearest",
+            )
+            ax.set_title(title)
+            ax.set_xlabel("p")
+            ax.set_ylabel("q")
+
+            if plot_mn:
+                # p = n (vertical line)
+                ax.axvline(n, linestyle="-", c='black',alpha=0.25)
+                # q = m (horizontal line)
+                ax.axhline(m, linestyle="-", c='black',alpha=0.25)
+
+            plt.colorbar(im, ax=ax)
+
+        if want_b:
+            _imshow(B, f"b(p,q) heatmap (m={m:g}, n={n:g})")
+        if want_d:
+            _imshow(D, f"d(p) heatmap (m={m:g}, n={n:g})")
+        if want_bd:
+            _imshow(BD, f"b(p,q)+d(p) heatmap (m={m:g}, n={n:g})")
+
+        plt.show()
