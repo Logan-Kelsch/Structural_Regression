@@ -1141,7 +1141,8 @@ def evaluate_participation(m: float, n: float, p, q):
 def evaluate_population(
     population:_I.Population,
     solver:Solver = None,
-    slack:float=0.00
+    slack:float=0.00,
+    metric:str='heavensent'
 ):
     if(solver is None):
         solver = Solver(population, offset=6, t_mode='AD', emission = [
