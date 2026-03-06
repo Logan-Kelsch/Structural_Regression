@@ -1051,15 +1051,12 @@ def evaluate_participation(m: float, n: float, p, q):
     """
     Vectorized evaluation of breadth b(p,q) and depth d(p) for arrays p and q.
 
-    Args:
-        m, n : positive constants with n >= m
-        p, q : array-like, same shape (G,). Must satisfy p >= q elementwise.
-        e    : Euler's number by default (np.e)
-
-    Returns:
-        b, d : np.ndarray, shape (G,)
+    Rules:
+      - If p == 0: set b = -10.0 for that sample (avoid denom issues). d computed normally.
+      - If p >= 2n: force d = 10.0 for that sample (avoid log-domain issue in p>n branch).
     """
     e = np.e
+
     # ---- basic validation ----
     m = float(m); n = float(n)
     if not (n >= m):
@@ -1077,13 +1074,18 @@ def evaluate_participation(m: float, n: float, p, q):
 
     if np.any(p < 0) or np.any(q < 0):
         raise ValueError("p and q must be nonnegative (counts-like).")
-    if np.any(p < q):
-        bad = np.where(p < q)[0][:10]
+
+    mask_zero = (p == 0)
+    mask_nz = ~mask_zero
+
+    # Enforce p>=q only where p>0 (p==0 handled via b=-10)
+    if np.any(mask_nz & (p < q)):
+        bad = np.where(mask_nz & (p < q))[0][:10]
         raise ValueError(f"Constraint violated: need p >= q elementwise. Example bad indices: {bad}.")
 
     # ---- constants ----
-    f = m / n                # f = m/n
-    pf = p * f               # pf = p*m/n
+    f = m / n
+    pf = p * f
 
     # ---- depth d(p) ----
     d = np.zeros_like(p, dtype=float)
@@ -1091,48 +1093,253 @@ def evaluate_participation(m: float, n: float, p, q):
     mask_lo = p < m
     d[mask_lo] = np.log(2.0 - (p[mask_lo] / m))**2
 
-    mask_hi = p > n
-    # For p>n branch, need 2 - p/n > 0 => p < 2n to stay in real logs
-    if np.any(mask_hi & (p >= 2.0 * n)):
-        bad = np.where(mask_hi & (p >= 2.0 * n))[0][:10]
-        raise ValueError(f"Depth log undefined for p >= 2n on the (p>n) branch. Example bad indices: {bad}.")
-    d[mask_hi] = np.log(2.0 - (p[mask_hi] / n))**2
+    # p>n branch split: safe log region vs forced cap
+    mask_cap = p >= (2.0 * n)
+    d[mask_cap] = 10.0
+
+    mask_hi_safe = (p > n) & (~mask_cap)  # n < p < 2n
+    d[mask_hi_safe] = np.log(2.0 - (p[mask_hi_safe] / n))**2
 
     # ---- breadth b(p,q) ----
     b = np.zeros_like(p, dtype=float)
 
-    denom = p * f * e
-    if np.any(denom <= 0):
-        bad = np.where(denom <= 0)[0][:10]
-        raise ValueError(f"Breadth denominator p*f*e must be > 0. Example bad indices: {bad}.")
+    # p == 0 => force b to -10
+    b[mask_zero] = -10.0
 
-    # Branch split: q < pf  vs  q >= pf
-    mask_b1 = q < pf
-    mask_b2 = ~mask_b1
+    if np.any(mask_nz):
+        p_nz = p[mask_nz]
+        q_nz = q[mask_nz]
+        pf_nz = pf[mask_nz]
 
-    # b1: ln(((e-1)q + f)/(p f e))^2
-    b[mask_b1] = np.log(((e - 1.0) * q[mask_b1] + f) / denom[mask_b1])**2
+        denom = p_nz * f * e  # safe since p_nz > 0 and f,e > 0
+        b_nz = np.zeros_like(p_nz, dtype=float)
 
-    # b2: ln(((e-1)q + pf)/(p f e))^2 + C * ((q-pf)/(p(1-f)))^2
-    log_term = np.log(((e - 1.0) * q[mask_b2] + pf[mask_b2]) / denom[mask_b2])**2
+        mask_b1 = q_nz < pf_nz
+        mask_b2 = ~mask_b1
 
-    # C = 1 - ln(((e-1)+f)/(f e))^2  (constant w.r.t p,q)
-    C = 1.0 - (np.log(((e - 1.0) + f) / (f * e))**2)
+        # b1
+        b_nz[mask_b1] = np.log(((e - 1.0) * q_nz[mask_b1] + f) / denom[mask_b1])**2
 
-    if np.isclose(1.0 - f, 0.0):
-        # Degenerate case m == n -> f == 1:
-        # pf == p, and mask_b2 implies q >= p, but with p >= q we must have q == p.
-        # The quadratic term becomes a 0/0 limit -> treat as 0.
-        if np.any(mask_b2 & (q != p)):
-            bad = np.where(mask_b2 & (q != p))[0][:10]
-            raise ValueError(f"When m==n, branch2 requires q==p. Example bad indices: {bad}.")
-        quad = np.zeros_like(q[mask_b2])
-    else:
-        quad = ((q[mask_b2] - pf[mask_b2]) / (p[mask_b2] * (1.0 - f)))**2
+        # b2
+        log_term = np.log(((e - 1.0) * q_nz[mask_b2] + pf_nz[mask_b2]) / denom[mask_b2])**2
+        C = 1.0 - (np.log(((e - 1.0) + f) / (f * e))**2)
 
-    b[mask_b2] = log_term + C * quad
+        if np.isclose(1.0 - f, 0.0):
+            # m == n case: requires q == p in branch2
+            if np.any(mask_b2 & (q_nz != p_nz)):
+                bad = np.where(mask_b2 & (q_nz != p_nz))[0][:10]
+                raise ValueError(f"When m==n, branch2 requires q==p. Example bad indices: {bad}.")
+            quad = np.zeros_like(q_nz[mask_b2])
+        else:
+            quad = ((q_nz[mask_b2] - pf_nz[mask_b2]) / (p_nz[mask_b2] * (1.0 - f)))**2
+
+        b_nz[mask_b2] = log_term + C * quad
+        b[mask_nz] = b_nz
 
     return b, d
+
+def evaluate_population(
+    population:_I.Population,
+    solver:Solver = None,
+    slack:float=0.00
+):
+    if(solver is None):
+        solver = Solver(population, offset=6, t_mode='AD', emission = [
+        {"ID": 5, "alpha": {"ID": 3, "x": "tvec", "delta1": 6*4, "offset": False}},
+        {"ID": "divide"},
+        {"ID": 18, "x": "tvec", "delta1": 6*4, "offset": False},
+        ], AD_cond=('gt', 2))
+        print(f"WARNING: Using default solver. double check params!!!"
+              f" why are you using my software RRRRHHHAAAAAAAAA")
+    raw_emission, evaluation_mask, anomaly_mask = solver.solve(population)
+
+    # always-participating benchmark return (market baseline)
+    _em = np.asarray(raw_emission, dtype=np.float32).reshape(-1)
+    _mask = np.asarray(evaluation_mask).astype(bool, copy=False).reshape(-1)
+    np.nan_to_num(_em, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+    mu = float(_em[_mask].sum())
+
+    X_p = resolve_population_signs(population)
+    m, n= resolve_anomaly_mn(anomaly_mask)
+    p, q= resolve_population_pq(population, X_p)
+    b, d= evaluate_participation(m, n, p, q)
+    R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
+    
+    #meow
+    #i should come back to comment out this function before I get to far away from it
+    F = R - (1 - slack) * b * np.abs(R) - (1 - slack) * d * np.abs(R)
+
+    return {"F":F,"R":R,"mu":mu,"m":m,"n":n,"p":p,"q":q,"b":b,"d":d}
+
+
+def evaluate_return(population, X_p, raw_emission, evaluation_mask):
+    """
+    Compute per-gene cumulative return from participation.
+
+    For each gene index g in population._G_idx:
+        R[g] = sum(raw_emission[t] for t where evaluation_mask[t] and X_p[t, g])
+
+    Parameters
+    ----------
+    population : object
+        Must have attribute `_G_idx` (indices of gene columns to evaluate).
+    X_p : array-like, shape (T, G)
+        Boolean (or 0/1) participation/prediction matrix.
+    raw_emission : array-like, shape (T,)
+        Emission/return series aligned with X_p along time.
+    evaluation_mask : array-like, shape (T,)
+        Boolean (or 0/1) mask for time points allowed to be evaluated.
+
+    Returns
+    -------
+    R : np.ndarray, shape (G,), dtype=float32
+        Cumulative returns per gene (zeros for genes not in _G_idx).
+    """
+    if not hasattr(population, "_G_idx"):
+        raise AttributeError("population must have attribute '_G_idx'")
+
+    X_p = np.asarray(X_p)
+    if X_p.ndim != 2:
+        raise ValueError("X_p must be 2D with shape (T, G)")
+
+    T, G = X_p.shape
+
+    raw_emission = np.asarray(raw_emission, dtype=np.float32).reshape(-1)
+    evaluation_mask = np.asarray(evaluation_mask).reshape(-1)
+
+    if raw_emission.shape[0] != T:
+        raise ValueError(f"raw_emission length {raw_emission.shape[0]} must equal T={T}")
+    if evaluation_mask.shape[0] != T:
+        raise ValueError(f"evaluation_mask length {evaluation_mask.shape[0]} must equal T={T}")
+
+    # Normalize mask + sanitize emissions
+    eval_mask = evaluation_mask.astype(bool, copy=False)
+    weights = raw_emission.copy()
+    # any NaN/Inf is treated as 0 contribution
+    np.nan_to_num(weights, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+    weights[~eval_mask] = 0.0  # zero out non-evaluable times
+
+    # Indices to evaluate
+    idx = np.asarray(population._G_idx, dtype=np.int64).reshape(-1)
+    if idx.size == 0:
+        return np.zeros(G, dtype=np.float32)
+
+    if np.any(idx < 0) or np.any(idx >= G):
+        bad = idx[(idx < 0) | (idx >= G)][:10]
+        raise IndexError(f"population._G_idx contains out-of-bounds indices (first bad: {bad})")
+
+    # Ensure boolean participation
+    Xp_bool = X_p.astype(bool, copy=False)
+
+    R = np.zeros(G, dtype=np.float32)
+
+    # Blocked matmul to avoid huge temporaries if idx is big
+    # (still only evaluates columns in _G_idx)
+    block = 1024
+    w = weights.astype(np.float32, copy=False)
+
+    for s in range(0, idx.size, block):
+        j = idx[s:s + block]
+        # (T, B) @ (T,) -> (B,)
+        # bool will upcast; that's fine
+        R[j] = (Xp_bool[:, j].T @ w).astype(np.float32, copy=False)
+
+    return R
+
+def resolve_anomaly_mn(x: np.ndarray) -> tuple[int, int]:
+    """
+    Return (m, n) for a 1D boolean numpy array.
+
+    n = total number of True values
+    m = total number of contiguous True groups
+
+    Example:
+        [False, True, True, False, True, False] -> (2, 3)
+    """
+    x = np.asarray(x, dtype=np.bool_)
+    if x.ndim != 1:
+        raise ValueError("resolve_anomaly_mn() expects a 1D array of shape (N,)")
+
+    n = int(x.sum())
+
+    if x.size == 0:
+        return 0, 0
+
+    m = int(x[0]) + int(np.sum(x[1:] & ~x[:-1]))
+    return m, n
+
+
+def resolve_population_signs(population) -> np.ndarray:
+    """
+    Build a boolean mask M with same shape as population._X_inst (N, G).
+
+    M is all-False except in columns population._G_idx, where:
+      M[:, g] = (population._X_inst[:, g] >= 0)
+
+    Intended for fast boolean indexing like: A[M].sum()
+    """
+    X = population._X_inst
+    idx = np.asarray(population._G_idx, dtype=np.intp)
+
+    #print(np.where(population._X_inst[:,10:]>0))
+    #print()
+    ##print(idx)
+    #print(np.unique_counts(X[:, idx] > 0))
+
+    M = np.zeros(X.shape, dtype=np.bool_)
+
+    if idx.size:
+        M[:, idx] = (X[:, idx] > 0)
+
+    return M
+
+import numpy as np
+
+def resolve_population_pq(population, X_p) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Build p and q vectors (shape (G,)) for a population.
+
+    For each gene column g in population._G_idx:
+      p[g] = sum(X_p[:, g])  (total positive predictions, X_p is 0/1 or bool)
+      q[g] = number of contiguous runs of 1s in X_p[:, g]  (unique prediction episodes)
+
+    Other columns (not in _G_idx) are left as 0.
+
+    Returns:
+      p, q : int64 arrays, shape (G,)
+    """
+    X = population._X_inst
+    idx = np.asarray(population._G_idx, dtype=np.intp)
+
+    Xp = np.asarray(X_p)
+    if Xp.shape != X.shape:
+        raise ValueError(f"X_p must have shape {X.shape}, got {Xp.shape}.")
+
+    N, G = X.shape
+    p = np.zeros(G, dtype=np.int64)
+    q = np.zeros(G, dtype=np.int64)
+
+    if idx.size == 0 or N == 0:
+        return p, q
+
+    # Work on only the gene columns
+    B = Xp[:, idx].astype(np.bool_, copy=False)  # (N, len(idx))
+
+    # p = total ones per column
+    p_vals = B.sum(axis=0, dtype=np.int64)
+
+    # q = number of runs of ones per column: start with first row + count rising edges
+    if N == 1:
+        q_vals = B[0].astype(np.int64, copy=False)
+    else:
+        rises = np.logical_and(~B[:-1], B[1:]).sum(axis=0, dtype=np.int64)
+        q_vals = B[0].astype(np.int64, copy=False) + rises
+
+    # Write into full-length vectors
+    p[idx] = p_vals
+    q[idx] = q_vals
+
+    return p, q
 
 
 def visualize_participation_surfaces(
@@ -1168,7 +1375,7 @@ def visualize_participation_surfaces(
     # Evaluate only valid points to respect p>=q
     p_flat = P[valid].ravel()
     q_flat = Q[valid].ravel()
-    B_flat, D_flat = evaluate_participation(m, n, p_flat, q_flat, e=e)
+    B_flat, D_flat = evaluate_participation(m, n, p_flat, q_flat)
 
     # Put results back into grids with NaNs elsewhere
     B = np.full_like(P, np.nan, dtype=float)

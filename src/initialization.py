@@ -631,8 +631,8 @@ def generate_instructions(
             
         #at this point, we are going to add our instructions into the population prior
         #this starts with adding new gene instructions into gene and legal indices variables
-        #pop_prior._G_idx = np.union1d(pop_prior._G_idx, inst_inst[:, 0])
-        #pop_prior._L_idx = np.union1d(pop_prior._L_idx, pop_prior._G_idx)
+        pop_prior._G_idx = np.union1d(pop_prior._G_idx, inst_inst[:, 0])
+        pop_prior._L_idx = np.union1d(pop_prior._L_idx, pop_prior._G_idx)
         #print(f'Lidx: {pop_prior._L_idx}')
         #print(f'Gidx: {pop_prior._G_idx}')
         #print(f'instinst0: {inst_inst[:, 0]}')
