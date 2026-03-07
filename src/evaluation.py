@@ -1142,6 +1142,7 @@ def evaluate_population(
     population:_I.Population,
     solver:Solver = None,
     slack:float=0.00,
+    complexity:str='log_parsimony',
     metric:str='heavensent'
 ):
     if(solver is None):
@@ -1160,6 +1161,7 @@ def evaluate_population(
     np.nan_to_num(_em, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
     mu = float(_em[_mask].sum())
 
+    c = evaluate_depth(population)
     X_p = resolve_population_signs(population)
     m, n= resolve_anomaly_mn(anomaly_mask)
     p, q= resolve_population_pq(population, X_p)
@@ -1168,9 +1170,22 @@ def evaluate_population(
     
     #meow
     #i should come back to comment out this function before I get to far away from it
-    F = R - (1 - slack) * b * np.abs(R) - (1 - slack) * d * np.abs(R)
+    F = R - (1 - slack) * np.abs(R) * (b + d)
 
-    return {"F":F,"R":R,"mu":mu,"m":m,"n":n,"p":p,"q":q,"b":b,"d":d}
+    parsimony_coef = solve_auto_parsimony(population, c, F)
+    print("parsimony_coef: ", parsimony_coef)
+
+    match(complexity):
+        case 'log_parsimony':
+            F -= np.clip(parsimony_coef, 0, None) * np.log(c+1)
+        case 'parsimony':
+            F -= np.clip(parsimony_coef, 0, None) * c
+        case 'None':
+            pass
+            #F is ready to go
+
+    return {"F":F,"R":R,"mu":mu,"parsimony_coef":parsimony_coef,
+            "m":m,"n":n,"p":p,"q":q,"b":b,"d":d,"c":c}
 
 
 def evaluate_return(population, X_p, raw_emission, evaluation_mask):
@@ -1246,6 +1261,94 @@ def evaluate_return(population, X_p, raw_emission, evaluation_mask):
         R[j] = (Xp_bool[:, j].T @ w).astype(np.float32, copy=False)
 
     return R
+
+
+def evaluate_depth(population) -> np.ndarray:
+    """
+    Compute ancestor-count depth for every gene in population._G_idx.
+
+    For each gene g, this calls family_tree_indices(...) and stores the number
+    of unique ancestor genes returned, including the gene itself.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (G,), where G = population._G_idx.shape[0].
+        depth[g] = number of parent genes in g's family tree, including self.
+    """
+    instructions = np.asarray(population._instructions)
+    G = instructions.shape[0]
+
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("population._instructions must have shape (G, 11) (need at least cols 0..9).")
+    if instructions.shape[0] < G:
+        raise ValueError("population._instructions has fewer rows than population._G_idx dim0.")
+
+    depth = np.zeros(G, dtype=np.int64)
+
+    for g in population._G_idx.astype(int):
+        depth[g] = _I.family_tree_indices(
+            instructions,
+            g,
+            include_self=True,
+        ).size
+
+    return depth
+
+import numpy as np
+
+def solve_auto_parsimony(population, complexity, F):
+    """
+    Compute a gplearn-style auto parsimony coefficient using only legal indices.
+
+    Parameters
+    ----------
+    population : object
+        Must have a 1D integer array `population._G_idx` of legal indices.
+    complexity : np.ndarray, shape (G,)
+        1D array of complexity values per individual.
+        Usually this is total node count. It can also be depth if that is
+        what you want to penalize.
+    F : np.ndarray, shape (G,)
+        1D array of raw fitness scores per individual.
+
+    Returns
+    -------
+    float
+        Auto parsimony coefficient:
+            cov(complexity_legal, fitness_legal) / var(complexity_legal)
+
+        This mirrors the gplearn idea:
+            np.cov(length, fitness)[0, 1] / np.var(length)
+    """
+    idx = np.asarray(population._G_idx, dtype=int)
+    complexity = np.asarray(complexity, dtype=float)
+    F = np.asarray(F, dtype=float)
+
+    if complexity.ndim != 1 or F.ndim != 1:
+        raise ValueError("complexity and F must be 1D numpy arrays.")
+    if complexity.shape[0] != F.shape[0]:
+        raise ValueError("complexity and F must have the same length.")
+    if idx.ndim != 1:
+        raise ValueError("population._G_idx must be a 1D index array.")
+    if idx.size == 0:
+        return 0.0
+    if np.any(idx < 0) or np.any(idx >= complexity.shape[0]):
+        raise IndexError("population._G_idx contains out-of-bounds indices.")
+
+    x = complexity[idx]
+    #clipping at zero to avoid meaningless
+    y = np.clip(F[idx], 0, None)
+
+    if x.size < 2:
+        return 0.0
+
+    var_x = np.var(x)
+    if var_x == 0.0 or not np.isfinite(var_x):
+        return 0.0
+
+    coeff = np.cov(x, y)[0, 1] / var_x
+    return 0.0 if not np.isfinite(coeff) else np.clip(coeff, 0, None)
 
 def resolve_anomaly_mn(x: np.ndarray) -> tuple[int, int]:
     """

@@ -684,119 +684,10 @@ def apply_index_map_axis0(arr: np.ndarray, old_to_new: np.ndarray, *, fill_value
     out[old_to_new[keep_old]] = arr[keep_old]
     return out
 
-import numpy as np
-
-_BITS_5_9 = np.arange(5, 10, dtype=np.uint32)   # sensor-flag bit positions
-_COLS_5_9 = np.arange(5, 10, dtype=np.int64)    # x,a,d,dd,k columns
 
 
-def flush_population(X, keep_idx):
-    """
-    In-place population compaction on:
-      - X._instructions : np.ndarray shape (G, 11)
-      - X._G_idx        : 1D np.ndarray of candidate-removal indices
 
-    keep_idx: 1D array-like of gene indices that must be preserved.
 
-    Behavior:
-      - Removes indices in X._G_idx that are not in keep_idx
-      - Packs kept indices from X._G_idx into the lowest indices of the original X._G_idx
-      - Updates parent displacement references in cols 5..9 using SENSOR_FLAGS bits 5..9
-      - Clears removed rows to all zeros (no gaps)
-      - Updates X._G_idx to the new candidate indices after compaction
-      - Returns old_to_new mapping (len G, -1 for removed)
-
-    Returns
-    -------
-    old_to_new : np.ndarray[int64] shape (G,)
-        Mapping old gene index -> new gene index, -1 for removed.
-    """
-    instructions = X._instructions
-    if instructions.ndim != 2 or instructions.shape[1] != 11:
-        raise ValueError("X._instructions must have shape (G, 11).")
-
-    G = instructions.shape[0]
-
-    G_idx = np.asarray(X._G_idx, dtype=np.int64).reshape(-1)
-    keep_idx = np.asarray(keep_idx, dtype=np.int64).reshape(-1)
-
-    # keep only in-range
-    G_idx = G_idx[(G_idx >= 0) & (G_idx < G)]
-    keep_idx = keep_idx[(keep_idx >= 0) & (keep_idx < G)]
-
-    G_sorted = np.unique(G_idx)
-    keep_sorted = np.unique(keep_idx)
-
-    # candidates in G_idx that must be preserved
-    kept_in_G = np.intersect1d(G_sorted, keep_sorted, assume_unique=True)
-    removed   = np.setdiff1d(G_sorted, kept_in_G, assume_unique=True)
-
-    # pack kept genes into lowest indices of original G_idx
-    target_positions = G_sorted[:kept_in_G.size]
-
-    # build old->new mapping (identity unless remapped/removed)
-    old_to_new = np.arange(G, dtype=np.int64)
-    if removed.size:
-        old_to_new[removed] = -1
-    for old_i, new_i in zip(kept_in_G.tolist(), target_positions.tolist()):
-        old_to_new[old_i] = new_i
-
-    # ---- build compacted instructions (needs a new array; then write back) ----
-    out = np.zeros_like(instructions)
-    source_old_for_new = np.full(G, -1, dtype=np.int64)
-
-    keep_old = np.flatnonzero(old_to_new >= 0)
-    out[old_to_new[keep_old]] = instructions[keep_old]
-    source_old_for_new[old_to_new[keep_old]] = keep_old
-
-    # rewrite pop_idx for non-empty rows
-    non_empty = np.any(out != 0, axis=1)
-    out[non_empty, 0] = np.arange(G, dtype=out.dtype)[non_empty]
-
-    # ---- fix parent displacements for preserved rows ----
-    sensor_flags = out[:, 4].astype(np.uint32, copy=False)
-
-    for new_child in np.flatnonzero(non_empty):
-        old_child = int(source_old_for_new[new_child])
-        if old_child < 0:
-            continue
-
-        sf = sensor_flags[new_child]
-        slot_mask = ((sf >> _BITS_5_9) & np.uint32(1)).astype(bool)
-        if not np.any(slot_mask):
-            continue
-
-        cols = _COLS_5_9[slot_mask]
-        disp = out[new_child, cols].astype(np.int64, copy=False)
-
-        for col, d in zip(cols.tolist(), disp.tolist()):
-            if d >= 0:
-                continue  # only negative displacements are parents
-
-            old_parent = old_child + int(d)
-            if not (0 <= old_parent < G):
-                raise ValueError(
-                    f"Invalid parent: old_child={old_child}, disp={d} -> old_parent={old_parent}"
-                )
-
-            new_parent = int(old_to_new[old_parent])
-            if new_parent < 0:
-                raise ValueError(
-                    f"Kept gene {old_child} depends on removed parent {old_parent}. "
-                    f"Include {old_parent} in keep_idx (or keep closure of ancestors)."
-                )
-
-            new_disp = new_parent - new_child  # should remain negative
-            out[new_child, col] = np.array(new_disp, dtype=out.dtype)
-
-    # ---- update X in-place ----
-    X._instructions = out
-
-    mapped = old_to_new[G_sorted]
-    X._G_idx = np.unique(mapped[mapped >= 0]).astype(np.int64, copy=False)
-    X._L_idx = np.union1d(X._G_idx, X._T_idx)
-
-    return old_to_new
 
 
 def family_tree_indices(instructions: np.ndarray, gene_idxs, *, include_self: bool = True) -> np.ndarray:
@@ -877,7 +768,6 @@ from collections import deque, defaultdict
 
 _BITS_5_9 = np.arange(5, 10, dtype=np.uint32)   # sensor flag bits
 _COLS_5_9 = np.arange(5, 10, dtype=np.int64)    # x,a,d,dd,k columns
-
 
 
 def build_operation_list(instructions: np.ndarray,
