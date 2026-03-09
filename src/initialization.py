@@ -44,6 +44,7 @@ class Population:
         terminal_idx: np.ndarray | list,
         excluded_idx: np.ndarray | list,
         max_size    : int   =   20000,
+        chunk_size  : int|float = 0.2,
         include_time: bool  =   False,
         structure   : str   =   'Continuous',
         market_only : bool  =   True,
@@ -57,6 +58,13 @@ class Population:
         self._max_size = max_size
         self._structure= structure
         self._time_terminals = include_time
+
+        if(chunk_size < 1):
+            chunk_size = int(np.ceil(max_size * chunk_size))
+
+        if(chunk_size == 0):
+            raise ValueError(f'Chunk Size in Population Cannot Be Zero.')
+        self._chunk_size = chunk_size
 
         if(include_time):
             #NOTE tentative must is that epoch time column is first in excluded idx array
@@ -503,8 +511,6 @@ def fill_const_UA0(arr: np.ndarray,
 def generate_instructions(
     pop_prior   :   Population,
     grm_prior   :   Grammar,
-    n           :   int,
-    chunk_size  :   int =   0,
     seed        :   int =   None,
     verbose     :   bool=   False
 ):
@@ -518,27 +524,26 @@ def generate_instructions(
                  allows for grammar updating within generation, will be slower.
 
     INSTRUCTIONS FORMAT [pop_idx, func_id, USED_FLAGS, CONST_FLAGS, SENSOR_FLAGS, x, a, d, dd, k]
-
-
     '''
 
     #we will have the entirety of the population space pre-allocated 
     #therefore we need some logic checks for if we are within these memory bounds
 
-
+    #sick of typing in the same things over and over
+    n = int(pop_prior._max_size - pop_prior._T_idx.size - pop_prior._E_idx.size)
 
     # INSTRUCTIONS FORMAT [pop_idx, func_id, USED_FLAGS, CONST_FLAGS, SENSOR_FLAGS, x, a, d, dd, k]
     gen_size = n
-    if(chunk_size == 0):
-        chunk_size = gen_size
+    if(pop_prior._chunk_size == 0):
+        pop_prior._chunk_size = gen_size
     
     while(gen_size > 0):
 
         #quick fix for if the final chunk generated is ill-shaped
         #really only going to happen as I am making vizualizations for 
         #instantiation operation list efficiency vizualizations
-        if(gen_size < chunk_size):
-            chunk_size = gen_size
+        if(gen_size < pop_prior._chunk_size):
+            pop_prior._chunk_size = gen_size
 
         
         #match case different grammars
@@ -548,7 +553,7 @@ def generate_instructions(
                 #first thing will be to allocate some memory for instructions
                 #instruction format will be along the lines of
 
-                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+                inst_inst = np.zeros((pop_prior._chunk_size, 11), dtype=np.float32)
 
                 #now that we have allocated the memory for instructions
                 #we can begin generating instructions
@@ -559,7 +564,7 @@ def generate_instructions(
                 #we will need to put the population indices in the first column
                 #go get the total length of instructions thus far
                 start_idx = pop_prior._L_idx.max()
-                inst_inst[:, 0] = np.arange(start_idx+1, start_idx+1+chunk_size, dtype=np.uint16)
+                inst_inst[:, 0] = np.arange(start_idx+1, start_idx+1+pop_prior._chunk_size, dtype=np.uint16)
                 
                 #for this NO GRAMMAR generation we will randomly select each T function
                 inst_inst[:, 1] = np.random.randint(1, 22, size=inst_inst.shape[0], dtype=np.uint16)
@@ -648,9 +653,9 @@ def generate_instructions(
 
         #then we will actually bring in the new instantiation instructions into correct memory locations
         #this should place the instructions correctly into the population prior that was provided
-        pop_prior._instructions[ break_idx : break_idx+chunk_size , : ] = inst_inst
+        pop_prior._instructions[ break_idx : break_idx+pop_prior._chunk_size , : ] = inst_inst
             
-        gen_size -= chunk_size
+        gen_size -= pop_prior._chunk_size
         if(gen_size>0 and verbose):
             print(f'{gen_size} Generations Remaining.')
 
@@ -2372,15 +2377,15 @@ def instantiate_from_ops_chunked_intraday(
 import pandas as pd
 
 def initialize(
-    structure   :   str =   'Continuous',
-    incl_time   :   bool=   False,
+    structure   :   str =   'Intraday',
+    incl_time   :   bool=   True,
     data_file   :   str =   '../data/spy5m.csv',
     epoch_idx   :   list=   [0],
     hlocv_idx   :   list=   [1,2,3,4],
     pop_size    :   int =   1000,
     grmr_type   :   str =   'Null',
     grmr_mdl    :   int | tuple =   240,
-    gen_chunk   :   float   =   0.1,
+    chunk_size  :   float   =   0.1,
     verbose     :   int =   0
 ):
     '''
@@ -2410,6 +2415,7 @@ def initialize(
         terminal_idx=hlocv_idx,
         excluded_idx=epoch_idx,
         max_size=pop_size,
+        chunk_size=chunk_size,
         include_time=incl_time,
         structure=structure
     )
@@ -2424,17 +2430,6 @@ def initialize(
 
     if(verbose>0):print('Initializations complete')
 
-    #clarify gen_chunk format
-    #gen_chunk can be fraction of generating space, or actual integer
-    if(gen_chunk<0):
-        raise ValueError(f'gen_chunk came in as negative ({gen_chunk}). Must be positive.')
-    elif(gen_chunk<1):
-        chunk_size = int(np.ceil(pop_size * gen_chunk))
-    elif(gen_chunk>pop_size):
-        chunk_size = pop_size
-    else:
-        chunk_size = gen_chunk
-    if(verbose>0):print(f'Chunk Sizes: {chunk_size}')
     if(verbose>1):print(f'pop size: {pop_size, type(pop_size)}')
     #if(verbose>1):print(f'Tidx size: {X._T_idx.size}')
     #if(verbose>1):print(f'Lidx size: {X._L_idx.size}')
@@ -2447,8 +2442,6 @@ def initialize(
         #a little clunky but maybe easiest,
         #this is the open space not used so far
         #so total size - excluded space and legal existing space
-        n=int(pop_size - X._E_idx.size - X._T_idx.size),
-        chunk_size=chunk_size
     )
     #print(X._instructions)
     if(verbose>0):print(f'Instructions generated.')

@@ -216,8 +216,7 @@ def reproduce(
     population  :   _I.Population,
     grammar     :   _I.Grammar,
     selector    :   Selector,
-    evaluation  :   any,
-    chunk_size  :   int =   25
+    evaluation  :   any
 ):
     match(selector._method):
         case 'Threshold':
@@ -226,7 +225,7 @@ def reproduce(
             g_map = flush_population(population, survived_genes)
             _I.generate_instructions(population, grammar, n=int(
                 population._max_size - population._L_idx.size - population._E_idx.size
-            ), chunk_size=chunk_size)
+            ), chunk_size=population._chunk_size)
 
             #making a thingy to be able to return
             reproduction_stats = {
