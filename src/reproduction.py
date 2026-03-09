@@ -13,11 +13,12 @@ class Selector:
     '''
     def __init__(
         self,
-        method:str='best%',
-        percent:float=0.4
+        method:str='Threshold',
+        percent:float=0.2
     ):
+        self._method = method
+        self._percent = percent
 
-        pass
 
 
 
@@ -210,3 +211,32 @@ def locate_top_genes(F, p):
     idx_by_index = np.sort(idx_by_value)
 
     return idx_by_index, idx_by_value
+
+def reproduce(
+    population  :   _I.Population,
+    grammar     :   _I.Grammar,
+    selector    :   Selector,
+    evaluation  :   any,
+    chunk_size  :   int =   25
+):
+    match(selector._method):
+        case 'Threshold':
+            selected_parents, _ = locate_top_genes(evaluation["F"], p=selector._percent)
+            survived_genes = _I.family_tree_indices(population._instructions, selected_parents, include_terminals=True)
+            g_map = flush_population(population, survived_genes)
+            _I.generate_instructions(population, grammar, n=int(
+                population._max_size - population._L_idx.size - population._E_idx.size
+            ), chunk_size=chunk_size)
+
+            #making a thingy to be able to return
+            reproduction_stats = {
+                "selected_parents":selected_parents,
+                "survived_genes":survived_genes,
+                "gene_mapping":g_map
+            }
+
+            return reproduction_stats
+
+        case _:
+            raise NotImplementedError(f"Selector method of ({selector._method}) not implemented into reproduce function")
+        

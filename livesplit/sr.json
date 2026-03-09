@@ -22,7 +22,7 @@
       "Name": "GP Mod Evaluation"
     },
     {
-      "Time": null,
+      "Time": "1.22:12:47.2552194",
       "Name": "GP Mod Reproduction"
     },
     {
@@ -122,7 +122,7 @@
       "Name": "Compile Results"
     }
   ],
-  "CurrentSplitIndex": 5,
+  "CurrentSplitIndex": 6,
   "CurrentSplitTime": null,
-  "CurrentTime": "1.17:20:01.3496005"
+  "CurrentTime": "1.22:12:50.8782376"
 }

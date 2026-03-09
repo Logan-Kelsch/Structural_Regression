@@ -690,7 +690,7 @@ def apply_index_map_axis0(arr: np.ndarray, old_to_new: np.ndarray, *, fill_value
 
 
 
-def family_tree_indices(instructions: np.ndarray, gene_idxs, *, include_self: bool = True) -> np.ndarray:
+def family_tree_indices(instructions: np.ndarray, gene_idxs, *, include_self: bool = True, include_terminals: bool = False) -> np.ndarray:
     """
     Collect the full ancestor set ("family tree" of parent nodes) for one or many genes.
 
@@ -761,7 +761,18 @@ def family_tree_indices(instructions: np.ndarray, gene_idxs, *, include_self: bo
                 visited[p] = True
                 q.append(p)
 
-    return np.flatnonzero(visited).astype(np.int64, copy=False)
+    out = np.flatnonzero(visited).astype(np.int64, copy=False)
+
+    if include_terminals:
+        func_ids = instructions[:, 1]
+        nonzero_idx = np.flatnonzero(func_ids != 0)
+
+        # include only the consecutive leading zeros from the start
+        cutoff = nonzero_idx[0] if nonzero_idx.size else G
+        if cutoff > 0:
+            out = np.union1d(out, np.arange(cutoff, dtype=np.int64))
+
+    return out.astype(np.int64, copy=False)
 
 
 from collections import deque, defaultdict
@@ -2070,6 +2081,16 @@ def instantiate_from_ops_chunked_intraday(
             print(msg)
 
     # ------------------------------------------------------------
+    # enforce zero baseline for all non-terminal/non-excluded cols
+    # ------------------------------------------------------------
+    keep = np.unique(np.concatenate((population._T_idx, population._E_idx))).astype(np.int64)
+
+    _kept = X_out[:, keep].copy()   # keep is small
+    X_out.fill(0.0)                 # fastest bulk clear
+    X_out[:, keep] = _kept
+    del _kept
+
+    # ------------------------------------------------------------
     # detect day starts from exact zeros in TOD column
     # ------------------------------------------------------------
     tod = X_out[:, tod_col]
@@ -2264,6 +2285,7 @@ def instantiate_from_ops_chunked_intraday(
                     kappa_vec = _param_vec("k", idx_chunk, cast=np.float32, default=1.0, clamp_min=None)
 
                 y_view = y_buf[:, :B]
+                y_view.fill(0.0)   # add this line
                 transform_ops.apply(
                     fid,
                     x_view,

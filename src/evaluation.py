@@ -136,25 +136,29 @@ class Solver:
 		
 
 #first candidate evaluation function should be a light modular somewhat function that containst the first solution type selection
+import transform_ops as _OPS
 
 def evaluate(
 	population		:	_I.Population,
-	raw_emissions	:	any,
-	evaluation_mask	:	any,
-	anomaly_mask	:	any	
+    solver          :   Solver,
+    slack           :   float   =   0,
+    complexity      :   str =   'log_parsimony',
+    metric          :   str =   'heavensent'
 ):
-	#bring in population to be able to see the instantiated genes
-	#identify the column that has real data that the solution will be derived from
-	#call generate_solution() to get the desired vector for comparison with the selected function
+    
+    #instantiate
+    match(population._structure):
+        case 'Intraday':
+            instantiation_stats = _I.instantiate_from_ops_chunked_intraday(
+                population, transform_ops=_OPS, chunk_B=8
+            )
+        case _:
+            raise NotImplementedError('Did not implement other structure other than intraday should be easy ask logan.')
+	
+    #evaluate
+    evaluation = evaluate_population(population, solver, slack=slack, complexity=complexity, metric=metric)
 
-	#NOTE SOMETHING LIKE
-	#
-	#	x[evaluation_mask] for cost based evaluation, as initial example?? not really just scrap comments at the moment.
-	#
-	#
-
-	#NOTE IF SOLVER._T_MODE IS 'AD' THEN WE MUST CONVERT POPULATION INSTANTIATION INTO BOOLEAN COLUMNS WHERE G_mn = G_mn > 0
-	return
+    return evaluation, instantiation_stats
 
 
 import numpy as np
@@ -1173,7 +1177,7 @@ def evaluate_population(
     F = R - (1 - slack) * np.abs(R) * (b + d)
 
     parsimony_coef = solve_auto_parsimony(population, c, F)
-    print("parsimony_coef: ", parsimony_coef)
+    #print("parsimony_coef: ", parsimony_coef)
 
     match(complexity):
         case 'log_parsimony':
