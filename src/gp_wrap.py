@@ -4,14 +4,15 @@ import evaluation as _E
 
 
 def evolve_population(
-    X, G, 
-    iterations,
-    initialization_kwargs   :   dict,
-    solver_kwargs,
-    selector_kwargs,
+    X = None, 
+    G = None, 
+    iterations = 0,
+    initialization_kwargs = None,
+    solver_kwargs = None,
+    selector_kwargs = None,
     return_stats    :   bool    =   False
 ):
-    '''returns X, G, final evaluation'''
+    '''returns X, G, final evaluation (and optionally stats)'''
 
     #-----------------------------------------------
     # KWARGS FORMATTING FOR NO PARAMETER DEFINITION
@@ -25,10 +26,10 @@ def evolve_population(
             "data_file"   :   '../data/spy5m.csv',
             "epoch_idx"   :   [0],
             "hlocv_idx"   :   [1,2,3,4],
-            "pop_size"    :   1000,
+            "pop_size"    :   150,
             "grmr_type"   :   'Null',
             "grmr_mdl"    :   240,
-            "chunk_size"  :   0.1,
+            "chunk_size"  :   25,
             "verbose"     :   0
         }
 
@@ -43,7 +44,6 @@ def evolve_population(
 
     if(solver_kwargs is None):
         solver_kwargs = {
-            "population":	X,
             "offset"    :   5,
             "t_vec"		:	'Close',
             "t_mode"	:	'RE',
@@ -53,7 +53,7 @@ def evolve_population(
                 {"ID": "divide"},
                 {"ID": 18, "x": "tvec", "delta1": 20, "offset": False},
             ],
-            "AD_cond"   :	('lt', -2),
+            "AD_cond"   :	('gt', 2),
         }
 
     if(selector_kwargs is None):

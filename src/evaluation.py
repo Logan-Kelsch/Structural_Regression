@@ -57,12 +57,14 @@ class Solver:
 		self,
 		population	:	_I.Population,
 		t_vec		:	str	=	'Close', #could be volume
-		t_mode		:	str	=	'RE', #AD for anomoly detection, or RE for raw emission
+		t_mode		:	str	=	'AD', #AD for anomoly detection, or RE for raw emission
 		emission	:	list=	[
-			{"ID":16,"delta1":6}
+		{"ID": 5, "alpha": {"ID": 3, "x": "tvec", "delta1": 6*4, "offset": False}},
+		{"ID": "divide"},
+		{"ID": 18, "x": "tvec", "delta1": 6*4, "offset": False},
 		],
 		offset      :   int=    6,
-		AD_cond		:	tuple=	('lt', -2),
+		AD_cond		:	tuple=	('gt', 2),
 	):
 		'''emission is interpreted as functions applied to t_vec from left to right.'''
 
@@ -119,12 +121,11 @@ class Solver:
 			evaluation_mask = generate_evaluation_mask(Population, self._offset)
 
 			#may find a better shape or type for this default of no use
-			anomaly_mask = np.full(evaluation_mask.shape, True, dtype=bool)
-
-			if(self._tmode=='AD'):
-				
-				#then we need to make a boolean masking variable where raw emission is true under AD_cond parameter interpretation
-				anomaly_mask = generate_anomaly_mask(raw_emission, self._AD_cond)	
+			#anomaly_mask = np.full(evaluation_mask.shape, False, dtype=bool)
+			print('ad cond: ', self._AD_cond)
+			#then we need to make a boolean masking variable where raw emission is true under AD_cond parameter interpretation
+			anomaly_mask = generate_anomaly_mask(raw_emission, self._AD_cond)	
+			print('am counts', np.unique_counts(anomaly_mask))
 
 		else:
 			raise NotImplementedError(f'Target Mode of "{self._tmode}" is not supported at this moment.')
@@ -140,25 +141,25 @@ import transform_ops as _OPS
 
 def evaluate(
 	population		:	_I.Population,
-    solver          :   Solver,
-    slack           :   float   =   0,
-    complexity      :   str =   'log_parsimony',
-    metric          :   str =   'heavensent'
+	solver          :   Solver,
+	slack           :   float   =   0,
+	complexity      :   str =   'log_parsimony',
+	metric          :   str =   'heavensent'
 ):
-    
-    #instantiate
-    match(population._structure):
-        case 'Intraday':
-            instantiation_stats = _I.instantiate_from_ops_chunked_intraday(
-                population, transform_ops=_OPS, chunk_B=8
-            )
-        case _:
-            raise NotImplementedError('Did not implement other structure other than intraday should be easy ask logan.')
 	
-    #evaluate
-    evaluation = evaluate_population(population, solver, slack=slack, complexity=complexity, metric=metric)
+	#instantiate
+	match(population._structure):
+		case 'Intraday':
+			instantiation_stats = _I.instantiate_from_ops_chunked_intraday(
+				population, transform_ops=_OPS, chunk_B=8
+			)
+		case _:
+			raise NotImplementedError('Did not implement other structure other than intraday should be easy ask logan.')
+	
+	#evaluate
+	evaluation = evaluate_population(population, solver, slack=slack, complexity=complexity, metric=metric)
 
-    return evaluation, instantiation_stats
+	return evaluation, instantiation_stats
 
 
 import numpy as np
@@ -166,529 +167,529 @@ import transform_ops
 
 
 def generate_raw_emission(Population, target_idx, emissions, offset):
-    """
-    Broad, emission-driven target builder.
+	"""
+	Broad, emission-driven target builder.
 
-    Base target:
-      tvec_offset[i] = Population._X_inst[i + offset, target_idx]
-      valid region is i = 0..N-offset-1
-      output is length N with NaN tail of length `offset`.
+	Base target:
+	  tvec_offset[i] = Population._X_inst[i + offset, target_idx]
+	  valid region is i = 0..N-offset-1
+	  output is length N with NaN tail of length `offset`.
 
-    Supported emission features
-    ---------------------------
-    Each emission dict may include:
-      - "ID"      : op id, or "divide"
-      - "x"       : "emit" (default), "tvec", scalar, 1D array, or (valid_len,1) array
-      - "alpha"   : scalar, array, "tvec", "emit", or a nested op dict
-      - "offset"  : bool, default True, controls how "tvec" is resolved
-                    True  -> future-aligned tvec_offset
-                    False -> raw/current tvec_raw
-      - "delta1", "delta2", "kappa", "min_count": scalar params
+	Supported emission features
+	---------------------------
+	Each emission dict may include:
+	  - "ID"      : op id, or "divide"
+	  - "x"       : "emit" (default), "tvec", scalar, 1D array, or (valid_len,1) array
+	  - "alpha"   : scalar, array, "tvec", "emit", or a nested op dict
+	  - "offset"  : bool, default True, controls how "tvec" is resolved
+					True  -> future-aligned tvec_offset
+					False -> raw/current tvec_raw
+	  - "delta1", "delta2", "kappa", "min_count": scalar params
 
-    Special:
-      {"ID": "divide"} divides the current emission by the output of the next op.
+	Special:
+	  {"ID": "divide"} divides the current emission by the output of the next op.
 
-    New:
-      alpha may be a nested op dict, e.g.
-        {"ID": 5, "alpha": {"ID": 3, "delta1": 6, "offset": False}}
+	New:
+	  alpha may be a nested op dict, e.g.
+		{"ID": 5, "alpha": {"ID": 3, "delta1": 6, "offset": False}}
 
-      For nested alpha op dicts:
-        - x must be "tvec" or omitted
-        - if omitted, x defaults to "tvec"
-        - nested dict may use its own offset
-    """
-    if not hasattr(Population, "_X_inst"):
-        raise AttributeError("Population must have attribute '_X_inst'")
+	  For nested alpha op dicts:
+		- x must be "tvec" or omitted
+		- if omitted, x defaults to "tvec"
+		- nested dict may use its own offset
+	"""
+	if not hasattr(Population, "_X_inst"):
+		raise AttributeError("Population must have attribute '_X_inst'")
 
-    X = Population._X_inst
-    if not isinstance(X, np.ndarray) or X.ndim != 2:
-        raise TypeError("Population._X_inst must be a 2D numpy ndarray")
+	X = Population._X_inst
+	if not isinstance(X, np.ndarray) or X.ndim != 2:
+		raise TypeError("Population._X_inst must be a 2D numpy ndarray")
 
-    N, G = X.shape
+	N, G = X.shape
 
-    target_idx = int(target_idx)
-    if target_idx < 0 or target_idx >= G:
-        raise IndexError(f"target_idx={target_idx} out of bounds for G={G}")
+	target_idx = int(target_idx)
+	if target_idx < 0 or target_idx >= G:
+		raise IndexError(f"target_idx={target_idx} out of bounds for G={G}")
 
-    offset = int(offset)
-    if offset < 0:
-        raise ValueError("offset must be >= 0")
+	offset = int(offset)
+	if offset < 0:
+		raise ValueError("offset must be >= 0")
 
-    if emissions is None:
-        emissions = []
-    if not isinstance(emissions, (list, tuple)):
-        raise TypeError("emissions must be a list/tuple of dicts")
+	if emissions is None:
+		emissions = []
+	if not isinstance(emissions, (list, tuple)):
+		raise TypeError("emissions must be a list/tuple of dicts")
 
-    base = np.asarray(X[:, target_idx], dtype=np.float32)
+	base = np.asarray(X[:, target_idx], dtype=np.float32)
 
-    valid_len = N - offset
-    out_full = np.full(N, np.nan, dtype=np.float32)
+	valid_len = N - offset
+	out_full = np.full(N, np.nan, dtype=np.float32)
 
-    if valid_len <= 0:
-        return out_full
+	if valid_len <= 0:
+		return out_full
 
-    if offset == 0:
-        tvec_offset_1d = base
-    else:
-        tvec_offset_1d = base[offset:]
+	if offset == 0:
+		tvec_offset_1d = base
+	else:
+		tvec_offset_1d = base[offset:]
 
-    tvec_raw_1d = base[:valid_len]
+	tvec_raw_1d = base[:valid_len]
 
-    tvec_offset = np.ascontiguousarray(tvec_offset_1d.reshape(valid_len, 1), dtype=np.float32)
-    tvec_raw    = np.ascontiguousarray(tvec_raw_1d.reshape(valid_len, 1), dtype=np.float32)
+	tvec_offset = np.ascontiguousarray(tvec_offset_1d.reshape(valid_len, 1), dtype=np.float32)
+	tvec_raw    = np.ascontiguousarray(tvec_raw_1d.reshape(valid_len, 1), dtype=np.float32)
 
-    work = tvec_offset.copy()
-    buf  = np.empty_like(work)
+	work = tvec_offset.copy()
+	buf  = np.empty_like(work)
 
-    def _to_fid(v):
-        if isinstance(v, str):
-            s = v.strip().lower()
-            if s == "divide":
-                return "divide"
-            if s.isdigit():
-                return int(s)
-            raise ValueError(f"Unrecognized ID string: {v!r}")
-        return int(v)
+	def _to_fid(v):
+		if isinstance(v, str):
+			s = v.strip().lower()
+			if s == "divide":
+				return "divide"
+			if s.isdigit():
+				return int(s)
+			raise ValueError(f"Unrecognized ID string: {v!r}")
+		return int(v)
 
-    def _scalar_const(name, v, cast=float):
-        if v is None:
-            return None
-        a = np.asarray(v)
-        if a.ndim != 0:
-            raise TypeError(f"'{name}' must be a scalar constant")
-        return cast(a.item())
+	def _scalar_const(name, v, cast=float):
+		if v is None:
+			return None
+		a = np.asarray(v)
+		if a.ndim != 0:
+			raise TypeError(f"'{name}' must be a scalar constant")
+		return cast(a.item())
 
-    def _resolve_series(spec, use_offset_tvec, current_work):
-        if spec is None or (isinstance(spec, str) and spec.strip().lower() in ("emit", "work")):
-            return current_work
+	def _resolve_series(spec, use_offset_tvec, current_work):
+		if spec is None or (isinstance(spec, str) and spec.strip().lower() in ("emit", "work")):
+			return current_work
 
-        if isinstance(spec, str) and spec.strip().lower() == "tvec":
-            return tvec_offset if use_offset_tvec else tvec_raw
+		if isinstance(spec, str) and spec.strip().lower() == "tvec":
+			return tvec_offset if use_offset_tvec else tvec_raw
 
-        if np.isscalar(spec):
-            return np.full((valid_len, 1), float(spec), dtype=np.float32)
+		if np.isscalar(spec):
+			return np.full((valid_len, 1), float(spec), dtype=np.float32)
 
-        arr = np.asarray(spec)
-        if arr.ndim == 1:
-            if arr.shape[0] != valid_len:
-                raise ValueError(f"1D series must have length {valid_len}, got {arr.shape[0]}")
-            return np.ascontiguousarray(arr.astype(np.float32, copy=False).reshape(valid_len, 1))
-        if arr.ndim == 2:
-            if arr.shape != (valid_len, 1):
-                raise ValueError(f"2D series must be shape {(valid_len,1)}, got {arr.shape}")
-            return np.ascontiguousarray(arr.astype(np.float32, copy=False))
+		arr = np.asarray(spec)
+		if arr.ndim == 1:
+			if arr.shape[0] != valid_len:
+				raise ValueError(f"1D series must have length {valid_len}, got {arr.shape[0]}")
+			return np.ascontiguousarray(arr.astype(np.float32, copy=False).reshape(valid_len, 1))
+		if arr.ndim == 2:
+			if arr.shape != (valid_len, 1):
+				raise ValueError(f"2D series must be shape {(valid_len,1)}, got {arr.shape}")
+			return np.ascontiguousarray(arr.astype(np.float32, copy=False))
 
-        raise ValueError("Series spec must be scalar, 1D (valid_len,), or 2D (valid_len,1)")
+		raise ValueError("Series spec must be scalar, 1D (valid_len,), or 2D (valid_len,1)")
 
-    def _resolve_alpha(alpha_spec, use_offset_tvec, current_work):
-        """
-        Resolve alpha which may be:
-          - scalar
-          - array
-          - "tvec"
-          - "emit"
-          - nested op dict (must root x on tvec)
-        """
-        if isinstance(alpha_spec, dict):
-            return _eval_nested_alpha_op(alpha_spec)
+	def _resolve_alpha(alpha_spec, use_offset_tvec, current_work):
+		"""
+		Resolve alpha which may be:
+		  - scalar
+		  - array
+		  - "tvec"
+		  - "emit"
+		  - nested op dict (must root x on tvec)
+		"""
+		if isinstance(alpha_spec, dict):
+			return _eval_nested_alpha_op(alpha_spec)
 
-        if isinstance(alpha_spec, str) and alpha_spec.strip().lower() in ("tvec", "emit", "work"):
-            return _resolve_series(alpha_spec, use_offset_tvec, current_work)
+		if isinstance(alpha_spec, str) and alpha_spec.strip().lower() in ("tvec", "emit", "work"):
+			return _resolve_series(alpha_spec, use_offset_tvec, current_work)
 
-        if np.isscalar(alpha_spec):
-            return float(alpha_spec)
+		if np.isscalar(alpha_spec):
+			return float(alpha_spec)
 
-        return _resolve_series(alpha_spec, use_offset_tvec, current_work)
+		return _resolve_series(alpha_spec, use_offset_tvec, current_work)
 
-    def _eval_nested_alpha_op(op_dict):
-        """
-        Evaluate a nested op dict for alpha.
-        This subtree must be rooted on tvec, not current emission.
-        """
-        if not isinstance(op_dict, dict):
-            raise TypeError("Nested alpha spec must be a dict")
+	def _eval_nested_alpha_op(op_dict):
+		"""
+		Evaluate a nested op dict for alpha.
+		This subtree must be rooted on tvec, not current emission.
+		"""
+		if not isinstance(op_dict, dict):
+			raise TypeError("Nested alpha spec must be a dict")
 
-        if "ID" not in op_dict:
-            raise KeyError("Nested alpha dict must include 'ID'")
+		if "ID" not in op_dict:
+			raise KeyError("Nested alpha dict must include 'ID'")
 
-        fid = _to_fid(op_dict["ID"])
-        if fid == "divide":
-            raise ValueError("Nested alpha dict cannot use {'ID':'divide'} directly")
+		fid = _to_fid(op_dict["ID"])
+		if fid == "divide":
+			raise ValueError("Nested alpha dict cannot use {'ID':'divide'} directly")
 
-        use_offset_tvec = bool(op_dict.get("offset", True))
+		use_offset_tvec = bool(op_dict.get("offset", True))
 
-        x_spec = op_dict.get("x", "tvec")
-        if not (isinstance(x_spec, str) and x_spec.strip().lower() == "tvec"):
-            raise ValueError("Nested alpha dict must have x='tvec' or omit 'x'")
+		x_spec = op_dict.get("x", "tvec")
+		if not (isinstance(x_spec, str) and x_spec.strip().lower() == "tvec"):
+			raise ValueError("Nested alpha dict must have x='tvec' or omit 'x'")
 
-        x_in = tvec_offset if use_offset_tvec else tvec_raw
+		x_in = tvec_offset if use_offset_tvec else tvec_raw
 
-        alpha_in = None
-        if "alpha" in op_dict:
-            alpha_in = _resolve_alpha(op_dict["alpha"], use_offset_tvec, x_in)
+		alpha_in = None
+		if "alpha" in op_dict:
+			alpha_in = _resolve_alpha(op_dict["alpha"], use_offset_tvec, x_in)
 
-        delta1 = _scalar_const("delta1", op_dict.get("delta1", None), cast=int)
-        delta2 = _scalar_const("delta2", op_dict.get("delta2", None), cast=int)
-        kappa  = _scalar_const("kappa",  op_dict.get("kappa",  None), cast=float)
+		delta1 = _scalar_const("delta1", op_dict.get("delta1", None), cast=int)
+		delta2 = _scalar_const("delta2", op_dict.get("delta2", None), cast=int)
+		kappa  = _scalar_const("kappa",  op_dict.get("kappa",  None), cast=float)
 
-        kw = {}
-        if "min_count" in op_dict:
-            kw["min_count"] = _scalar_const("min_count", op_dict.get("min_count"), cast=int)
+		kw = {}
+		if "min_count" in op_dict:
+			kw["min_count"] = _scalar_const("min_count", op_dict.get("min_count"), cast=int)
 
-        if fid in (20, 21):
-            if alpha_in is None:
-                raise ValueError(f"Nested alpha op ID {fid} requires 'alpha'")
-            if np.isscalar(alpha_in):
-                alpha_in = np.full(x_in.shape, float(alpha_in), dtype=np.float32)
-            else:
-                if not (isinstance(alpha_in, np.ndarray) and alpha_in.shape == x_in.shape):
-                    raise ValueError(
-                        f"Nested alpha op ID {fid}: alpha must be shape {x_in.shape}, "
-                        f"got {getattr(alpha_in, 'shape', None)}"
-                    )
+		if fid in (20, 21):
+			if alpha_in is None:
+				raise ValueError(f"Nested alpha op ID {fid} requires 'alpha'")
+			if np.isscalar(alpha_in):
+				alpha_in = np.full(x_in.shape, float(alpha_in), dtype=np.float32)
+			else:
+				if not (isinstance(alpha_in, np.ndarray) and alpha_in.shape == x_in.shape):
+					raise ValueError(
+						f"Nested alpha op ID {fid}: alpha must be shape {x_in.shape}, "
+						f"got {getattr(alpha_in, 'shape', None)}"
+					)
 
-        out_tmp = np.empty_like(x_in)
-        transform_ops.apply(
-            fid,
-            x_in,
-            alpha=alpha_in,
-            delta1=delta1,
-            delta2=delta2,
-            kappa=kappa,
-            out=out_tmp,
-            in_place=False,
-            **kw,
-        )
-        np.nan_to_num(out_tmp, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
-        return out_tmp
+		out_tmp = np.empty_like(x_in)
+		transform_ops.apply(
+			fid,
+			x_in,
+			alpha=alpha_in,
+			delta1=delta1,
+			delta2=delta2,
+			kappa=kappa,
+			out=out_tmp,
+			in_place=False,
+			**kw,
+		)
+		np.nan_to_num(out_tmp, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+		return out_tmp
 
-    def _apply_one(op_dict, current_work, out_buf):
-        if not isinstance(op_dict, dict):
-            raise TypeError(f"Each emission must be a dict, got {type(op_dict).__name__}")
+	def _apply_one(op_dict, current_work, out_buf):
+		if not isinstance(op_dict, dict):
+			raise TypeError(f"Each emission must be a dict, got {type(op_dict).__name__}")
 
-        if "ID" not in op_dict:
-            raise KeyError("Emission dict missing required key 'ID'")
+		if "ID" not in op_dict:
+			raise KeyError("Emission dict missing required key 'ID'")
 
-        fid = _to_fid(op_dict["ID"])
-        if fid == "divide":
-            raise ValueError("Internal error: _apply_one called on 'divide'")
+		fid = _to_fid(op_dict["ID"])
+		if fid == "divide":
+			raise ValueError("Internal error: _apply_one called on 'divide'")
 
-        use_offset_tvec = bool(op_dict.get("offset", True))
+		use_offset_tvec = bool(op_dict.get("offset", True))
 
-        x_in = _resolve_series(op_dict.get("x", None), use_offset_tvec, current_work)
+		x_in = _resolve_series(op_dict.get("x", None), use_offset_tvec, current_work)
 
-        alpha_in = None
-        if "alpha" in op_dict:
-            alpha_in = _resolve_alpha(op_dict["alpha"], use_offset_tvec, current_work)
+		alpha_in = None
+		if "alpha" in op_dict:
+			alpha_in = _resolve_alpha(op_dict["alpha"], use_offset_tvec, current_work)
 
-        delta1 = _scalar_const("delta1", op_dict.get("delta1", None), cast=int)
-        delta2 = _scalar_const("delta2", op_dict.get("delta2", None), cast=int)
-        kappa  = _scalar_const("kappa",  op_dict.get("kappa",  None), cast=float)
+		delta1 = _scalar_const("delta1", op_dict.get("delta1", None), cast=int)
+		delta2 = _scalar_const("delta2", op_dict.get("delta2", None), cast=int)
+		kappa  = _scalar_const("kappa",  op_dict.get("kappa",  None), cast=float)
 
-        kw = {}
-        if "min_count" in op_dict:
-            kw["min_count"] = _scalar_const("min_count", op_dict.get("min_count"), cast=int)
+		kw = {}
+		if "min_count" in op_dict:
+			kw["min_count"] = _scalar_const("min_count", op_dict.get("min_count"), cast=int)
 
-        if fid in (20, 21):
-            if alpha_in is None:
-                raise ValueError(f"Emission ID {fid} requires 'alpha'")
-            if np.isscalar(alpha_in):
-                alpha_in = np.full(x_in.shape, float(alpha_in), dtype=np.float32)
-            else:
-                if not (isinstance(alpha_in, np.ndarray) and alpha_in.shape == x_in.shape):
-                    raise ValueError(
-                        f"Emission ID {fid}: alpha must be shape {x_in.shape}, "
-                        f"got {getattr(alpha_in, 'shape', None)}"
-                    )
+		if fid in (20, 21):
+			if alpha_in is None:
+				raise ValueError(f"Emission ID {fid} requires 'alpha'")
+			if np.isscalar(alpha_in):
+				alpha_in = np.full(x_in.shape, float(alpha_in), dtype=np.float32)
+			else:
+				if not (isinstance(alpha_in, np.ndarray) and alpha_in.shape == x_in.shape):
+					raise ValueError(
+						f"Emission ID {fid}: alpha must be shape {x_in.shape}, "
+						f"got {getattr(alpha_in, 'shape', None)}"
+					)
 
-        transform_ops.apply(
-            fid,
-            x_in,
-            alpha=alpha_in,
-            delta1=delta1,
-            delta2=delta2,
-            kappa=kappa,
-            out=out_buf,
-            in_place=False,
-            **kw,
-        )
+		transform_ops.apply(
+			fid,
+			x_in,
+			alpha=alpha_in,
+			delta1=delta1,
+			delta2=delta2,
+			kappa=kappa,
+			out=out_buf,
+			in_place=False,
+			**kw,
+		)
 
-        np.nan_to_num(out_buf, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
-        return out_buf
+		np.nan_to_num(out_buf, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+		return out_buf
 
-    i = 0
-    while i < len(emissions):
-        op = emissions[i]
-        if not isinstance(op, dict):
-            raise TypeError(f"Each emission must be a dict, got {type(op).__name__} at index {i}")
-        if "ID" not in op:
-            raise KeyError(f"Emission at index {i} missing 'ID'")
+	i = 0
+	while i < len(emissions):
+		op = emissions[i]
+		if not isinstance(op, dict):
+			raise TypeError(f"Each emission must be a dict, got {type(op).__name__} at index {i}")
+		if "ID" not in op:
+			raise KeyError(f"Emission at index {i} missing 'ID'")
 
-        fid = _to_fid(op["ID"])
+		fid = _to_fid(op["ID"])
 
-        if fid == "divide":
-            if i + 1 >= len(emissions):
-                raise ValueError("Found {'ID':'divide'} but no subsequent op to produce denominator")
+		if fid == "divide":
+			if i + 1 >= len(emissions):
+				raise ValueError("Found {'ID':'divide'} but no subsequent op to produce denominator")
 
-            denom_op = emissions[i + 1]
-            numerator = work.copy()
-            denom = _apply_one(denom_op, work, buf)
+			denom_op = emissions[i + 1]
+			numerator = work.copy()
+			denom = _apply_one(denom_op, work, buf)
 
-            work.fill(0.0)
-            np.divide(numerator, denom, out=work, where=(denom != 0.0))
-            np.nan_to_num(work, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+			work.fill(0.0)
+			np.divide(numerator, denom, out=work, where=(denom != 0.0))
+			np.nan_to_num(work, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
 
-            i += 2
-            continue
+			i += 2
+			continue
 
-        _apply_one(op, work, buf)
-        work, buf = buf, work
-        i += 1
+		_apply_one(op, work, buf)
+		work, buf = buf, work
+		i += 1
 
-    out_full[:valid_len] = work[:, 0]
-    return out_full
+	out_full[:valid_len] = work[:, 0]
+	return out_full
 
 
 def generate_raw_emission_v2(Population, target_idx, emissions, offset):
-    """
-    Broad, emission-driven target builder.
+	"""
+	Broad, emission-driven target builder.
 
-    Base target:
-      tvec_offset[i] = Population._X_inst[i + offset, target_idx]   (future-aligned)
-      valid region is i = 0..N-offset-1
-      output is length N with NaN tail of length `offset`.
+	Base target:
+	  tvec_offset[i] = Population._X_inst[i + offset, target_idx]   (future-aligned)
+	  valid region is i = 0..N-offset-1
+	  output is length N with NaN tail of length `offset`.
 
-    New capabilities:
-      - Each emission dict may optionally provide:
-          * "x": "emit" (default) or "tvec" or a scalar/array
-          * "alpha": scalar/array or "tvec" or "emit"
-          * "offset": bool (default True) controlling how "tvec" is resolved:
-                True  -> use future-aligned tvec_offset
-                False -> use current-time tvec_raw (no forward shift)
-          * "delta1","delta2","kappa","min_count": scalar constants
-      - Special op: {"ID": "divide"} divides current emission by the output of
-        the *next* op dict (which is evaluated to produce a denominator series).
+	New capabilities:
+	  - Each emission dict may optionally provide:
+		  * "x": "emit" (default) or "tvec" or a scalar/array
+		  * "alpha": scalar/array or "tvec" or "emit"
+		  * "offset": bool (default True) controlling how "tvec" is resolved:
+				True  -> use future-aligned tvec_offset
+				False -> use current-time tvec_raw (no forward shift)
+		  * "delta1","delta2","kappa","min_count": scalar constants
+	  - Special op: {"ID": "divide"} divides current emission by the output of
+		the *next* op dict (which is evaluated to produce a denominator series).
 
-    Examples
-    --------
-    # current emission (tvec_offset) minus the raw (unshifted) tvec:
-    emissions = [{"ID": 5, "alpha": "tvec", "offset": False}]
+	Examples
+	--------
+	# current emission (tvec_offset) minus the raw (unshifted) tvec:
+	emissions = [{"ID": 5, "alpha": "tvec", "offset": False}]
 
-    # divide everything so far by STD(tvec_raw):
-    emissions = [
-        {"ID": 14, "delta1": 20},          # EMA on tvec_offset (default x=emit)
-        {"ID": "divide"},
-        {"ID": "18", "x": "tvec", "offset": False, "delta1": 50}  # denom from tvec_raw
-    ]
-    """
-    # ------------------ validate ------------------
-    if not hasattr(Population, "_X_inst"):
-        raise AttributeError("Population must have attribute '_X_inst'")
+	# divide everything so far by STD(tvec_raw):
+	emissions = [
+		{"ID": 14, "delta1": 20},          # EMA on tvec_offset (default x=emit)
+		{"ID": "divide"},
+		{"ID": "18", "x": "tvec", "offset": False, "delta1": 50}  # denom from tvec_raw
+	]
+	"""
+	# ------------------ validate ------------------
+	if not hasattr(Population, "_X_inst"):
+		raise AttributeError("Population must have attribute '_X_inst'")
 
-    X = Population._X_inst
-    if not isinstance(X, np.ndarray) or X.ndim != 2:
-        raise TypeError("Population._X_inst must be a 2D numpy ndarray")
+	X = Population._X_inst
+	if not isinstance(X, np.ndarray) or X.ndim != 2:
+		raise TypeError("Population._X_inst must be a 2D numpy ndarray")
 
-    N, G = X.shape
+	N, G = X.shape
 
-    target_idx = int(target_idx)
-    if target_idx < 0 or target_idx >= G:
-        raise IndexError(f"target_idx={target_idx} out of bounds for G={G}")
+	target_idx = int(target_idx)
+	if target_idx < 0 or target_idx >= G:
+		raise IndexError(f"target_idx={target_idx} out of bounds for G={G}")
 
-    offset = int(offset)
-    if offset < 0:
-        raise ValueError("offset must be >= 0")
+	offset = int(offset)
+	if offset < 0:
+		raise ValueError("offset must be >= 0")
 
-    if emissions is None:
-        emissions = []
-    if not isinstance(emissions, (list, tuple)):
-        raise TypeError("emissions must be a list/tuple of dicts")
+	if emissions is None:
+		emissions = []
+	if not isinstance(emissions, (list, tuple)):
+		raise TypeError("emissions must be a list/tuple of dicts")
 
-    # ------------------ build tvecs (valid region only) ------------------
-    base = np.asarray(X[:, target_idx], dtype=np.float32)
+	# ------------------ build tvecs (valid region only) ------------------
+	base = np.asarray(X[:, target_idx], dtype=np.float32)
 
-    valid_len = N - offset
-    out_full = np.full(N, np.nan, dtype=np.float32)
+	valid_len = N - offset
+	out_full = np.full(N, np.nan, dtype=np.float32)
 
-    if valid_len <= 0:
-        return out_full
+	if valid_len <= 0:
+		return out_full
 
-    # future-aligned target (the default "tvec")
-    if offset == 0:
-        tvec_offset_1d = base
-    else:
-        tvec_offset_1d = base[offset:]  # length = valid_len
+	# future-aligned target (the default "tvec")
+	if offset == 0:
+		tvec_offset_1d = base
+	else:
+		tvec_offset_1d = base[offset:]  # length = valid_len
 
-    # raw (no forward shift) tvec, aligned to the same valid_len
-    tvec_raw_1d = base[:valid_len]
+	# raw (no forward shift) tvec, aligned to the same valid_len
+	tvec_raw_1d = base[:valid_len]
 
-    tvec_offset = np.ascontiguousarray(tvec_offset_1d.reshape(valid_len, 1), dtype=np.float32)
-    tvec_raw    = np.ascontiguousarray(tvec_raw_1d.reshape(valid_len, 1), dtype=np.float32)
+	tvec_offset = np.ascontiguousarray(tvec_offset_1d.reshape(valid_len, 1), dtype=np.float32)
+	tvec_raw    = np.ascontiguousarray(tvec_raw_1d.reshape(valid_len, 1), dtype=np.float32)
 
-    # working emission starts as the future-aligned target
-    work = tvec_offset.copy()
-    buf  = np.empty_like(work)
+	# working emission starts as the future-aligned target
+	work = tvec_offset.copy()
+	buf  = np.empty_like(work)
 
-    # ------------------ helpers ------------------
-    def _to_fid(v):
-        if isinstance(v, str):
-            s = v.strip().lower()
-            if s == "divide":
-                return "divide"
-            # numeric string like "18"
-            if s.isdigit():
-                return int(s)
-            raise ValueError(f"Unrecognized ID string: {v!r}")
-        return int(v)
+	# ------------------ helpers ------------------
+	def _to_fid(v):
+		if isinstance(v, str):
+			s = v.strip().lower()
+			if s == "divide":
+				return "divide"
+			# numeric string like "18"
+			if s.isdigit():
+				return int(s)
+			raise ValueError(f"Unrecognized ID string: {v!r}")
+		return int(v)
 
-    def _resolve_series(spec, use_offset_tvec, current_work):
-        """
-        Turn a spec into an (valid_len,1) float32 matrix.
-        spec may be:
-          - "emit" / "work" / None -> current_work
-          - "tvec" -> tvec_offset or tvec_raw (depending on use_offset_tvec)
-          - scalar -> broadcast constant series
-          - 1D array length valid_len -> reshape to (valid_len,1)
-          - 2D array shape (valid_len,1) -> use as-is
-        """
-        if spec is None or (isinstance(spec, str) and spec.strip().lower() in ("emit", "work")):
-            return current_work
+	def _resolve_series(spec, use_offset_tvec, current_work):
+		"""
+		Turn a spec into an (valid_len,1) float32 matrix.
+		spec may be:
+		  - "emit" / "work" / None -> current_work
+		  - "tvec" -> tvec_offset or tvec_raw (depending on use_offset_tvec)
+		  - scalar -> broadcast constant series
+		  - 1D array length valid_len -> reshape to (valid_len,1)
+		  - 2D array shape (valid_len,1) -> use as-is
+		"""
+		if spec is None or (isinstance(spec, str) and spec.strip().lower() in ("emit", "work")):
+			return current_work
 
-        if isinstance(spec, str) and spec.strip().lower() == "tvec":
-            return tvec_offset if use_offset_tvec else tvec_raw
+		if isinstance(spec, str) and spec.strip().lower() == "tvec":
+			return tvec_offset if use_offset_tvec else tvec_raw
 
-        if np.isscalar(spec):
-            # broadcast constant into a column
-            return np.full((valid_len, 1), float(spec), dtype=np.float32)
+		if np.isscalar(spec):
+			# broadcast constant into a column
+			return np.full((valid_len, 1), float(spec), dtype=np.float32)
 
-        arr = np.asarray(spec)
-        if arr.ndim == 1:
-            if arr.shape[0] != valid_len:
-                raise ValueError(f"1D series must have length {valid_len}, got {arr.shape[0]}")
-            return np.ascontiguousarray(arr.astype(np.float32, copy=False).reshape(valid_len, 1))
-        if arr.ndim == 2:
-            if arr.shape != (valid_len, 1):
-                raise ValueError(f"2D series must be shape {(valid_len,1)}, got {arr.shape}")
-            return np.ascontiguousarray(arr.astype(np.float32, copy=False))
-        raise ValueError("Series spec must be scalar, 1D (valid_len,), or 2D (valid_len,1)")
+		arr = np.asarray(spec)
+		if arr.ndim == 1:
+			if arr.shape[0] != valid_len:
+				raise ValueError(f"1D series must have length {valid_len}, got {arr.shape[0]}")
+			return np.ascontiguousarray(arr.astype(np.float32, copy=False).reshape(valid_len, 1))
+		if arr.ndim == 2:
+			if arr.shape != (valid_len, 1):
+				raise ValueError(f"2D series must be shape {(valid_len,1)}, got {arr.shape}")
+			return np.ascontiguousarray(arr.astype(np.float32, copy=False))
+		raise ValueError("Series spec must be scalar, 1D (valid_len,), or 2D (valid_len,1)")
 
-    def _scalar_const(name, v, cast=float):
-        if v is None:
-            return None
-        a = np.asarray(v)
-        if a.ndim != 0:
-            raise TypeError(f"'{name}' must be a scalar constant")
-        return cast(a.item())
+	def _scalar_const(name, v, cast=float):
+		if v is None:
+			return None
+		a = np.asarray(v)
+		if a.ndim != 0:
+			raise TypeError(f"'{name}' must be a scalar constant")
+		return cast(a.item())
 
-    def _apply_one(op_dict, current_work, out_buf):
-        """
-        Evaluate a single transform op dict into out_buf (valid_len,1).
-        Returns the output matrix (a view/alias of out_buf).
-        """
-        if not isinstance(op_dict, dict):
-            raise TypeError(f"Each emission must be a dict, got {type(op_dict).__name__}")
+	def _apply_one(op_dict, current_work, out_buf):
+		"""
+		Evaluate a single transform op dict into out_buf (valid_len,1).
+		Returns the output matrix (a view/alias of out_buf).
+		"""
+		if not isinstance(op_dict, dict):
+			raise TypeError(f"Each emission must be a dict, got {type(op_dict).__name__}")
 
-        if "ID" not in op_dict:
-            raise KeyError("Emission dict missing required key 'ID'")
+		if "ID" not in op_dict:
+			raise KeyError("Emission dict missing required key 'ID'")
 
-        fid = _to_fid(op_dict["ID"])
-        if fid == "divide":
-            raise ValueError("Internal error: _apply_one called on 'divide' op")
+		fid = _to_fid(op_dict["ID"])
+		if fid == "divide":
+			raise ValueError("Internal error: _apply_one called on 'divide' op")
 
-        # how to resolve "tvec" inside this op
-        use_offset_tvec = bool(op_dict.get("offset", True))
+		# how to resolve "tvec" inside this op
+		use_offset_tvec = bool(op_dict.get("offset", True))
 
-        # x input (default = current emission)
-        x_in = _resolve_series(op_dict.get("x", None), use_offset_tvec, current_work)
+		# x input (default = current emission)
+		x_in = _resolve_series(op_dict.get("x", None), use_offset_tvec, current_work)
 
-        # alpha can be scalar/series, including "tvec" or "emit"
-        alpha_in = None
-        if "alpha" in op_dict:
-            a_spec = op_dict["alpha"]
-            if isinstance(a_spec, str) and a_spec.strip().lower() in ("tvec", "emit", "work"):
-                alpha_in = _resolve_series(a_spec, use_offset_tvec, current_work)
-            else:
-                # scalar or array
-                if np.isscalar(a_spec):
-                    alpha_in = float(a_spec)
-                else:
-                    alpha_in = _resolve_series(a_spec, use_offset_tvec, current_work)
+		# alpha can be scalar/series, including "tvec" or "emit"
+		alpha_in = None
+		if "alpha" in op_dict:
+			a_spec = op_dict["alpha"]
+			if isinstance(a_spec, str) and a_spec.strip().lower() in ("tvec", "emit", "work"):
+				alpha_in = _resolve_series(a_spec, use_offset_tvec, current_work)
+			else:
+				# scalar or array
+				if np.isscalar(a_spec):
+					alpha_in = float(a_spec)
+				else:
+					alpha_in = _resolve_series(a_spec, use_offset_tvec, current_work)
 
-        # scalar params
-        delta1 = _scalar_const("delta1", op_dict.get("delta1", None), cast=int)
-        delta2 = _scalar_const("delta2", op_dict.get("delta2", None), cast=int)
-        kappa  = _scalar_const("kappa",  op_dict.get("kappa",  None), cast=float)
+		# scalar params
+		delta1 = _scalar_const("delta1", op_dict.get("delta1", None), cast=int)
+		delta2 = _scalar_const("delta2", op_dict.get("delta2", None), cast=int)
+		kappa  = _scalar_const("kappa",  op_dict.get("kappa",  None), cast=float)
 
-        kw = {}
-        if "min_count" in op_dict:
-            kw["min_count"] = _scalar_const("min_count", op_dict.get("min_count"), cast=int)
+		kw = {}
+		if "min_count" in op_dict:
+			kw["min_count"] = _scalar_const("min_count", op_dict.get("min_count"), cast=int)
 
-        # AGR/COR require alpha matrix; broadcast if a scalar slipped in
-        if fid in (20, 21):
-            if alpha_in is None:
-                raise ValueError(f"Emission ID {fid} requires 'alpha'")
-            if np.isscalar(alpha_in):
-                alpha_in = np.full(x_in.shape, float(alpha_in), dtype=np.float32)
-            else:
-                # ensure correct matrix shape
-                if not (isinstance(alpha_in, np.ndarray) and alpha_in.shape == x_in.shape):
-                    raise ValueError(f"Emission ID {fid}: alpha must be shape {x_in.shape}, got {getattr(alpha_in,'shape',None)}")
+		# AGR/COR require alpha matrix; broadcast if a scalar slipped in
+		if fid in (20, 21):
+			if alpha_in is None:
+				raise ValueError(f"Emission ID {fid} requires 'alpha'")
+			if np.isscalar(alpha_in):
+				alpha_in = np.full(x_in.shape, float(alpha_in), dtype=np.float32)
+			else:
+				# ensure correct matrix shape
+				if not (isinstance(alpha_in, np.ndarray) and alpha_in.shape == x_in.shape):
+					raise ValueError(f"Emission ID {fid}: alpha must be shape {x_in.shape}, got {getattr(alpha_in,'shape',None)}")
 
-        # run op
-        transform_ops.apply(
-            fid,
-            x_in,
-            alpha=alpha_in,
-            delta1=delta1,
-            delta2=delta2,
-            kappa=kappa,
-            out=out_buf,
-            in_place=False,
-            **kw,
-        )
+		# run op
+		transform_ops.apply(
+			fid,
+			x_in,
+			alpha=alpha_in,
+			delta1=delta1,
+			delta2=delta2,
+			kappa=kappa,
+			out=out_buf,
+			in_place=False,
+			**kw,
+		)
 
-        # sanitize (matches your instantiation philosophy)
-        np.nan_to_num(out_buf, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
-        return out_buf
+		# sanitize (matches your instantiation philosophy)
+		np.nan_to_num(out_buf, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+		return out_buf
 
-    # ------------------ main emission loop ------------------
-    i = 0
-    while i < len(emissions):
-        op = emissions[i]
-        if not isinstance(op, dict):
-            raise TypeError(f"Each emission must be a dict, got {type(op).__name__} at index {i}")
-        if "ID" not in op:
-            raise KeyError(f"Emission at index {i} missing 'ID'")
+	# ------------------ main emission loop ------------------
+	i = 0
+	while i < len(emissions):
+		op = emissions[i]
+		if not isinstance(op, dict):
+			raise TypeError(f"Each emission must be a dict, got {type(op).__name__} at index {i}")
+		if "ID" not in op:
+			raise KeyError(f"Emission at index {i} missing 'ID'")
 
-        fid = _to_fid(op["ID"])
+		fid = _to_fid(op["ID"])
 
-        if fid == "divide":
-            if i + 1 >= len(emissions):
-                raise ValueError("Found {'ID':'divide'} but no subsequent op to produce denominator")
+		if fid == "divide":
+			if i + 1 >= len(emissions):
+				raise ValueError("Found {'ID':'divide'} but no subsequent op to produce denominator")
 
-            denom_op = emissions[i + 1]
-            # compute denominator into buf
-            denom = _apply_one(denom_op, work, buf)
+			denom_op = emissions[i + 1]
+			# compute denominator into buf
+			denom = _apply_one(denom_op, work, buf)
 
-            # safe divide: where denom != 0 else 0
-            np.divide(
-                work,
-                denom,
-                out=work,
-                where=(denom != 0.0),
-            )
-            np.nan_to_num(work, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+			# safe divide: where denom != 0 else 0
+			np.divide(
+				work,
+				denom,
+				out=work,
+				where=(denom != 0.0),
+			)
+			np.nan_to_num(work, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
 
-            i += 2
-            continue
+			i += 2
+			continue
 
-        # normal op -> output into buf, then swap
-        _apply_one(op, work, buf)
-        work, buf = buf, work
-        i += 1
+		# normal op -> output into buf, then swap
+		_apply_one(op, work, buf)
+		work, buf = buf, work
+		i += 1
 
-    out_full[:valid_len] = work[:, 0]
-    return out_full
+	out_full[:valid_len] = work[:, 0]
+	return out_full
 
 
 def generate_raw_emission_v1(Population, target_idx, emissions, offset):
@@ -1052,516 +1053,518 @@ def generate_anomaly_mask(raw_emission, AD_cond):
 import numpy as np
 
 def evaluate_participation(m: float, n: float, p, q):
-    """
-    Vectorized evaluation of breadth b(p,q) and depth d(p) for arrays p and q.
+	"""
+	Vectorized evaluation of breadth b(p,q) and depth d(p) for arrays p and q.
 
-    Rules:
-      - If p == 0: set b = -10.0 for that sample (avoid denom issues). d computed normally.
-      - If p >= 2n: force d = 10.0 for that sample (avoid log-domain issue in p>n branch).
-    """
-    e = np.e
+	Rules:
+	  - If p == 0: set b = -10.0 for that sample (avoid denom issues). d computed normally.
+	  - If p >= 2n: force d = 10.0 for that sample (avoid log-domain issue in p>n branch).
+	"""
+	e = np.e
 
-    # ---- basic validation ----
-    m = float(m); n = float(n)
-    if not (n >= m):
-        raise ValueError(f"Constraint violated: need n >= m, got n={n}, m={m}.")
-    if m <= 0 or n <= 0:
-        raise ValueError("m and n must be positive.")
+	# ---- basic validation ----
+	m = float(m); n = float(n)
+	if not (n >= m):
+		raise ValueError(f"Constraint violated: need n >= m, got n={n}, m={m}.")
+	if m <= 0 or n <= 0:
+		raise ValueError("m and n must be positive.")
 
-    p = np.asarray(p, dtype=float)
-    q = np.asarray(q, dtype=float)
+	p = np.asarray(p, dtype=float)
+	q = np.asarray(q, dtype=float)
 
-    if p.shape != q.shape:
-        raise ValueError(f"p and q must have the same shape. Got p={p.shape}, q={q.shape}.")
-    if p.ndim != 1:
-        raise ValueError(f"Expected 1D vectors for p and q (shape (G,)). Got p.ndim={p.ndim}.")
+	if p.shape != q.shape:
+		raise ValueError(f"p and q must have the same shape. Got p={p.shape}, q={q.shape}.")
+	if p.ndim != 1:
+		raise ValueError(f"Expected 1D vectors for p and q (shape (G,)). Got p.ndim={p.ndim}.")
 
-    if np.any(p < 0) or np.any(q < 0):
-        raise ValueError("p and q must be nonnegative (counts-like).")
+	if np.any(p < 0) or np.any(q < 0):
+		raise ValueError("p and q must be nonnegative (counts-like).")
 
-    mask_zero = (p == 0)
-    mask_nz = ~mask_zero
+	mask_zero = (p == 0)
+	mask_nz = ~mask_zero
 
-    # Enforce p>=q only where p>0 (p==0 handled via b=-10)
-    if np.any(mask_nz & (p < q)):
-        bad = np.where(mask_nz & (p < q))[0][:10]
-        raise ValueError(f"Constraint violated: need p >= q elementwise. Example bad indices: {bad}.")
+	# Enforce p>=q only where p>0 (p==0 handled via b=-10)
+	if np.any(mask_nz & (p < q)):
+		bad = np.where(mask_nz & (p < q))[0][:10]
+		raise ValueError(f"Constraint violated: need p >= q elementwise. Example bad indices: {bad}.")
 
-    # ---- constants ----
-    f = m / n
-    pf = p * f
+	# ---- constants ----
+	f = m / n
+	pf = p * f
 
-    # ---- depth d(p) ----
-    d = np.zeros_like(p, dtype=float)
+	# ---- depth d(p) ----
+	d = np.zeros_like(p, dtype=float)
 
-    mask_lo = p < m
-    d[mask_lo] = np.log(2.0 - (p[mask_lo] / m))**2
+	mask_lo = p < m
+	d[mask_lo] = np.log(2.0 - (p[mask_lo] / m))**2
 
-    # p>n branch split: safe log region vs forced cap
-    mask_cap = p >= (2.0 * n)
-    d[mask_cap] = 10.0
+	# p>n branch split: safe log region vs forced cap
+	mask_cap = p >= (2.0 * n)
+	d[mask_cap] = 10.0
 
-    mask_hi_safe = (p > n) & (~mask_cap)  # n < p < 2n
-    d[mask_hi_safe] = np.log(2.0 - (p[mask_hi_safe] / n))**2
+	mask_hi_safe = (p > n) & (~mask_cap)  # n < p < 2n
+	d[mask_hi_safe] = np.log(2.0 - (p[mask_hi_safe] / n))**2
 
-    # ---- breadth b(p,q) ----
-    b = np.zeros_like(p, dtype=float)
+	# ---- breadth b(p,q) ----
+	b = np.zeros_like(p, dtype=float)
 
-    # p == 0 => force b to -10
-    b[mask_zero] = -10.0
+	# p == 0 => force b to -10
+	b[mask_zero] = -10.0
 
-    if np.any(mask_nz):
-        p_nz = p[mask_nz]
-        q_nz = q[mask_nz]
-        pf_nz = pf[mask_nz]
+	if np.any(mask_nz):
+		p_nz = p[mask_nz]
+		q_nz = q[mask_nz]
+		pf_nz = pf[mask_nz]
 
-        denom = p_nz * f * e  # safe since p_nz > 0 and f,e > 0
-        b_nz = np.zeros_like(p_nz, dtype=float)
+		denom = p_nz * f * e  # safe since p_nz > 0 and f,e > 0
+		b_nz = np.zeros_like(p_nz, dtype=float)
 
-        mask_b1 = q_nz < pf_nz
-        mask_b2 = ~mask_b1
+		mask_b1 = q_nz < pf_nz
+		mask_b2 = ~mask_b1
 
-        # b1
-        b_nz[mask_b1] = np.log(((e - 1.0) * q_nz[mask_b1] + f) / denom[mask_b1])**2
+		# b1
+		b_nz[mask_b1] = np.log(((e - 1.0) * q_nz[mask_b1] + f) / denom[mask_b1])**2
 
-        # b2
-        log_term = np.log(((e - 1.0) * q_nz[mask_b2] + pf_nz[mask_b2]) / denom[mask_b2])**2
-        C = 1.0 - (np.log(((e - 1.0) + f) / (f * e))**2)
+		# b2
+		log_term = np.log(((e - 1.0) * q_nz[mask_b2] + pf_nz[mask_b2]) / denom[mask_b2])**2
+		C = 1.0 - (np.log(((e - 1.0) + f) / (f * e))**2)
 
-        if np.isclose(1.0 - f, 0.0):
-            # m == n case: requires q == p in branch2
-            if np.any(mask_b2 & (q_nz != p_nz)):
-                bad = np.where(mask_b2 & (q_nz != p_nz))[0][:10]
-                raise ValueError(f"When m==n, branch2 requires q==p. Example bad indices: {bad}.")
-            quad = np.zeros_like(q_nz[mask_b2])
-        else:
-            quad = ((q_nz[mask_b2] - pf_nz[mask_b2]) / (p_nz[mask_b2] * (1.0 - f)))**2
+		if np.isclose(1.0 - f, 0.0):
+			# m == n case: requires q == p in branch2
+			if np.any(mask_b2 & (q_nz != p_nz)):
+				bad = np.where(mask_b2 & (q_nz != p_nz))[0][:10]
+				raise ValueError(f"When m==n, branch2 requires q==p. Example bad indices: {bad}.")
+			quad = np.zeros_like(q_nz[mask_b2])
+		else:
+			quad = ((q_nz[mask_b2] - pf_nz[mask_b2]) / (p_nz[mask_b2] * (1.0 - f)))**2
 
-        b_nz[mask_b2] = log_term + C * quad
-        b[mask_nz] = b_nz
+		b_nz[mask_b2] = log_term + C * quad
+		b[mask_nz] = b_nz
 
-    return b, d
+	return b, d
 
 def evaluate_population(
-    population:_I.Population,
-    solver:Solver = None,
-    slack:float=0.00,
-    complexity:str='log_parsimony',
-    metric:str='heavensent'
+	population:_I.Population,
+	solver:Solver = None,
+	slack:float=0.00,
+	complexity:str='log_parsimony',
+	metric:str='heavensent'
 ):
-    if(solver is None):
-        solver = Solver(population, offset=6, t_mode='AD', emission = [
-        {"ID": 5, "alpha": {"ID": 3, "x": "tvec", "delta1": 6*4, "offset": False}},
-        {"ID": "divide"},
-        {"ID": 18, "x": "tvec", "delta1": 6*4, "offset": False},
-        ], AD_cond=('gt', 2))
-        print(f"WARNING: Using default solver. double check params!!!"
-              f" why are you using my software RRRRHHHAAAAAAAAA")
-    raw_emission, evaluation_mask, anomaly_mask = solver.solve(population)
+	if(solver is None):
+		solver = Solver(population, offset=6, t_mode='AD', emission = [
+		{"ID": 5, "alpha": {"ID": 3, "x": "tvec", "delta1": 6*4, "offset": False}},
+		{"ID": "divide"},
+		{"ID": 18, "x": "tvec", "delta1": 6*4, "offset": False},
+		], AD_cond=('gt', 2))
+		print(f"WARNING: Using default solver. double check params!!!"
+			  f" why are you using my software RRRRHHHAAAAAAAAA")
+	raw_emission, evaluation_mask, anomaly_mask = solver.solve(population)
 
-    # always-participating benchmark return (market baseline)
-    _em = np.asarray(raw_emission, dtype=np.float32).reshape(-1)
-    _mask = np.asarray(evaluation_mask).astype(bool, copy=False).reshape(-1)
-    np.nan_to_num(_em, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
-    mu = float(_em[_mask].sum())
+	# always-participating benchmark return (market baseline)
+	_em = np.asarray(raw_emission, dtype=np.float32).reshape(-1)
+	_mask = np.asarray(evaluation_mask).astype(bool, copy=False).reshape(-1)
+	np.nan_to_num(_em, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+	mu = float(_em[_mask].sum())
 
-    c = evaluate_depth(population)
-    X_p = resolve_population_signs(population)
-    m, n= resolve_anomaly_mn(anomaly_mask)
-    p, q= resolve_population_pq(population, X_p)
-    b, d= evaluate_participation(m, n, p, q)
-    R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
-    
-    #meow
-    #i should come back to comment out this function before I get to far away from it
-    F = R - (1 - slack) * np.abs(R) * (b + d)
+	c = evaluate_depth(population)
+	X_p = resolve_population_signs(population)
+	m, n= resolve_anomaly_mn(anomaly_mask)
+	p, q= resolve_population_pq(population, X_p)
+	b, d= evaluate_participation(m, n, p, q)
+	R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
+	
+	#meow
+	#i should come back to comment out this function before I get to far away from it
+	F = R - (1 - slack) * np.abs(R) * (b + d)
 
-    parsimony_coef = solve_auto_parsimony(population, c, F)
-    #print("parsimony_coef: ", parsimony_coef)
+	parsimony_coef = solve_auto_parsimony(population, c, F)
+	#print("parsimony_coef: ", parsimony_coef)
 
-    match(complexity):
-        case 'log_parsimony':
-            F -= np.clip(parsimony_coef, 0, None) * np.log(c+1)
-        case 'parsimony':
-            F -= np.clip(parsimony_coef, 0, None) * c
-        case 'None':
-            pass
-            #F is ready to go
+	match(complexity):
+		case 'log_parsimony':
+			F -= np.clip(parsimony_coef, 0, None) * np.log(c+1)
+		case 'parsimony':
+			F -= np.clip(parsimony_coef, 0, None) * c
+		case 'None':
+			pass
+			#F is ready to go
 
-    return {"F":F,"R":R,"mu":mu,"parsimony_coef":parsimony_coef,
-            "m":m,"n":n,"p":p,"q":q,"b":b,"d":d,"c":c}
+	return {"F":F,"R":R,"mu":mu,"parsimony_coef":parsimony_coef,
+			"m":m,"n":n,"p":p,"q":q,"b":b,"d":d,"c":c,"svecs":
+			{"raw_emission":raw_emission,"evaluation_mask":evaluation_mask,"anomaly_mask":anomaly_mask}
+			}
 
 
 def evaluate_return(population, X_p, raw_emission, evaluation_mask):
-    """
-    Compute per-gene cumulative return from participation.
+	"""
+	Compute per-gene cumulative return from participation.
 
-    For each gene index g in population._G_idx:
-        R[g] = sum(raw_emission[t] for t where evaluation_mask[t] and X_p[t, g])
+	For each gene index g in population._G_idx:
+		R[g] = sum(raw_emission[t] for t where evaluation_mask[t] and X_p[t, g])
 
-    Parameters
-    ----------
-    population : object
-        Must have attribute `_G_idx` (indices of gene columns to evaluate).
-    X_p : array-like, shape (T, G)
-        Boolean (or 0/1) participation/prediction matrix.
-    raw_emission : array-like, shape (T,)
-        Emission/return series aligned with X_p along time.
-    evaluation_mask : array-like, shape (T,)
-        Boolean (or 0/1) mask for time points allowed to be evaluated.
+	Parameters
+	----------
+	population : object
+		Must have attribute `_G_idx` (indices of gene columns to evaluate).
+	X_p : array-like, shape (T, G)
+		Boolean (or 0/1) participation/prediction matrix.
+	raw_emission : array-like, shape (T,)
+		Emission/return series aligned with X_p along time.
+	evaluation_mask : array-like, shape (T,)
+		Boolean (or 0/1) mask for time points allowed to be evaluated.
 
-    Returns
-    -------
-    R : np.ndarray, shape (G,), dtype=float32
-        Cumulative returns per gene (zeros for genes not in _G_idx).
-    """
-    if not hasattr(population, "_G_idx"):
-        raise AttributeError("population must have attribute '_G_idx'")
+	Returns
+	-------
+	R : np.ndarray, shape (G,), dtype=float32
+		Cumulative returns per gene (zeros for genes not in _G_idx).
+	"""
+	if not hasattr(population, "_G_idx"):
+		raise AttributeError("population must have attribute '_G_idx'")
 
-    X_p = np.asarray(X_p)
-    if X_p.ndim != 2:
-        raise ValueError("X_p must be 2D with shape (T, G)")
+	X_p = np.asarray(X_p)
+	if X_p.ndim != 2:
+		raise ValueError("X_p must be 2D with shape (T, G)")
 
-    T, G = X_p.shape
+	T, G = X_p.shape
 
-    raw_emission = np.asarray(raw_emission, dtype=np.float32).reshape(-1)
-    evaluation_mask = np.asarray(evaluation_mask).reshape(-1)
+	raw_emission = np.asarray(raw_emission, dtype=np.float32).reshape(-1)
+	evaluation_mask = np.asarray(evaluation_mask).reshape(-1)
 
-    if raw_emission.shape[0] != T:
-        raise ValueError(f"raw_emission length {raw_emission.shape[0]} must equal T={T}")
-    if evaluation_mask.shape[0] != T:
-        raise ValueError(f"evaluation_mask length {evaluation_mask.shape[0]} must equal T={T}")
+	if raw_emission.shape[0] != T:
+		raise ValueError(f"raw_emission length {raw_emission.shape[0]} must equal T={T}")
+	if evaluation_mask.shape[0] != T:
+		raise ValueError(f"evaluation_mask length {evaluation_mask.shape[0]} must equal T={T}")
 
-    # Normalize mask + sanitize emissions
-    eval_mask = evaluation_mask.astype(bool, copy=False)
-    weights = raw_emission.copy()
-    # any NaN/Inf is treated as 0 contribution
-    np.nan_to_num(weights, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
-    weights[~eval_mask] = 0.0  # zero out non-evaluable times
+	# Normalize mask + sanitize emissions
+	eval_mask = evaluation_mask.astype(bool, copy=False)
+	weights = raw_emission.copy()
+	# any NaN/Inf is treated as 0 contribution
+	np.nan_to_num(weights, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+	weights[~eval_mask] = 0.0  # zero out non-evaluable times
 
-    # Indices to evaluate
-    idx = np.asarray(population._G_idx, dtype=np.int64).reshape(-1)
-    if idx.size == 0:
-        return np.zeros(G, dtype=np.float32)
+	# Indices to evaluate
+	idx = np.asarray(population._G_idx, dtype=np.int64).reshape(-1)
+	if idx.size == 0:
+		return np.zeros(G, dtype=np.float32)
 
-    if np.any(idx < 0) or np.any(idx >= G):
-        bad = idx[(idx < 0) | (idx >= G)][:10]
-        raise IndexError(f"population._G_idx contains out-of-bounds indices (first bad: {bad})")
+	if np.any(idx < 0) or np.any(idx >= G):
+		bad = idx[(idx < 0) | (idx >= G)][:10]
+		raise IndexError(f"population._G_idx contains out-of-bounds indices (first bad: {bad})")
 
-    # Ensure boolean participation
-    Xp_bool = X_p.astype(bool, copy=False)
+	# Ensure boolean participation
+	Xp_bool = X_p.astype(bool, copy=False)
 
-    R = np.zeros(G, dtype=np.float32)
+	R = np.zeros(G, dtype=np.float32)
 
-    # Blocked matmul to avoid huge temporaries if idx is big
-    # (still only evaluates columns in _G_idx)
-    block = 1024
-    w = weights.astype(np.float32, copy=False)
+	# Blocked matmul to avoid huge temporaries if idx is big
+	# (still only evaluates columns in _G_idx)
+	block = 1024
+	w = weights.astype(np.float32, copy=False)
 
-    for s in range(0, idx.size, block):
-        j = idx[s:s + block]
-        # (T, B) @ (T,) -> (B,)
-        # bool will upcast; that's fine
-        R[j] = (Xp_bool[:, j].T @ w).astype(np.float32, copy=False)
+	for s in range(0, idx.size, block):
+		j = idx[s:s + block]
+		# (T, B) @ (T,) -> (B,)
+		# bool will upcast; that's fine
+		R[j] = (Xp_bool[:, j].T @ w).astype(np.float32, copy=False)
 
-    return R
+	return R
 
 
 def evaluate_depth(population) -> np.ndarray:
-    """
-    Compute ancestor-count depth for every gene in population._G_idx.
+	"""
+	Compute ancestor-count depth for every gene in population._G_idx.
 
-    For each gene g, this calls family_tree_indices(...) and stores the number
-    of unique ancestor genes returned, including the gene itself.
+	For each gene g, this calls family_tree_indices(...) and stores the number
+	of unique ancestor genes returned, including the gene itself.
 
-    Returns
-    -------
-    np.ndarray
-        Shape (G,), where G = population._G_idx.shape[0].
-        depth[g] = number of parent genes in g's family tree, including self.
-    """
-    instructions = np.asarray(population._instructions)
-    G = instructions.shape[0]
+	Returns
+	-------
+	np.ndarray
+		Shape (G,), where G = population._G_idx.shape[0].
+		depth[g] = number of parent genes in g's family tree, including self.
+	"""
+	instructions = np.asarray(population._instructions)
+	G = instructions.shape[0]
 
-    if instructions.ndim != 2 or instructions.shape[1] < 10:
-        raise ValueError("population._instructions must have shape (G, 11) (need at least cols 0..9).")
-    if instructions.shape[0] < G:
-        raise ValueError("population._instructions has fewer rows than population._G_idx dim0.")
+	if instructions.ndim != 2 or instructions.shape[1] < 10:
+		raise ValueError("population._instructions must have shape (G, 11) (need at least cols 0..9).")
+	if instructions.shape[0] < G:
+		raise ValueError("population._instructions has fewer rows than population._G_idx dim0.")
 
-    depth = np.zeros(G, dtype=np.int64)
+	depth = np.zeros(G, dtype=np.int64)
 
-    for g in population._G_idx.astype(int):
-        depth[g] = _I.family_tree_indices(
-            instructions,
-            g,
-            include_self=True,
-        ).size
+	for g in population._G_idx.astype(int):
+		depth[g] = _I.family_tree_indices(
+			instructions,
+			g,
+			include_self=True,
+		).size
 
-    return depth
+	return depth
 
 import numpy as np
 
 def solve_auto_parsimony(population, complexity, F):
-    """
-    Compute a gplearn-style auto parsimony coefficient using only legal indices.
+	"""
+	Compute a gplearn-style auto parsimony coefficient using only legal indices.
 
-    Parameters
-    ----------
-    population : object
-        Must have a 1D integer array `population._G_idx` of legal indices.
-    complexity : np.ndarray, shape (G,)
-        1D array of complexity values per individual.
-        Usually this is total node count. It can also be depth if that is
-        what you want to penalize.
-    F : np.ndarray, shape (G,)
-        1D array of raw fitness scores per individual.
+	Parameters
+	----------
+	population : object
+		Must have a 1D integer array `population._G_idx` of legal indices.
+	complexity : np.ndarray, shape (G,)
+		1D array of complexity values per individual.
+		Usually this is total node count. It can also be depth if that is
+		what you want to penalize.
+	F : np.ndarray, shape (G,)
+		1D array of raw fitness scores per individual.
 
-    Returns
-    -------
-    float
-        Auto parsimony coefficient:
-            cov(complexity_legal, fitness_legal) / var(complexity_legal)
+	Returns
+	-------
+	float
+		Auto parsimony coefficient:
+			cov(complexity_legal, fitness_legal) / var(complexity_legal)
 
-        This mirrors the gplearn idea:
-            np.cov(length, fitness)[0, 1] / np.var(length)
-    """
-    idx = np.asarray(population._G_idx, dtype=int)
-    complexity = np.asarray(complexity, dtype=float)
-    F = np.asarray(F, dtype=float)
+		This mirrors the gplearn idea:
+			np.cov(length, fitness)[0, 1] / np.var(length)
+	"""
+	idx = np.asarray(population._G_idx, dtype=int)
+	complexity = np.asarray(complexity, dtype=float)
+	F = np.asarray(F, dtype=float)
 
-    if complexity.ndim != 1 or F.ndim != 1:
-        raise ValueError("complexity and F must be 1D numpy arrays.")
-    if complexity.shape[0] != F.shape[0]:
-        raise ValueError("complexity and F must have the same length.")
-    if idx.ndim != 1:
-        raise ValueError("population._G_idx must be a 1D index array.")
-    if idx.size == 0:
-        return 0.0
-    if np.any(idx < 0) or np.any(idx >= complexity.shape[0]):
-        raise IndexError("population._G_idx contains out-of-bounds indices.")
+	if complexity.ndim != 1 or F.ndim != 1:
+		raise ValueError("complexity and F must be 1D numpy arrays.")
+	if complexity.shape[0] != F.shape[0]:
+		raise ValueError("complexity and F must have the same length.")
+	if idx.ndim != 1:
+		raise ValueError("population._G_idx must be a 1D index array.")
+	if idx.size == 0:
+		return 0.0
+	if np.any(idx < 0) or np.any(idx >= complexity.shape[0]):
+		raise IndexError("population._G_idx contains out-of-bounds indices.")
 
-    x = complexity[idx]
-    #clipping at zero to avoid meaningless
-    y = np.clip(F[idx], 0, None)
+	x = complexity[idx]
+	#clipping at zero to avoid meaningless
+	y = np.clip(F[idx], 0, None)
 
-    if x.size < 2:
-        return 0.0
+	if x.size < 2:
+		return 0.0
 
-    var_x = np.var(x)
-    if var_x == 0.0 or not np.isfinite(var_x):
-        return 0.0
+	var_x = np.var(x)
+	if var_x == 0.0 or not np.isfinite(var_x):
+		return 0.0
 
-    coeff = np.cov(x, y)[0, 1] / var_x
-    return 0.0 if not np.isfinite(coeff) else np.clip(coeff, 0, None)
+	coeff = np.cov(x, y)[0, 1] / var_x
+	return 0.0 if not np.isfinite(coeff) else np.clip(coeff, 0, None)
 
 def resolve_anomaly_mn(x: np.ndarray) -> tuple[int, int]:
-    """
-    Return (m, n) for a 1D boolean numpy array.
+	"""
+	Return (m, n) for a 1D boolean numpy array.
 
-    n = total number of True values
-    m = total number of contiguous True groups
+	n = total number of True values
+	m = total number of contiguous True groups
 
-    Example:
-        [False, True, True, False, True, False] -> (2, 3)
-    """
-    x = np.asarray(x, dtype=np.bool_)
-    if x.ndim != 1:
-        raise ValueError("resolve_anomaly_mn() expects a 1D array of shape (N,)")
+	Example:
+		[False, True, True, False, True, False] -> (2, 3)
+	"""
+	x = np.asarray(x, dtype=np.bool_)
+	if x.ndim != 1:
+		raise ValueError("resolve_anomaly_mn() expects a 1D array of shape (N,)")
 
-    n = int(x.sum())
+	n = int(x.sum())
 
-    if x.size == 0:
-        return 0, 0
+	if x.size == 0:
+		return 0, 0
 
-    m = int(x[0]) + int(np.sum(x[1:] & ~x[:-1]))
-    return m, n
+	m = int(x[0]) + int(np.sum(x[1:] & ~x[:-1]))
+	return m, n
 
 
 def resolve_population_signs(population) -> np.ndarray:
-    """
-    Build a boolean mask M with same shape as population._X_inst (N, G).
+	"""
+	Build a boolean mask M with same shape as population._X_inst (N, G).
 
-    M is all-False except in columns population._G_idx, where:
-      M[:, g] = (population._X_inst[:, g] >= 0)
+	M is all-False except in columns population._G_idx, where:
+	  M[:, g] = (population._X_inst[:, g] >= 0)
 
-    Intended for fast boolean indexing like: A[M].sum()
-    """
-    X = population._X_inst
-    idx = np.asarray(population._G_idx, dtype=np.intp)
+	Intended for fast boolean indexing like: A[M].sum()
+	"""
+	X = population._X_inst
+	idx = np.asarray(population._G_idx, dtype=np.intp)
 
-    #print(np.where(population._X_inst[:,10:]>0))
-    #print()
-    ##print(idx)
-    #print(np.unique_counts(X[:, idx] > 0))
+	#print(np.where(population._X_inst[:,10:]>0))
+	#print()
+	##print(idx)
+	#print(np.unique_counts(X[:, idx] > 0))
 
-    M = np.zeros(X.shape, dtype=np.bool_)
+	M = np.zeros(X.shape, dtype=np.bool_)
 
-    if idx.size:
-        M[:, idx] = (X[:, idx] > 0)
+	if idx.size:
+		M[:, idx] = (X[:, idx] > 0)
 
-    return M
+	return M
 
 import numpy as np
 
 def resolve_population_pq(population, X_p) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Build p and q vectors (shape (G,)) for a population.
+	"""
+	Build p and q vectors (shape (G,)) for a population.
 
-    For each gene column g in population._G_idx:
-      p[g] = sum(X_p[:, g])  (total positive predictions, X_p is 0/1 or bool)
-      q[g] = number of contiguous runs of 1s in X_p[:, g]  (unique prediction episodes)
+	For each gene column g in population._G_idx:
+	  p[g] = sum(X_p[:, g])  (total positive predictions, X_p is 0/1 or bool)
+	  q[g] = number of contiguous runs of 1s in X_p[:, g]  (unique prediction episodes)
 
-    Other columns (not in _G_idx) are left as 0.
+	Other columns (not in _G_idx) are left as 0.
 
-    Returns:
-      p, q : int64 arrays, shape (G,)
-    """
-    X = population._X_inst
-    idx = np.asarray(population._G_idx, dtype=np.intp)
+	Returns:
+	  p, q : int64 arrays, shape (G,)
+	"""
+	X = population._X_inst
+	idx = np.asarray(population._G_idx, dtype=np.intp)
 
-    Xp = np.asarray(X_p)
-    if Xp.shape != X.shape:
-        raise ValueError(f"X_p must have shape {X.shape}, got {Xp.shape}.")
+	Xp = np.asarray(X_p)
+	if Xp.shape != X.shape:
+		raise ValueError(f"X_p must have shape {X.shape}, got {Xp.shape}.")
 
-    N, G = X.shape
-    p = np.zeros(G, dtype=np.int64)
-    q = np.zeros(G, dtype=np.int64)
+	N, G = X.shape
+	p = np.zeros(G, dtype=np.int64)
+	q = np.zeros(G, dtype=np.int64)
 
-    if idx.size == 0 or N == 0:
-        return p, q
+	if idx.size == 0 or N == 0:
+		return p, q
 
-    # Work on only the gene columns
-    B = Xp[:, idx].astype(np.bool_, copy=False)  # (N, len(idx))
+	# Work on only the gene columns
+	B = Xp[:, idx].astype(np.bool_, copy=False)  # (N, len(idx))
 
-    # p = total ones per column
-    p_vals = B.sum(axis=0, dtype=np.int64)
+	# p = total ones per column
+	p_vals = B.sum(axis=0, dtype=np.int64)
 
-    # q = number of runs of ones per column: start with first row + count rising edges
-    if N == 1:
-        q_vals = B[0].astype(np.int64, copy=False)
-    else:
-        rises = np.logical_and(~B[:-1], B[1:]).sum(axis=0, dtype=np.int64)
-        q_vals = B[0].astype(np.int64, copy=False) + rises
+	# q = number of runs of ones per column: start with first row + count rising edges
+	if N == 1:
+		q_vals = B[0].astype(np.int64, copy=False)
+	else:
+		rises = np.logical_and(~B[:-1], B[1:]).sum(axis=0, dtype=np.int64)
+		q_vals = B[0].astype(np.int64, copy=False) + rises
 
-    # Write into full-length vectors
-    p[idx] = p_vals
-    q[idx] = q_vals
+	# Write into full-length vectors
+	p[idx] = p_vals
+	q[idx] = q_vals
 
-    return p, q
+	return p, q
 
 
 def visualize_participation_surfaces(
-    *,
-    m: float = 20.0,
-    n: float = 100.0,
-    num: int = 160,
-    e: float = np.e,
-    mode: str = "surface",          # "surface" or "imshow"
-    which: str = "all",             # "b", "d", "bd", or "all"
-    ceil: int = 0,
-    plot_mn: bool = False,          # NEW: plot m and n reference lines
+	*,
+	m: float = 20.0,
+	n: float = 100.0,
+	num: int = 160,
+	e: float = np.e,
+	mode: str = "surface",          # "surface" or "imshow"
+	which: str = "all",             # "b", "d", "bd", or "all"
+	ceil: int = 0,
+	plot_mn: bool = False,          # NEW: plot m and n reference lines
 ):
-    """
-    Visualize b(p,q), d(p), and combined (b+d) over a (p,q) grid, masking out invalid q>p.
+	"""
+	Visualize b(p,q), d(p), and combined (b+d) over a (p,q) grid, masking out invalid q>p.
 
-    If plot_mn=True:
-      - plot p = n (line perpendicular to p axis; i.e., vertical line in p-q plane)
-      - plot q = m (line perpendicular to q axis; i.e., horizontal line in p-q plane)
-    """
-    import matplotlib.pyplot as plt
+	If plot_mn=True:
+	  - plot p = n (line perpendicular to p axis; i.e., vertical line in p-q plane)
+	  - plot q = m (line perpendicular to q axis; i.e., horizontal line in p-q plane)
+	"""
+	import matplotlib.pyplot as plt
 
-    if not (n >= m):
-        raise ValueError("Need n >= m.")
+	if not (n >= m):
+		raise ValueError("Need n >= m.")
 
-    # Keep p < 2n to avoid depth-log domain issues on the p>n branch
-    p_vals = np.linspace(1.0, 1.9 * n, num)
-    q_vals = np.linspace(0.0, 1.9 * n, num)
-    P, Q = np.meshgrid(p_vals, q_vals)
+	# Keep p < 2n to avoid depth-log domain issues on the p>n branch
+	p_vals = np.linspace(1.0, 1.9 * n, num)
+	q_vals = np.linspace(0.0, 1.9 * n, num)
+	P, Q = np.meshgrid(p_vals, q_vals)
 
-    valid = (Q <= P)
+	valid = (Q <= P)
 
-    # Evaluate only valid points to respect p>=q
-    p_flat = P[valid].ravel()
-    q_flat = Q[valid].ravel()
-    B_flat, D_flat = evaluate_participation(m, n, p_flat, q_flat)
+	# Evaluate only valid points to respect p>=q
+	p_flat = P[valid].ravel()
+	q_flat = Q[valid].ravel()
+	B_flat, D_flat = evaluate_participation(m, n, p_flat, q_flat)
 
-    # Put results back into grids with NaNs elsewhere
-    B = np.full_like(P, np.nan, dtype=float)
-    D = np.full_like(P, np.nan, dtype=float)
-    BD = np.full_like(P, np.nan, dtype=float)
+	# Put results back into grids with NaNs elsewhere
+	B = np.full_like(P, np.nan, dtype=float)
+	D = np.full_like(P, np.nan, dtype=float)
+	BD = np.full_like(P, np.nan, dtype=float)
 
-    B[valid] = B_flat
-    D[valid] = D_flat
-    BD[valid] = B_flat + D_flat
+	B[valid] = B_flat
+	D[valid] = D_flat
+	BD[valid] = B_flat + D_flat
 
-    if ceil > 0:
-        B = np.clip(B, None, ceil)
-        D = np.clip(D, None, ceil)
-        BD = np.clip(BD, None, ceil)
+	if ceil > 0:
+		B = np.clip(B, None, ceil)
+		D = np.clip(D, None, ceil)
+		BD = np.clip(BD, None, ceil)
 
-    want_b = which in ("b", "all")
-    want_d = which in ("d", "all")
-    want_bd = which in ("bd", "all")
+	want_b = which in ("b", "all")
+	want_d = which in ("d", "all")
+	want_bd = which in ("bd", "all")
 
-    if mode not in ("surface", "imshow"):
-        raise ValueError("mode must be 'surface' or 'imshow'.")
+	if mode not in ("surface", "imshow"):
+		raise ValueError("mode must be 'surface' or 'imshow'.")
 
-    if mode == "surface":
-        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+	if mode == "surface":
+		from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-        def _surface(Z, title, zlab):
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection="3d")
-            ax.plot_surface(P, Q, Z, linewidth=0, antialiased=True)
-            ax.set_title(title)
-            ax.set_xlabel("p")
-            ax.set_ylabel("q")
-            ax.set_zlabel(zlab)
+		def _surface(Z, title, zlab):
+			fig = plt.figure()
+			ax = fig.add_subplot(111, projection="3d")
+			ax.plot_surface(P, Q, Z, linewidth=0, antialiased=True)
+			ax.set_title(title)
+			ax.set_xlabel("p")
+			ax.set_ylabel("q")
+			ax.set_zlabel(zlab)
 
-            if plot_mn:
-                # p = n plane slice: line at p=n, varying q, at z=0 (reference)
-                ax.plot([n] * len(q_vals), q_vals, np.zeros_like(q_vals), linestyle="--")
-                # q = m plane slice: line at q=m, varying p, at z=0 (reference)
-                ax.plot(p_vals, [m] * len(p_vals), np.zeros_like(p_vals), linestyle="--")
+			if plot_mn:
+				# p = n plane slice: line at p=n, varying q, at z=0 (reference)
+				ax.plot([n] * len(q_vals), q_vals, np.zeros_like(q_vals), linestyle="--")
+				# q = m plane slice: line at q=m, varying p, at z=0 (reference)
+				ax.plot(p_vals, [m] * len(p_vals), np.zeros_like(p_vals), linestyle="--")
 
-        if want_b:
-            _surface(B, f"b(p,q) (m={m:g}, n={n:g})", "b")
-        if want_d:
-            _surface(D, f"d(p) (m={m:g}, n={n:g})", "d")
-        if want_bd:
-            _surface(BD, f"b(p,q)+d(p) (m={m:g}, n={n:g})", "b+d")
+		if want_b:
+			_surface(B, f"b(p,q) (m={m:g}, n={n:g})", "b")
+		if want_d:
+			_surface(D, f"d(p) (m={m:g}, n={n:g})", "d")
+		if want_bd:
+			_surface(BD, f"b(p,q)+d(p) (m={m:g}, n={n:g})", "b+d")
 
-        plt.show()
+		plt.show()
 
-    else:  # mode == "imshow"
-        extent = [p_vals.min(), p_vals.max(), q_vals.min(), q_vals.max()]
+	else:  # mode == "imshow"
+		extent = [p_vals.min(), p_vals.max(), q_vals.min(), q_vals.max()]
 
-        def _imshow(Z, title):
-            fig, ax = plt.subplots()
-            im = ax.imshow(
-                Z, cmap="Reds",
-                origin="lower",
-                aspect="auto",
-                extent=extent,
-                interpolation="nearest",
-            )
-            ax.set_title(title)
-            ax.set_xlabel("p")
-            ax.set_ylabel("q")
+		def _imshow(Z, title):
+			fig, ax = plt.subplots()
+			im = ax.imshow(
+				Z, cmap="Reds",
+				origin="lower",
+				aspect="auto",
+				extent=extent,
+				interpolation="nearest",
+			)
+			ax.set_title(title)
+			ax.set_xlabel("p")
+			ax.set_ylabel("q")
 
-            if plot_mn:
-                # p = n (vertical line)
-                ax.axvline(n, linestyle="-", c='black',alpha=0.25)
-                # q = m (horizontal line)
-                ax.axhline(m, linestyle="-", c='black',alpha=0.25)
+			if plot_mn:
+				# p = n (vertical line)
+				ax.axvline(n, linestyle="-", c='black',alpha=0.25)
+				# q = m (horizontal line)
+				ax.axhline(m, linestyle="-", c='black',alpha=0.25)
 
-            plt.colorbar(im, ax=ax)
+			plt.colorbar(im, ax=ax)
 
-        if want_b:
-            _imshow(B, f"b(p,q) heatmap (m={m:g}, n={n:g})")
-        if want_d:
-            _imshow(D, f"d(p) heatmap (m={m:g}, n={n:g})")
-        if want_bd:
-            _imshow(BD, f"b(p,q)+d(p) heatmap (m={m:g}, n={n:g})")
+		if want_b:
+			_imshow(B, f"b(p,q) heatmap (m={m:g}, n={n:g})")
+		if want_d:
+			_imshow(D, f"d(p) heatmap (m={m:g}, n={n:g})")
+		if want_bd:
+			_imshow(BD, f"b(p,q)+d(p) heatmap (m={m:g}, n={n:g})")
 
-        plt.show()
+		plt.show()

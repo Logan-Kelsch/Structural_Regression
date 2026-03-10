@@ -530,20 +530,25 @@ def generate_instructions(
     #therefore we need some logic checks for if we are within these memory bounds
 
     #sick of typing in the same things over and over
-    n = int(pop_prior._max_size - pop_prior._T_idx.size - pop_prior._E_idx.size)
+    n = int(pop_prior._max_size - pop_prior._L_idx.size - pop_prior._E_idx.size)
 
     # INSTRUCTIONS FORMAT [pop_idx, func_id, USED_FLAGS, CONST_FLAGS, SENSOR_FLAGS, x, a, d, dd, k]
     gen_size = n
-    if(pop_prior._chunk_size == 0):
-        pop_prior._chunk_size = gen_size
+    chunk_size = pop_prior._chunk_size
+
+    #print('gen and chunk size:', gen_size, chunk_size)
+    if(chunk_size == 0):
+        chunk_size = gen_size
     
     while(gen_size > 0):
 
         #quick fix for if the final chunk generated is ill-shaped
         #really only going to happen as I am making vizualizations for 
         #instantiation operation list efficiency vizualizations
-        if(gen_size < pop_prior._chunk_size):
-            pop_prior._chunk_size = gen_size
+        if(gen_size < chunk_size):
+            chunk_size = gen_size
+
+        #print('in loop gen and chunk size:', gen_size, chunk_size)
 
         
         #match case different grammars
@@ -553,7 +558,7 @@ def generate_instructions(
                 #first thing will be to allocate some memory for instructions
                 #instruction format will be along the lines of
 
-                inst_inst = np.zeros((pop_prior._chunk_size, 11), dtype=np.float32)
+                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
 
                 #now that we have allocated the memory for instructions
                 #we can begin generating instructions
@@ -564,7 +569,7 @@ def generate_instructions(
                 #we will need to put the population indices in the first column
                 #go get the total length of instructions thus far
                 start_idx = pop_prior._L_idx.max()
-                inst_inst[:, 0] = np.arange(start_idx+1, start_idx+1+pop_prior._chunk_size, dtype=np.uint16)
+                inst_inst[:, 0] = np.arange(start_idx+1, start_idx+1+chunk_size, dtype=np.uint16)
                 
                 #for this NO GRAMMAR generation we will randomly select each T function
                 inst_inst[:, 1] = np.random.randint(1, 22, size=inst_inst.shape[0], dtype=np.uint16)
@@ -653,9 +658,10 @@ def generate_instructions(
 
         #then we will actually bring in the new instantiation instructions into correct memory locations
         #this should place the instructions correctly into the population prior that was provided
-        pop_prior._instructions[ break_idx : break_idx+pop_prior._chunk_size , : ] = inst_inst
-            
-        gen_size -= pop_prior._chunk_size
+        #print(f'writing from indices: [{break_idx}, {break_idx+chunk_size})')
+        pop_prior._instructions[ break_idx : break_idx+chunk_size , : ] = inst_inst
+
+        gen_size -= chunk_size
         if(gen_size>0 and verbose):
             print(f'{gen_size} Generations Remaining.')
 
@@ -1983,7 +1989,7 @@ def instantiate_from_ops_chunked_intraday(
     *,
     transform_ops,
     chunk_B: int = 16,
-    verbosity: int = 1,
+    verbosity: int = 0,
     sanitize_final: bool = True,
 ):
     """

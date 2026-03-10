@@ -223,9 +223,7 @@ def reproduce(
             selected_parents, _ = locate_top_genes(evaluation["F"], p=selector._percent)
             survived_genes = _I.family_tree_indices(population._instructions, selected_parents, include_terminals=True)
             g_map = flush_population(population, survived_genes)
-            _I.generate_instructions(population, grammar, n=int(
-                population._max_size - population._L_idx.size - population._E_idx.size
-            ), chunk_size=population._chunk_size)
+            _I.generate_instructions(population, grammar)
 
             #making a thingy to be able to return
             reproduction_stats = {
