@@ -219,6 +219,13 @@ def generate_raw_emission(Population, target_idx, emissions, offset):
 		emissions = []
 	if not isinstance(emissions, (list, tuple)):
 		raise TypeError("emissions must be a list/tuple of dicts")
+	
+	if not _emission_depends_on_future(emissions, offset):
+		raise ValueError(
+			"Emission does not depend on future data (offset-aligned tvec). "
+			"This target would be non-forward / easily solvable. "
+			"Ensure offset>0 and that the pipeline uses 'emit' (default) or tvec with offset=True."
+		)
 
 	base = np.asarray(X[:, target_idx], dtype=np.float32)
 
@@ -1453,118 +1460,103 @@ def resolve_population_pq(population, X_p) -> tuple[np.ndarray, np.ndarray]:
 	return p, q
 
 
-def visualize_participation_surfaces(
-	*,
-	m: float = 20.0,
-	n: float = 100.0,
-	num: int = 160,
-	e: float = np.e,
-	mode: str = "surface",          # "surface" or "imshow"
-	which: str = "all",             # "b", "d", "bd", or "all"
-	ceil: int = 0,
-	plot_mn: bool = False,          # NEW: plot m and n reference lines
-):
+
+
+import numpy as np
+
+def _emission_depends_on_future(emissions, base_offset):
 	"""
-	Visualize b(p,q), d(p), and combined (b+d) over a (p,q) grid, masking out invalid q>p.
-
-	If plot_mn=True:
-	  - plot p = n (line perpendicular to p axis; i.e., vertical line in p-q plane)
-	  - plot q = m (line perpendicular to q axis; i.e., horizontal line in p-q plane)
+	Conservative static dependency check.
+	Returns True if the final emission stream depends on future-aligned tvec (offset=True)
+	or on the default initial future-aligned 'emit' stream.
 	"""
-	import matplotlib.pyplot as plt
+	base_offset = int(base_offset)
+	if base_offset <= 0:
+		return False  # no forward info possible
 
-	if not (n >= m):
-		raise ValueError("Need n >= m.")
+	if emissions is None:
+		emissions = []
+	if not isinstance(emissions, (list, tuple)):
+		raise TypeError("emissions must be a list/tuple of dicts")
 
-	# Keep p < 2n to avoid depth-log domain issues on the p>n branch
-	p_vals = np.linspace(1.0, 1.9 * n, num)
-	q_vals = np.linspace(0.0, 1.9 * n, num)
-	P, Q = np.meshgrid(p_vals, q_vals)
+	def _is_future_tvec(offset_flag):
+		return bool(offset_flag) and base_offset > 0
 
-	valid = (Q <= P)
+	def _spec_future_dep(spec, offset_flag, current_emit_dep):
+		# spec describes a series source ("emit"/"tvec"/scalar/array)
+		if spec is None:
+			return current_emit_dep
+		if isinstance(spec, str):
+			s = spec.strip().lower()
+			if s in ("emit", "work"):
+				return current_emit_dep
+			if s == "tvec":
+				return _is_future_tvec(offset_flag)
+			return False
+		# scalar / arrays are not future by themselves
+		return False
 
-	# Evaluate only valid points to respect p>=q
-	p_flat = P[valid].ravel()
-	q_flat = Q[valid].ravel()
-	B_flat, D_flat = evaluate_participation(m, n, p_flat, q_flat)
+	def _nested_alpha_dep(alpha_dict):
+		# nested alpha dict must be rooted on tvec; offset controls future-ness
+		if not isinstance(alpha_dict, dict):
+			return False
+		off = bool(alpha_dict.get("offset", True))
+		x_spec = alpha_dict.get("x", "tvec")
+		if not (isinstance(x_spec, str) and x_spec.strip().lower() == "tvec"):
+			# by your rule, nested alpha must root on tvec; treat as not future
+			return False
+		dep = _is_future_tvec(off)
+		# if it itself has nested alpha, include it (conservative)
+		if isinstance(alpha_dict.get("alpha", None), dict):
+			dep = dep or _nested_alpha_dep(alpha_dict["alpha"])
+		return dep
 
-	# Put results back into grids with NaNs elsewhere
-	B = np.full_like(P, np.nan, dtype=float)
-	D = np.full_like(P, np.nan, dtype=float)
-	BD = np.full_like(P, np.nan, dtype=float)
+	# The emission stream starts as future-aligned tvec_offset (if base_offset>0)
+	emit_dep = True
 
-	B[valid] = B_flat
-	D[valid] = D_flat
-	BD[valid] = B_flat + D_flat
+	i = 0
+	while i < len(emissions):
+		op = emissions[i]
+		if not isinstance(op, dict) or "ID" not in op:
+			i += 1
+			continue
 
-	if ceil > 0:
-		B = np.clip(B, None, ceil)
-		D = np.clip(D, None, ceil)
-		BD = np.clip(BD, None, ceil)
+		fid = op["ID"]
+		if isinstance(fid, str) and fid.strip().lower() == "divide":
+			# divide: result depends on numerator OR denominator
+			if i + 1 >= len(emissions):
+				return False
+			denom_op = emissions[i + 1]
+			denom_off = bool(denom_op.get("offset", True)) if isinstance(denom_op, dict) else True
+			denom_x = denom_op.get("x", None) if isinstance(denom_op, dict) else None
+			denom_dep = _spec_future_dep(denom_x, denom_off, emit_dep)
 
-	want_b = which in ("b", "all")
-	want_d = which in ("d", "all")
-	want_bd = which in ("bd", "all")
+			# include denom alpha dependency too
+			if isinstance(denom_op, dict) and "alpha" in denom_op:
+				a = denom_op["alpha"]
+				if isinstance(a, dict):
+					denom_dep = denom_dep or _nested_alpha_dep(a)
+				else:
+					denom_dep = denom_dep or _spec_future_dep(a, denom_off, emit_dep)
 
-	if mode not in ("surface", "imshow"):
-		raise ValueError("mode must be 'surface' or 'imshow'.")
+			emit_dep = emit_dep or denom_dep
+			i += 2
+			continue
 
-	if mode == "surface":
-		from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+		off = bool(op.get("offset", True))
+		x_spec = op.get("x", None)
+		x_dep = _spec_future_dep(x_spec, off, emit_dep)
 
-		def _surface(Z, title, zlab):
-			fig = plt.figure()
-			ax = fig.add_subplot(111, projection="3d")
-			ax.plot_surface(P, Q, Z, linewidth=0, antialiased=True)
-			ax.set_title(title)
-			ax.set_xlabel("p")
-			ax.set_ylabel("q")
-			ax.set_zlabel(zlab)
+		a_dep = False
+		if "alpha" in op:
+			a = op["alpha"]
+			if isinstance(a, dict):
+				a_dep = _nested_alpha_dep(a)
+			else:
+				a_dep = _spec_future_dep(a, off, emit_dep)
 
-			if plot_mn:
-				# p = n plane slice: line at p=n, varying q, at z=0 (reference)
-				ax.plot([n] * len(q_vals), q_vals, np.zeros_like(q_vals), linestyle="--")
-				# q = m plane slice: line at q=m, varying p, at z=0 (reference)
-				ax.plot(p_vals, [m] * len(p_vals), np.zeros_like(p_vals), linestyle="--")
+		# conservative: output depends on future if ANY input did
+		emit_dep = bool(x_dep or a_dep)
+		i += 1
 
-		if want_b:
-			_surface(B, f"b(p,q) (m={m:g}, n={n:g})", "b")
-		if want_d:
-			_surface(D, f"d(p) (m={m:g}, n={n:g})", "d")
-		if want_bd:
-			_surface(BD, f"b(p,q)+d(p) (m={m:g}, n={n:g})", "b+d")
-
-		plt.show()
-
-	else:  # mode == "imshow"
-		extent = [p_vals.min(), p_vals.max(), q_vals.min(), q_vals.max()]
-
-		def _imshow(Z, title):
-			fig, ax = plt.subplots()
-			im = ax.imshow(
-				Z, cmap="Reds",
-				origin="lower",
-				aspect="auto",
-				extent=extent,
-				interpolation="nearest",
-			)
-			ax.set_title(title)
-			ax.set_xlabel("p")
-			ax.set_ylabel("q")
-
-			if plot_mn:
-				# p = n (vertical line)
-				ax.axvline(n, linestyle="-", c='black',alpha=0.25)
-				# q = m (horizontal line)
-				ax.axhline(m, linestyle="-", c='black',alpha=0.25)
-
-			plt.colorbar(im, ax=ax)
-
-		if want_b:
-			_imshow(B, f"b(p,q) heatmap (m={m:g}, n={n:g})")
-		if want_d:
-			_imshow(D, f"d(p) heatmap (m={m:g}, n={n:g})")
-		if want_bd:
-			_imshow(BD, f"b(p,q)+d(p) heatmap (m={m:g}, n={n:g})")
-
-		plt.show()
+	return emit_dep

@@ -279,3 +279,217 @@ def plot_intraday_overlay(population, G: int, *, alpha: float = 0.08, linewidth:
     plt.ylabel(f"X_inst[:, {G}]")
     plt.grid(True)
     plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def show_consecutive_entry_paths(
+    raw_emissions,
+    evaluation_mask,
+    p,
+    *,
+    ax=None,
+    break_on_mask_gap=True,
+    show=True,
+):
+    """
+    Plot each consecutive run of True values in `p`, using `raw_emissions` as y.
+
+    Parameters
+    ----------
+    raw_emissions : 1d array-like
+        Real-valued series to plot on the y-axis.
+    evaluation_mask : 1d array-like of bool
+        Only points where this is True are considered.
+    p : 1d array-like of bool
+        Boolean signal whose consecutive True runs define the paths.
+    ax : matplotlib.axes.Axes, optional
+        Existing axis to draw on. If None, a new figure/axis is created.
+    break_on_mask_gap : bool, default=True
+        If True, an index with evaluation_mask=False breaks any active run.
+        If False, masked-out indices are skipped without breaking the run.
+    show : bool, default=True
+        Whether to call plt.show() when a new figure is created.
+
+    Returns
+    -------
+    runs : list of tuple[np.ndarray, np.ndarray]
+        A list of (x, y) pairs for each plotted run.
+    ax : matplotlib.axes.Axes
+        The axis the plot was drawn on.
+    """
+    raw_emissions = np.asarray(raw_emissions)
+    evaluation_mask = np.asarray(evaluation_mask, dtype=bool)
+    p = np.asarray(p, dtype=bool)
+
+    if raw_emissions.ndim != 1 or evaluation_mask.ndim != 1 or p.ndim != 1:
+        raise ValueError("All inputs must be 1D arrays.")
+    if not (len(raw_emissions) == len(evaluation_mask) == len(p)):
+        raise ValueError("All inputs must have the same length.")
+
+    created_fig = False
+    if ax is None:
+        _, ax = plt.subplots(figsize=(8, 5))
+        created_fig = True
+
+    runs = []
+    current_y = []
+
+    for y, mask_ok, is_true in zip(raw_emissions, evaluation_mask, p):
+        if not mask_ok:
+            if break_on_mask_gap and current_y:
+                x = np.arange(1, len(current_y) + 1)
+                runs.append((x, np.asarray(current_y)))
+                current_y = []
+            continue
+
+        if is_true:
+            current_y.append(y)
+        else:
+            if current_y:
+                x = np.arange(1, len(current_y) + 1)
+                runs.append((x, np.asarray(current_y)))
+                current_y = []
+
+    if current_y:
+        x = np.arange(1, len(current_y) + 1)
+        runs.append((x, np.asarray(current_y)))
+
+    for i, (x, y) in enumerate(runs, start=1):
+        ax.plot(x, y, linewidth=1, alpha=0.2, label=f"run {i}")
+
+    ax.set_xlabel("Consecutive instances of participation")
+    ax.set_ylabel("Raw Emissions")
+
+    ax.hlines(0, xmin=1, xmax=5, colors='black')
+
+    ax.set_title("Raw emissions along consecutive participation")
+
+    ax.grid(True, alpha=0.3)
+
+    if runs and len(runs) <= 15:
+        ax.legend()
+
+    if created_fig and show:
+        plt.show()
+
+    return runs, ax
+
+import evaluation as _E
+
+def visualize_participation_surfaces(
+	*,
+	m: float = 20.0,
+	n: float = 100.0,
+	num: int = 160,
+	e: float = np.e,
+	mode: str = "surface",          # "surface" or "imshow"
+	which: str = "all",             # "b", "d", "bd", or "all"
+	ceil: int = 0,
+	plot_mn: bool = False,          # NEW: plot m and n reference lines
+):
+	"""
+	Visualize b(p,q), d(p), and combined (b+d) over a (p,q) grid, masking out invalid q>p.
+
+	If plot_mn=True:
+	  - plot p = n (line perpendicular to p axis; i.e., vertical line in p-q plane)
+	  - plot q = m (line perpendicular to q axis; i.e., horizontal line in p-q plane)
+	"""
+	import matplotlib.pyplot as plt
+
+	if not (n >= m):
+		raise ValueError("Need n >= m.")
+
+	# Keep p < 2n to avoid depth-log domain issues on the p>n branch
+	p_vals = np.linspace(1.0, 1.9 * n, num)
+	q_vals = np.linspace(0.0, 1.9 * n, num)
+	P, Q = np.meshgrid(p_vals, q_vals)
+
+	valid = (Q <= P)
+
+	# Evaluate only valid points to respect p>=q
+	p_flat = P[valid].ravel()
+	q_flat = Q[valid].ravel()
+	B_flat, D_flat = _E.evaluate_participation(m, n, p_flat, q_flat)
+
+	# Put results back into grids with NaNs elsewhere
+	B = np.full_like(P, np.nan, dtype=float)
+	D = np.full_like(P, np.nan, dtype=float)
+	BD = np.full_like(P, np.nan, dtype=float)
+
+	B[valid] = B_flat
+	D[valid] = D_flat
+	BD[valid] = B_flat + D_flat
+
+	if ceil > 0:
+		B = np.clip(B, None, ceil)
+		D = np.clip(D, None, ceil)
+		BD = np.clip(BD, None, ceil)
+
+	want_b = which in ("b", "all")
+	want_d = which in ("d", "all")
+	want_bd = which in ("bd", "all")
+
+	if mode not in ("surface", "imshow"):
+		raise ValueError("mode must be 'surface' or 'imshow'.")
+
+	if mode == "surface":
+		from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+		def _surface(Z, title, zlab):
+			fig = plt.figure()
+			ax = fig.add_subplot(111, projection="3d")
+			ax.plot_surface(P, Q, Z, linewidth=0, antialiased=True)
+			ax.set_title(title)
+			ax.set_xlabel("p")
+			ax.set_ylabel("q")
+			ax.set_zlabel(zlab)
+
+			if plot_mn:
+				# p = n plane slice: line at p=n, varying q, at z=0 (reference)
+				ax.plot([n] * len(q_vals), q_vals, np.zeros_like(q_vals), linestyle="--")
+				# q = m plane slice: line at q=m, varying p, at z=0 (reference)
+				ax.plot(p_vals, [m] * len(p_vals), np.zeros_like(p_vals), linestyle="--")
+
+		if want_b:
+			_surface(B, f"b(p,q) (m={m:g}, n={n:g})", "b")
+		if want_d:
+			_surface(D, f"d(p) (m={m:g}, n={n:g})", "d")
+		if want_bd:
+			_surface(BD, f"b(p,q)+d(p) (m={m:g}, n={n:g})", "b+d")
+
+		plt.show()
+
+	else:  # mode == "imshow"
+		extent = [p_vals.min(), p_vals.max(), q_vals.min(), q_vals.max()]
+
+		def _imshow(Z, title):
+			fig, ax = plt.subplots()
+			im = ax.imshow(
+				Z, cmap="Reds",
+				origin="lower",
+				aspect="auto",
+				extent=extent,
+				interpolation="nearest",
+			)
+			ax.set_title(title)
+			ax.set_xlabel("p")
+			ax.set_ylabel("q")
+
+			if plot_mn:
+				# p = n (vertical line)
+				ax.axvline(n, linestyle="-", c='black',alpha=0.25)
+				# q = m (horizontal line)
+				ax.axhline(m, linestyle="-", c='black',alpha=0.25)
+
+			plt.colorbar(im, ax=ax)
+
+		if want_b:
+			_imshow(B, f"b(p,q) heatmap (m={m:g}, n={n:g})")
+		if want_d:
+			_imshow(D, f"d(p) heatmap (m={m:g}, n={n:g})")
+		if want_bd:
+			_imshow(BD, f"b(p,q)+d(p) heatmap (m={m:g}, n={n:g})")
+
+		plt.show()
