@@ -29,10 +29,14 @@ class Grammar:
         self,
         type    :   str,
         max_delta_lookback  :   int =   48,
+        p_mutation  :   float   =   0.05,
+        p_crossover :   float   =   0.025,
         spec_gram_args  :   dict    =   None
     ):
         self._type = type
         self._mdl = max_delta_lookback
+        self._p_mutation = p_mutation
+        self._p_crossover = p_crossover
         
 
 class Population:
@@ -507,8 +511,570 @@ def fill_const_UA0(arr: np.ndarray,
     out[rows, col] = rng.uniform(-1.0, 1.0, size=n).astype(np.float32, copy=False)
     return out
 
-
 def generate_instructions(
+    pop_prior       : Population,
+    grm_prior       : Grammar,
+    seed            : int   = None,
+    verbose         : bool  = False,
+):
+    '''
+    early dev notes
+    - x_inst coming into this contains the terminal states
+    - pop_prior is the population we are referencing going into generation
+    - grm_prior is the grammar we are referencing going into generation
+    - n         is the number of genes that are to be generated
+    - chunk_gen is the size of each chunk that will be generated.
+                 allows for grammar updating within generation, will be slower.
+
+    INSTRUCTIONS FORMAT
+    [pop_idx, func_id, USED_FLAGS, CONST_FLAGS, SENSOR_FLAGS, x, a, d, dd, k, unused]
+
+    added behavior
+    - before normal random generation, attempt mutation / crossover on existing genes
+    - originals are preserved
+    - if a selected gene has descendants, descendants are duplicated too
+    - _T_idx and _E_idx are never overwritten
+    - do not generate past pop_prior._max_size
+    '''
+
+    # -----------------------------
+    # basic capacity / guards
+    # -----------------------------
+    n_total = int(pop_prior._max_size - pop_prior._L_idx.size - pop_prior._E_idx.size)
+    if n_total <= 0:
+        return
+
+    if not (0.0 <= grm_prior._p_mutation <= 1.0):
+        raise ValueError('p_mutation must be in [0, 1].')
+    if not (0.0 <= grm_prior._p_crossover <= 1.0):
+        raise ValueError('p_crossover must be in [0, 1].')
+
+    match(grm_prior._type):
+        case 'Null':
+            pass
+        case _:
+            raise ValueError('Cannot interpret grammar prior in generate_instructions. Illegal type.')
+
+    rng = np.random.default_rng(seed)
+
+    # bits / cols for x,a,d,dd,k
+    mask_5_9 = np.uint32(0)
+    for b in range(5, 10):
+        mask_5_9 |= (np.uint32(1) << np.uint32(b))
+
+    op_cols = np.arange(5, 10, dtype=np.int64)
+
+    # constant fill behavior currently used in Null generation
+    const_fill_kind = {
+        6: 'UA0',
+        7: 'STEIS',
+        8: 'STEIS',
+        9: 'ITS',
+    }
+
+    # snapshot existing state BEFORE generation
+    base_G_idx = np.asarray(pop_prior._G_idx, dtype=np.int32).copy()
+    base_L_idx = np.asarray(pop_prior._L_idx, dtype=np.int32).copy()
+
+    if base_L_idx.size == 0:
+        current_max_pop_idx = 0
+    else:
+        current_max_pop_idx = int(base_L_idx.max())
+
+    # row lookup by pop_idx from existing instructions
+    instr = pop_prior._instructions
+    col0_i32 = instr[:, 0].astype(np.int32, copy=False)
+
+    pop_to_rowloc = {}
+    for r, pid in enumerate(col0_i32):
+        if pid != 0:
+            pop_to_rowloc[int(pid)] = r
+
+    base_rows = {}
+    for pid in base_G_idx:
+        if int(pid) in pop_to_rowloc:
+            base_rows[int(pid)] = instr[pop_to_rowloc[int(pid)]].copy()
+
+    base_gene_set = set(int(x) for x in base_G_idx)
+    base_legal_set = set(int(x) for x in base_L_idx)
+
+    # -----------------------------
+    # helpers
+    # -----------------------------
+    def _u32_flag_has(flag_u32, col_idx: int) -> bool:
+        return bool(np.uint32(flag_u32) & (np.uint32(1) << np.uint32(col_idx)))
+
+    def _is_neg_int_ref(v) -> bool:
+        if not np.isfinite(v):
+            return False
+        if v >= 0:
+            return False
+        iv = int(np.rint(v))
+        return abs(float(v) - float(iv)) < 1e-6
+
+    def _row_used_flags(row) -> np.uint32:
+        return np.uint32(int(np.rint(row[2])))
+
+    def _row_const_flags(row) -> np.uint32:
+        return np.uint32(int(np.rint(row[3])))
+
+    def _row_sensor_flags(row) -> np.uint32:
+        return np.uint32(int(np.rint(row[4])))
+
+    def _ref_cols_from_row(row):
+        used = _row_used_flags(row)
+        const = _row_const_flags(row)
+        ref_flags = (used & ~const) & mask_5_9
+        cols = []
+        for c in op_cols:
+            if _u32_flag_has(ref_flags, int(c)):
+                cols.append(int(c))
+        return cols
+
+    def _const_cols_from_row(row):
+        used = _row_used_flags(row)
+        const = _row_const_flags(row)
+        const_flags = (used & const) & mask_5_9
+        cols = []
+        for c in op_cols:
+            if _u32_flag_has(const_flags, int(c)):
+                cols.append(int(c))
+        return cols
+
+    def _fresh_const_inplace(row, col_idx: int):
+        tmp = row.reshape(1, -1).copy()
+        mask = np.array([True], dtype=bool)
+
+        kind = const_fill_kind.get(int(col_idx), None)
+        if kind is None:
+            # current Null setup does not define const generation for x / future slots
+            # keep current value if already present, else zero
+            return tmp[0]
+
+        if kind == 'UA0':
+            tmp = fill_const_UA0(tmp, mask, int(col_idx), rng)
+        elif kind == 'STEIS':
+            tmp = fill_const_STEIS(grm_prior._mdl, mask, tmp, int(col_idx), 2.0, 2.0, rng)
+        elif kind == 'ITS':
+            tmp = fill_const_ITS(tmp, mask, int(col_idx), 1.0, rng)
+
+        return tmp[0]
+
+    def _sample_abs_target(new_pop_idx: int, exclude_abs=None):
+        # all existing legal indices are < any newly appended gene, so they are valid left references
+        candidates = base_L_idx
+        if candidates.size == 0:
+            return None
+
+        if exclude_abs is not None and candidates.size > 1:
+            candidates = candidates[candidates != int(exclude_abs)]
+            if candidates.size == 0:
+                candidates = base_L_idx
+
+        return int(candidates[rng.integers(0, candidates.size)])
+
+    def _relink_row_refs_inplace(new_row, old_row, remap_abs):
+        old_pop = int(np.rint(old_row[0]))
+        new_pop = int(np.rint(new_row[0]))
+
+        for c in _ref_cols_from_row(old_row):
+            v = old_row[c]
+            if not _is_neg_int_ref(v):
+                continue
+
+            old_target_abs = old_pop + int(np.rint(v))
+            new_target_abs = remap_abs.get(old_target_abs, old_target_abs)
+            new_row[c] = np.float32(new_target_abs - new_pop)
+
+    def _copy_single_gene_row(old_pop_idx: int, new_pop_idx: int, remap_abs=None):
+        if remap_abs is None:
+            remap_abs = {}
+
+        old_row = base_rows[int(old_pop_idx)]
+        new_row = old_row.copy()
+        new_row[0] = np.float32(new_pop_idx)
+        _relink_row_refs_inplace(new_row, old_row, remap_abs)
+        return new_row
+
+    def _mutate_root_row_inplace(root_new_row, root_old_row):
+        old_pop = int(np.rint(root_old_row[0]))
+        new_pop = int(np.rint(root_new_row[0]))
+
+        old_ref_cols = _ref_cols_from_row(root_old_row)
+        old_const_cols = _const_cols_from_row(root_old_row)
+
+        mutation_modes = ['fid']
+        if len(old_ref_cols) > 0:
+            mutation_modes.append('ref')
+        if len(old_const_cols) > 0:
+            mutation_modes.append('const')
+
+        mode = mutation_modes[rng.integers(0, len(mutation_modes))]
+
+        # -----------------
+        # mutate function id
+        # -----------------
+        if mode == 'fid':
+            old_fid = int(np.rint(root_old_row[1]))
+            new_fid = old_fid
+            while new_fid == old_fid:
+                new_fid = int(rng.integers(1, 22))
+
+            used_flag = FUNC_to_USED_FLAGS(np.array([new_fid], dtype=np.int32))[0]
+            const_flag = FUNC_to_nonx_FLAGS(np.array([new_fid], dtype=np.int32))[0]
+            sensor_flag = FLAGS_to_SENSOR_FLAGS(
+                np.array([used_flag], dtype=np.uint32),
+                np.array([const_flag], dtype=np.uint32)
+            )[0]
+
+            root_new_row[1] = np.float32(new_fid)
+            root_new_row[2] = np.float32(used_flag)
+            root_new_row[3] = np.float32(const_flag)
+            root_new_row[4] = np.float32(sensor_flag)
+
+            # clear operand area and rebuild
+            root_new_row[5:10] = 0.0
+
+            for c in op_cols:
+                c = int(c)
+                bit_on = _u32_flag_has(np.uint32(used_flag), c)
+                if not bit_on:
+                    continue
+
+                is_const = _u32_flag_has(np.uint32(const_flag), c)
+
+                if is_const:
+                    # keep prior constant if same slot was constant before, else fresh
+                    if c in old_const_cols:
+                        root_new_row[c] = root_old_row[c]
+                    else:
+                        root_new_row[:] = _fresh_const_inplace(root_new_row, c)
+
+                else:
+                    target_abs = None
+
+                    # if same slot previously referenced something, try to preserve that absolute target
+                    if c in old_ref_cols and _is_neg_int_ref(root_old_row[c]):
+                        target_abs = old_pop + int(np.rint(root_old_row[c]))
+
+                    # otherwise sample a fresh left target
+                    if target_abs is None:
+                        target_abs = _sample_abs_target(new_pop)
+
+                    if target_abs is not None:
+                        root_new_row[c] = np.float32(target_abs - new_pop)
+
+            return
+
+        # -----------------
+        # mutate one reference
+        # -----------------
+        if mode == 'ref':
+            ref_cols = _ref_cols_from_row(root_new_row)
+            if len(ref_cols) == 0:
+                return
+
+            c = int(ref_cols[rng.integers(0, len(ref_cols))])
+
+            cur_target_abs = None
+            if _is_neg_int_ref(root_new_row[c]):
+                cur_target_abs = new_pop + int(np.rint(root_new_row[c]))
+
+            new_target_abs = _sample_abs_target(new_pop, exclude_abs=cur_target_abs)
+            if new_target_abs is not None:
+                root_new_row[c] = np.float32(new_target_abs - new_pop)
+            return
+
+        # -----------------
+        # mutate one constant
+        # -----------------
+        if mode == 'const':
+            const_cols = _const_cols_from_row(root_new_row)
+            if len(const_cols) == 0:
+                return
+
+            c = int(const_cols[rng.integers(0, len(const_cols))])
+            root_new_row[:] = _fresh_const_inplace(root_new_row, c)
+            return
+
+    def _build_children_map():
+        children = {int(g): [] for g in base_G_idx}
+
+        for child_pop in base_G_idx:
+            child_pop = int(child_pop)
+            row = base_rows.get(child_pop, None)
+            if row is None:
+                continue
+
+            for c in _ref_cols_from_row(row):
+                v = row[c]
+                if not _is_neg_int_ref(v):
+                    continue
+
+                parent_abs = child_pop + int(np.rint(v))
+                if parent_abs in base_gene_set:
+                    children[parent_abs].append(child_pop)
+
+        return children
+
+    def _descendant_closure(root_pop_idx: int, children_map):
+        root_pop_idx = int(root_pop_idx)
+        seen = set()
+        stack = [root_pop_idx]
+
+        while stack:
+            cur = stack.pop()
+            if cur in seen:
+                continue
+            seen.add(cur)
+
+            for ch in children_map.get(cur, []):
+                if ch not in seen:
+                    stack.append(ch)
+
+        return np.array(sorted(seen), dtype=np.int32)
+
+    def _build_mutation_event(root_pop_idx: int, start_new_idx: int, children_map):
+        closure = _descendant_closure(root_pop_idx, children_map)
+        if closure.size == 0:
+            return [], start_new_idx
+
+        # assign new pop indices for copied closure
+        remap_abs = {}
+        next_idx = int(start_new_idx)
+        for old_pop in closure:
+            remap_abs[int(old_pop)] = next_idx
+            next_idx += 1
+
+        new_rows = []
+        rows_by_old_pop = {}
+
+        # copy rows
+        for old_pop in closure:
+            old_pop = int(old_pop)
+            new_pop = remap_abs[old_pop]
+            new_row = _copy_single_gene_row(old_pop, new_pop, remap_abs=remap_abs)
+            new_rows.append(new_row)
+            rows_by_old_pop[old_pop] = new_row
+
+        # mutate copied root only
+        _mutate_root_row_inplace(rows_by_old_pop[int(root_pop_idx)], base_rows[int(root_pop_idx)])
+
+        return new_rows, next_idx
+
+    def _build_crossover_event(root_pop_idx: int, start_new_idx: int, children_map):
+        root_pop_idx = int(root_pop_idx)
+        root_old_row = base_rows.get(root_pop_idx, None)
+        if root_old_row is None:
+            return [], start_new_idx
+
+        root_ref_cols = _ref_cols_from_row(root_old_row)
+        if len(root_ref_cols) == 0:
+            return [], start_new_idx
+
+        closure = _descendant_closure(root_pop_idx, children_map)
+        closure_set = set(int(x) for x in closure)
+
+        # prefer donor genes outside closure, else any legal idx outside closure
+        donor_gene_candidates = np.array(
+            [g for g in base_G_idx if int(g) not in closure_set],
+            dtype=np.int32
+        )
+        donor_legal_candidates = np.array(
+            [l for l in base_L_idx if int(l) not in closure_set],
+            dtype=np.int32
+        )
+
+        donor_abs = None
+        donor_needs_copy = False
+
+        if donor_gene_candidates.size > 0:
+            donor_abs = int(donor_gene_candidates[rng.integers(0, donor_gene_candidates.size)])
+            donor_needs_copy = True
+        elif donor_legal_candidates.size > 0:
+            donor_abs = int(donor_legal_candidates[rng.integers(0, donor_legal_candidates.size)])
+            donor_needs_copy = donor_abs in base_gene_set
+        else:
+            return [], start_new_idx
+
+        next_idx = int(start_new_idx)
+        new_rows = []
+
+        # optional donor root copy first, so recipient can point to it
+        donor_new_abs = donor_abs
+        if donor_needs_copy and donor_abs in base_gene_set:
+            donor_new_abs = next_idx
+            donor_row = _copy_single_gene_row(donor_abs, donor_new_abs, remap_abs={})
+            new_rows.append(donor_row)
+            next_idx += 1
+
+        # copy recipient closure
+        remap_abs = {}
+        for old_pop in closure:
+            remap_abs[int(old_pop)] = next_idx
+            next_idx += 1
+
+        rows_by_old_pop = {}
+        for old_pop in closure:
+            old_pop = int(old_pop)
+            new_pop = remap_abs[old_pop]
+            new_row = _copy_single_gene_row(old_pop, new_pop, remap_abs=remap_abs)
+            new_rows.append(new_row)
+            rows_by_old_pop[old_pop] = new_row
+
+        # graft donor subtree root into one reference slot of copied root
+        root_new_row = rows_by_old_pop[root_pop_idx]
+        root_new_pop = int(np.rint(root_new_row[0]))
+
+        graft_col = int(root_ref_cols[rng.integers(0, len(root_ref_cols))])
+        root_new_row[graft_col] = np.float32(donor_new_abs - root_new_pop)
+
+        return new_rows, next_idx
+
+    def _append_rows_to_population(rows):
+        if rows is None or len(rows) == 0:
+            return
+
+        rows_arr = np.asarray(rows, dtype=np.float32)
+        n_rows = rows_arr.shape[0]
+
+        col0 = pop_prior._instructions[:, 0].astype(np.int32, copy=False)
+        empty = (col0 == 0)
+        empty[0] = False
+
+        empty_locs = np.flatnonzero(empty)
+        if empty_locs.size == 0:
+            raise ValueError('No empty instruction rows remain for append.')
+
+        break_idx = int(empty_locs[0])
+
+        pop_prior._instructions[break_idx:break_idx+n_rows, :] = rows_arr
+
+        new_gene_idx = rows_arr[:, 0].astype(np.int32, copy=False)
+        pop_prior._G_idx = np.union1d(pop_prior._G_idx, new_gene_idx)
+        pop_prior._L_idx = np.union1d(pop_prior._L_idx, pop_prior._G_idx)
+
+    # -----------------------------
+    # build descendant relationships
+    # -----------------------------
+    children_map = _build_children_map()
+
+    # -----------------------------
+    # decide mutation / crossover events
+    # each gene gets its own independent Bernoulli for each
+    # -----------------------------
+    event_specs = []
+    for g in base_G_idx:
+        g = int(g)
+        if rng.random() < grm_prior._p_mutation:
+            event_specs.append(('mutation', g))
+        if rng.random() < grm_prior._p_crossover:
+            event_specs.append(('crossover', g))
+
+    # randomize event order so capacity truncation is less biased
+    if len(event_specs) > 1:
+        rng.shuffle(event_specs)
+
+    # -----------------------------
+    # build pre-generation offspring
+    # -----------------------------
+    pre_rows = []
+    next_pop_idx = current_max_pop_idx + 1
+
+    for ev_kind, root_pop in event_specs:
+        remaining_capacity = n_total - len(pre_rows)
+        if remaining_capacity <= 0:
+            break
+
+        if ev_kind == 'mutation':
+            candidate_rows, candidate_next = _build_mutation_event(root_pop, next_pop_idx, children_map)
+        elif ev_kind == 'crossover':
+            candidate_rows, candidate_next = _build_crossover_event(root_pop, next_pop_idx, children_map)
+        else:
+            candidate_rows, candidate_next = [], next_pop_idx
+
+        if len(candidate_rows) == 0:
+            continue
+
+        # never exceed allowed new count
+        if len(candidate_rows) > remaining_capacity:
+            continue
+
+        pre_rows.extend(candidate_rows)
+        next_pop_idx = candidate_next
+
+    # append mutation / crossover offspring before random generation
+    if len(pre_rows) > 0:
+        _append_rows_to_population(pre_rows)
+
+    # -----------------------------
+    # remaining capacity -> original random generation path
+    # -----------------------------
+    gen_size = int(n_total - len(pre_rows))
+    if gen_size <= 0:
+        return
+
+    chunk_size = int(pop_prior._chunk_size)
+    if chunk_size == 0:
+        chunk_size = gen_size
+
+    while gen_size > 0:
+
+        if gen_size < chunk_size:
+            chunk_size = gen_size
+
+        match(grm_prior._type):
+            case 'Null':
+                # keep shape (chunk_size, 11); last col unused by design
+                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+
+                # populate new pop indices after everything currently legal
+                start_idx = int(pop_prior._L_idx.max())
+                inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
+
+                # random function ids
+                inst_inst[:, 1] = rng.integers(1, 22, size=inst_inst.shape[0], dtype=np.uint16)
+
+                func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
+
+                # used flags
+                flags_u32 = FUNC_to_USED_FLAGS(func_ids)
+                inst_inst[:, 2] = flags_u32
+
+                # const flags
+                flags_u32 = FUNC_to_nonx_FLAGS(func_ids)
+                inst_inst[:, 3] = flags_u32
+
+                # sensor flags
+                flags_u32 = FLAGS_to_SENSOR_FLAGS(inst_inst[:, 2], inst_inst[:, 3])
+                inst_inst[:, 4] = flags_u32
+
+                # current order: a, d, dd, k -> 6,7,8,9
+                v_cols = {6: 'UA0', 7: 'STEIS', 8: 'STEIS', 9: 'ITS'}
+
+                const_flags = inst_inst[:, 3].astype(np.uint32, copy=False)
+                for c, kind in v_cols.items():
+                    const_mask = (const_flags & (np.uint32(1) << np.uint32(c))) != 0
+                    if kind == 'UA0':
+                        inst_inst = fill_const_UA0(inst_inst, const_mask, c, rng)
+                    elif kind == 'STEIS':
+                        inst_inst = fill_const_STEIS(grm_prior._mdl, const_mask, inst_inst, c, 2.0, 2.0, rng)
+                    elif kind == 'ITS':
+                        inst_inst = fill_const_ITS(inst_inst, const_mask, c, 1.0, rng)
+
+                # sensors / refs
+                inst_inst = fill_sensor_UNIFORM(inst_inst, inst_inst[:, 4], legal_idx=pop_prior._L_idx)
+
+            case _:
+                raise ValueError('Cannot interpret grammar prior in generate_instructions. Illegal type.')
+
+        _append_rows_to_population(inst_inst)
+
+        gen_size -= chunk_size
+        if gen_size > 0 and verbose:
+            print(f'{gen_size} Generations Remaining.')
+
+def generate_instructions_old(
     pop_prior   :   Population,
     grm_prior   :   Grammar,
     seed        :   int =   None,
@@ -2391,6 +2957,8 @@ def initialize(
     pop_size    :   int =   1000,
     grmr_type   :   str =   'Null',
     grmr_mdl    :   int | tuple =   240,
+    grmr_p_mttn :   float=  0.0,
+    grmr_p_csvr :   float=  0.0,
     chunk_size  :   float   =   0.1,
     verbose     :   int =   0
 ):
@@ -2430,7 +2998,9 @@ def initialize(
     #generate our grammar variable and pass all parameters
     grammar = Grammar(
         type=grmr_type,
-        max_delta_lookback=grmr_mdl
+        max_delta_lookback=grmr_mdl,
+        p_crossover=grmr_p_csvr,
+        p_mutation=grmr_p_mttn
     )
     if(verbose>1):print('Grammar Initialized')
 

@@ -116,16 +116,21 @@ class Solver:
 			#Here we need to generate the raw emission
 			raw_emission = generate_raw_emission(Population, self._tidx, self._emission, self._offset)
 
+			#NOTE NOTE NOTE this is an attempt to flip the emissions for scoring a negative facing emission
+			if(self._AD_cond == 'lt' or self._AD_cond == 'le'):
+				raw_emission *= -1
+
 			#generate a mask for where we want to allow comparison to be done
 			#the default will be at all locations
 			evaluation_mask = generate_evaluation_mask(Population, self._offset)
 
 			#may find a better shape or type for this default of no use
 			#anomaly_mask = np.full(evaluation_mask.shape, False, dtype=bool)
-			print('ad cond: ', self._AD_cond)
+			#print('ad cond: ', self._AD_cond)
 			#then we need to make a boolean masking variable where raw emission is true under AD_cond parameter interpretation
 			anomaly_mask = generate_anomaly_mask(raw_emission, self._AD_cond)	
-			print('am counts', np.unique_counts(anomaly_mask))
+			#ftcount = np.unique_counts(anomaly_mask)[1]
+			#print(f'F:{ftcount[0]} T:{ftcount[1]} P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}%')
 
 		else:
 			raise NotImplementedError(f'Target Mode of "{self._tmode}" is not supported at this moment.')
@@ -307,6 +312,12 @@ def generate_raw_emission(Population, target_idx, emissions, offset):
 			return float(alpha_spec)
 
 		return _resolve_series(alpha_spec, use_offset_tvec, current_work)
+	
+
+	def _remove_buggers(x, thresh=100.0):
+
+		x[np.abs(x) > thresh] = 0
+		return x
 
 	def _eval_nested_alpha_op(op_dict):
 		"""
@@ -383,7 +394,11 @@ def generate_raw_emission(Population, target_idx, emissions, offset):
 
 		use_offset_tvec = bool(op_dict.get("offset", True))
 
-		x_in = _resolve_series(op_dict.get("x", None), use_offset_tvec, current_work)
+		x_spec = op_dict.get("x", None)
+		if isinstance(x_spec, dict):
+			x_in = _eval_nested_alpha_op(x_spec)  # reuse your existing nested-op resolver (it’s tvec-rooted)
+		else:
+			x_in = _resolve_series(x_spec, use_offset_tvec, current_work)
 
 		alpha_in = None
 		if "alpha" in op_dict:
@@ -454,7 +469,7 @@ def generate_raw_emission(Population, target_idx, emissions, offset):
 		i += 1
 
 	out_full[:valid_len] = work[:, 0]
-	return out_full
+	return _remove_buggers(out_full)
 
 
 def generate_raw_emission_v2(Population, target_idx, emissions, offset):
@@ -1105,6 +1120,9 @@ def evaluate_participation(m: float, n: float, p, q):
 	mask_lo = p < m
 	d[mask_lo] = np.log(2.0 - (p[mask_lo] / m))**2
 
+	mask_min = p < n / 100
+	d[mask_min] = 1
+
 	# p>n branch split: safe log region vs forced cap
 	mask_cap = p >= (2.0 * n)
 	d[mask_cap] = 10.0
@@ -1560,3 +1578,57 @@ def _emission_depends_on_future(emissions, base_offset):
 		i += 1
 
 	return emit_dep
+
+
+#NOTE VARIOUS EMISSIONS
+
+emission_fwd_return_sigma = [
+    {"ID": 5, "alpha": "tvec", "offset": False},                 # P[t+off] - P[t]
+    {"ID": "divide"},
+    {"ID": 18, "x": "tvec", "offset": False, "delta1": 24, "min_count": 2},  # STD over last ~2h
+]
+
+emission_future_window_terminal_z = [
+    {"ID": 5, "alpha": {"ID": 3, "x": "tvec", "delta1": 12, "offset": True}},  # P[t+12] - mean(P[t+1..t+12])
+    {"ID": "divide"},
+    {"ID": 18, "x": "tvec", "delta1": 12, "offset": True, "min_count": 2},    # std(P[t+1..t+12])
+]
+
+emission_vol_expansion_ratio = [
+    {"ID": 18, "delta1": 12, "min_count": 2},  # future-window realized std (uses future-aligned stream)
+    {"ID": "divide"},
+    {"ID": 18, "x": "tvec", "offset": False, "delta1": 12, "min_count": 2},  # trailing std now
+    {"ID": 5, "alpha": 1.0},  # ratio - 1
+]
+
+emission_breakout_above_high_sigma = [
+    {"ID": 5, "alpha": {"ID": 1, "x": "tvec", "delta1": 24, "offset": False}},  # P[t+off] - MAX24(P[t])
+    {"ID": "divide"},
+    {"ID": 18, "x": "tvec", "offset": False, "delta1": 24, "min_count": 2},    # / STD24(P[t])
+]
+
+emission_future_momentum_doe = [
+    {"ID": 15, "delta1": 3, "delta2": 12},            # DOE on future-aligned stream (fast - slow EMA)
+    {"ID": 17, "delta1": 24, "min_count": 2},         # zscore it over ~2h
+]
+
+delta = 24  # e.g., last 24 bars = 2 hours on 5-min data
+
+emission_minmax_breakout = [
+    # numerator: P[t+offset] - MIN_delta(P[t])
+    {"ID": 5,
+     "x": "tvec", "offset": True,
+     "alpha": {"ID": 2, "x": "tvec", "offset": False, "delta1": delta}},
+
+    # divide by range: (MAX_delta(P[t]) - MIN_delta(P[t]))
+    {"ID": "divide"},
+    {"ID": 5,
+     "x": {"ID": 1, "x": "tvec", "offset": False, "delta1": delta},
+     "alpha": {"ID": 2, "x": "tvec", "offset": False, "delta1": delta}},
+
+    # *2
+    {"ID": 6, "alpha": "emit"},
+
+    # -1
+    {"ID": 5, "alpha": 1.0},
+]

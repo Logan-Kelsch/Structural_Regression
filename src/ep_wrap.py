@@ -1,12 +1,56 @@
 import reproduction as _R
 import initialization as _I
 import evaluation as _E
+import numpy as np
+
+
+
+class Walker:
+
+    def __init__(self, xi, xd, min_iters):
+        self.xi = xi
+        self.xd = xd
+        self.min_iters = min_iters
+
+        self.i_step = (xd - xi) / min_iters
+        self.i_bped = -self.i_step / 2
+
+        self.position = xi
+        self.step = self.i_step
+        self.bped = self.i_bped
+
+    def walk(self, status: bool):
+        if status:
+            self.step *= 1.5
+            self.bped /= 2
+
+            # Clamp step so it cannot go above i_step
+            self.step = min(self.step, self.i_step)
+
+            self.position += self.step
+        else:
+            self.step /= 2
+            self.bped *= 1.5
+
+            # Clamp bped so it cannot go below i_bped
+            self.bped = max(self.bped, self.i_bped)
+
+            self.position += self.bped
+
+        print('step:',self.step,'bped:',self.bped)
+
+        return self.position
+
+
+
 
 
 def evolve_population(
     X = None, 
     G = None, 
     iterations = 0,
+    early_stop = 0.0,
+    break_extinction = False,
     initialization_kwargs = None,
     solver_kwargs = None,
     selector_kwargs = None,
@@ -46,7 +90,7 @@ def evolve_population(
         solver_kwargs = {
             "offset"    :   5,
             "t_vec"		:	'Close',
-            "t_mode"	:	'RE',
+            "t_mode"	:	'AD',
             "emission"	:	[
                 {"ID": 5, "alpha": 
                     {"ID": 3, "x": "tvec", "delta1": 20, "offset": False}},
@@ -77,12 +121,40 @@ def evolve_population(
 
     for i in range(iterations):
         evaluation, inst_stats = _E.evaluate(X, solver)
+
+        qgenes = np.count_nonzero(evaluation["F"]>0)
+
+        if(i==0):
+            #initial print of solution stats
+            ftcount = np.unique_counts(evaluation['svecs']['anomaly_mask'])[1]
+            print(f'F:{ftcount[0]} T:{ftcount[1]} P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}%')
+
+        print(f'Gen {i}: {qgenes} Quality Genes. ', end='')
+
+        if(break_extinction and qgenes==0):
+            print('All genes failed, breaking loop.')
+            break
+
+        
+        print('Reproducting...')
+
         reproduction_stats = _R.reproduce(X,G, selector, evaluation)
+
+        
+        
 
         #add on stats if user wants them returned
         if(return_stats):
             instantiation_stats_stack.append(inst_stats)
             reproduction_stats_stack.append(reproduction_stats)
+
+        #break case for enough success to end iteration
+        if(early_stop > 0 and (qgenes / X._max_size) > early_stop):
+            print(f'Success Reached ({early_stop:.2f}) in Population. Breaking evolution loop.')
+            break
+
+    print()
+
 
     #final gene evaluation
     evaluation, inst_stats = _E.evaluate(X, solver)
@@ -99,3 +171,5 @@ def evolve_population(
         return X, G, evaluation, stats
     else:
         return X, G, evaluation
+    
+

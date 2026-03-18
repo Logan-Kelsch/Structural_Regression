@@ -237,3 +237,132 @@ def reproduce(
         case _:
             raise NotImplementedError(f"Selector method of ({selector._method}) not implemented into reproduce function")
         
+
+def purge_indistinguishable(population, evaluation, threshold=0.02):
+    """
+    Return the surviving model indices c from population._G_idx such that:
+      1) evaluation["F"][c] > 0
+      2) models that are too similar are purged using abs-correlation distance
+
+    Similarity rule:
+      distance(i, j) = 1 - abs(corr(i, j))
+      if distance(i, j) <= threshold, they are considered indistinguishable
+
+    Tie break:
+      - remove lower F
+      - if F ties, remove higher c index
+
+    Parameters
+    ----------
+    population : object
+        Must contain:
+          population._X_inst : 2d numpy array, shape (n_samples, n_models_total)
+          population._G_idx  : iterable of model column indices c to consider
+    evaluation : dict
+        Must contain:
+          evaluation["F"] : 1d score array indexed by c
+    threshold : float, default=0.02
+        Maximum allowed abs-correlation distance for two models to be treated
+        as indistinguishable. Example:
+            threshold=0.02  -> remove one of any pair with |corr| >= 0.98
+
+    Returns
+    -------
+    selected : np.ndarray
+        1d array of surviving original column indices c
+    """
+    X = np.asarray(population._X_inst)
+    G_idx = np.asarray(population._G_idx, dtype=int)
+    F = np.asarray(evaluation["F"])
+
+    if X.ndim != 2:
+        raise ValueError("population._X_inst must be a 2d array")
+    if F.ndim != 1:
+        raise ValueError('evaluation["F"] must be a 1d array')
+    if np.any(G_idx < 0) or np.any(G_idx >= X.shape[1]):
+        raise ValueError("population._G_idx contains invalid column indices")
+    if np.any(G_idx >= F.shape[0]):
+        raise ValueError('evaluation["F"] is too short for indices in population._G_idx')
+
+    # only consider models in _G_idx with positive F
+    pos_mask = F[G_idx] > 0
+    cols = G_idx[pos_mask]
+
+    if cols.size <= 1:
+        return cols.copy()
+
+    X_sub = X[:, cols].astype(np.float64, copy=False)
+    F_sub = F[cols].astype(np.float64, copy=False)
+    n_models = cols.size
+
+    # robust absolute-correlation matrix
+    # standard correlation for non-constant columns
+    std = X_sub.std(axis=0)
+    nonconst = std > 0
+
+    abs_corr = np.zeros((n_models, n_models), dtype=np.float64)
+
+    if np.any(nonconst):
+        Xn = X_sub[:, nonconst]
+        corr_nc = np.corrcoef(Xn, rowvar=False)
+        corr_nc = np.nan_to_num(corr_nc, nan=0.0)
+        abs_corr[np.ix_(nonconst, nonconst)] = np.abs(corr_nc)
+
+    # handle constant columns explicitly
+    const_idx = np.where(~nonconst)[0]
+    if const_idx.size:
+        # same constant value -> perfectly correlated for our duplicate-purge purpose
+        const_vals = X_sub[0, const_idx]
+        for a in range(const_idx.size):
+            ia = const_idx[a]
+            abs_corr[ia, ia] = 1.0
+            for b in range(a + 1, const_idx.size):
+                ib = const_idx[b]
+                if np.all(X_sub[:, ia] == X_sub[:, ib]):
+                    abs_corr[ia, ib] = 1.0
+                    abs_corr[ib, ia] = 1.0
+
+    np.fill_diagonal(abs_corr, 1.0)
+
+    # distance = 1 - abs(corr)
+    # remove the weaker member of each too-close pair
+    alive = np.ones(n_models, dtype=bool)
+
+    # better models first: higher F, then lower c index
+    order = np.lexsort((cols, -F_sub))
+
+    for i in order:
+        if not alive[i]:
+            continue
+
+        for j in range(n_models):
+            if j == i or not alive[j]:
+                continue
+
+            dist = 1.0 - abs_corr[i, j]
+            if dist <= threshold:
+                # decide which one should survive
+                if F_sub[i] > F_sub[j]:
+                    alive[j] = False
+                elif F_sub[i] < F_sub[j]:
+                    alive[i] = False
+                    break
+                else:
+                    # tie: keep lower original c index
+                    if cols[i] < cols[j]:
+                        alive[j] = False
+                    else:
+                        alive[i] = False
+                        break
+
+    selected = cols[alive]
+    selected.sort()
+
+    survivors = _I.family_tree_indices(population._instructions, selected, include_terminals=True)
+    g_map = flush_population(population, survivors)
+
+    return selected
+
+        
+def purge_nonrecreative():
+    return
