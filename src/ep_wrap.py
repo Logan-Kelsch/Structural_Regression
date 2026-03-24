@@ -7,10 +7,11 @@ import numpy as np
 
 class Walker:
 
-    def __init__(self, xi, xd, min_iters):
+    def __init__(self, xi, xd, min_iters, exhaust=0.001):
         self.xi = xi
         self.xd = xd
         self.min_iters = min_iters
+        self.exhaust = exhaust
 
         self.i_step = (xd - xi) / min_iters
         self.i_bped = -self.i_step / 2
@@ -37,10 +38,15 @@ class Walker:
 
             self.position += self.bped
 
-        print('step:',self.step,'bped:',self.bped)
+        #print('step:',self.step,'bped:',self.bped)
 
         return self.position
-
+    
+    def is_exhausted(self):
+        if((abs(self.step) + abs(self.bped)) <= self.exhaust):
+            return True
+        else:
+            return False
 
 
 
@@ -54,6 +60,7 @@ def evolve_population(
     initialization_kwargs = None,
     solver_kwargs = None,
     selector_kwargs = None,
+    chunk_num = None,
     return_stats    :   bool    =   False
 ):
     '''returns X, G, final evaluation (and optionally stats)'''
@@ -74,6 +81,7 @@ def evolve_population(
             "grmr_type"   :   'Null',
             "grmr_mdl"    :   240,
             "chunk_size"  :   25,
+            "wf_windows"  :   2,
             "verbose"     :   0
         }
 
@@ -120,7 +128,7 @@ def evolve_population(
         reproduction_stats_stack  = []
 
     for i in range(iterations):
-        evaluation, inst_stats = _E.evaluate(X, solver)
+        evaluation, inst_stats = _E.evaluate(X, solver, chunk_num)
 
         qgenes = np.count_nonzero(evaluation["F"]>0)
 
@@ -157,7 +165,7 @@ def evolve_population(
 
 
     #final gene evaluation
-    evaluation, inst_stats = _E.evaluate(X, solver)
+    evaluation, inst_stats = _E.evaluate(X, solver, chunk_num)
 
     #add on last stats if the user wants them returned
     if(return_stats):

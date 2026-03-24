@@ -39,73 +39,106 @@ class Grammar:
         self._p_crossover = p_crossover
         
 
+import numpy as np
+
+
 class Population:
     '''
     All instructions containing all zeros suggest locations are terminal states
     '''
     def __init__(
-        self, X_inst: np.ndarray,
+        self,
+        X_inst: np.ndarray,
         terminal_idx: np.ndarray | list,
         excluded_idx: np.ndarray | list,
-        max_size    : int   =   20000,
-        chunk_size  : int|float = 0.2,
-        include_time: bool  =   False,
-        structure   : str   =   'Continuous',
-        market_only : bool  =   True,
-        market_close: int   =   390
+        max_size    : int = 20000,
+        chunk_size  : int | float = 0.2,
+        include_time: bool = True,
+        structure   : str = 'Intraday',
+        market_only : bool = True,
+        market_close: int = 390,
+        wf_windows  : int = 1
     ):
         self._X_inst = X_inst
         self._T_idx = np.asarray(terminal_idx, dtype=np.int64)
         self._E_idx = np.asarray(excluded_idx, dtype=np.int64)
         self._G_idx = np.asarray([], dtype=np.int64)
-        
-        self._max_size = max_size
-        self._structure= structure
+
+        self._max_size = int(max_size)
+        self._structure = structure
         self._time_terminals = include_time
 
-        if(chunk_size < 1):
+        #time terminal column locations if created
+        self._tod_idx = None
+        self._dow_idx = None
+
+        #walk-forward chunk metadata
+        self._n_chunks = int(wf_windows)
+        if self._n_chunks < 1:
+            raise ValueError('wf_windows must be >= 1.')
+
+        self._n_days = 0
+        self._day_start_idx = np.asarray([], dtype=np.int64)
+        self._day_stop_idx  = np.asarray([], dtype=np.int64)
+
+        #chunk bounds are half-open [lo, hi)
+        self._chunk_day_bounds = np.zeros((0, 2), dtype=np.int64)
+        self._chunk_row_bounds = np.zeros((0, 2), dtype=np.int64)
+        self._chunk_row_idx = []
+
+        if chunk_size < 1:
             chunk_size = int(np.ceil(max_size * chunk_size))
 
-        if(chunk_size == 0):
-            raise ValueError(f'Chunk Size in Population Cannot Be Zero.')
-        self._chunk_size = chunk_size
+        if chunk_size == 0:
+            raise ValueError('Chunk Size in Population Cannot Be Zero.')
 
-        if(include_time):
+        self._chunk_size = int(chunk_size)
+
+        #throw error if any intersection before any time columns are appended
+        overlap = np.intersect1d(self._T_idx, self._E_idx, assume_unique=False)
+        if overlap.size:
+            raise ValueError(
+                f'terminal_idx and excluded_idx overlap at indices: {overlap.tolist()}'
+            )
+
+        if include_time:
             #NOTE tentative must is that epoch time column is first in excluded idx array
-            #need to grab what index we are putting this in (will be terminal state)
-            next_idx = self._T_idx.max()
             time_src_col = int(self._E_idx[0])
-
             next_idx = int(self._T_idx.max())
 
+            self._tod_idx = next_idx + 1
+            self._dow_idx = next_idx + 2
+
+            if self._dow_idx >= self._max_size:
+                raise ValueError(
+                    f'Not enough population columns to append time terminals. '
+                    f'Need indices through {self._dow_idx}, but max_size={self._max_size}.'
+                )
+
             # next_idx+1 -> minutes relative to market open
-            self._X_inst[:, next_idx + 1] = tod_minutes_from_dstaware(
+            self._X_inst[:, self._tod_idx] = tod_minutes_from_dstaware(
                 self._X_inst[:, time_src_col],
                 mode='market_open'
             )
 
             # next_idx+2 -> day of week, DST-aware
-            self._X_inst[:, next_idx + 2] = dow_sun0_from_epoch(
+            self._X_inst[:, self._dow_idx] = dow_sun0_from_epoch(
                 self._X_inst[:, time_src_col]
             )
 
-            self._T_idx = np.concatenate((self._T_idx, [next_idx + 1, next_idx + 2]))
-            
+            self._T_idx = np.concatenate((self._T_idx, [self._tod_idx, self._dow_idx]))
 
             # optional regular-market-hours-only filter
-            if market_only and structure=='Intraday':
-                tod_col = next_idx + 1
-                tod_mkt = self._X_inst[:, tod_col]
+            if market_only and structure == 'Intraday':
+                tod_mkt = self._X_inst[:, self._tod_idx]
 
-                # keep [0, market_close_min) by default
-                # if your timestamps are end-of-bar and you want 16:00 included,
-                # change < market_close_min to <= market_close_min
+                #keep [0, market_close)
                 keep_mask = (tod_mkt >= 0) & (tod_mkt < market_close)
 
                 if not np.any(keep_mask):
                     raise ValueError(
-                        "market_only=True produced zero kept rows. "
-                        "Check the market-open time column and timestamp convention."
+                        'market_only=True produced zero kept rows. '
+                        'Check the market-open time column and timestamp convention.'
                     )
 
                 old_X = self._X_inst
@@ -113,19 +146,141 @@ class Population:
 
                 del old_X, keep_mask, tod_mkt
 
+        #build chunk partitions after final row layout exists
+        self._build_chunks()
 
         #allocating entire space of possible instructions
-        self._instructions = np.zeros((max_size, 11), dtype=np.float32)
+        self._instructions = np.zeros((self._max_size, 11), dtype=np.float32)
 
         #writing in gene indices for our terminal or excluded columns
         self._instructions[self._T_idx, 0] = self._T_idx
 
-        # throw error if any intersection
-        overlap = np.intersect1d(self._T_idx, self._E_idx, assume_unique=False)
-        if overlap.size:
-            raise ValueError(f"terminal_idx and excluded_idx overlap at indices: {overlap.tolist()}")
-        
         self._L_idx = np.asarray(self._T_idx, dtype=np.int64)
+
+    def _build_chunks(self):
+        '''
+        Build chunk boundaries for walk-forward use.
+
+        If include_time=True and structure='Intraday', chunking is aligned to
+        detected beginning-of-day rows.
+
+        Otherwise chunking falls back to simple row partitioning.
+        '''
+        n_rows = int(self._X_inst.shape[0])
+
+        if n_rows == 0:
+            raise ValueError('Cannot build chunks on empty X_inst.')
+
+        #day-aligned chunking for intraday time-aware data
+        if self._time_terminals and self._structure == 'Intraday' and self._tod_idx is not None:
+            tod = self._X_inst[:, self._tod_idx]
+            dow = self._X_inst[:, self._dow_idx]
+
+            #new day if market-open minutes reset backward or day-of-week changes
+            new_day_mask = (np.diff(tod) < 0) | (np.diff(dow) != 0)
+
+            self._day_start_idx = np.r_[0, 1 + np.flatnonzero(new_day_mask)].astype(np.int64)
+            self._day_stop_idx  = np.r_[self._day_start_idx[1:], n_rows].astype(np.int64)
+            self._n_days = int(self._day_start_idx.size)
+
+            if self._n_chunks > self._n_days:
+                raise ValueError(
+                    f'wf_windows={self._n_chunks} exceeds detected day count={self._n_days}.'
+                )
+
+            day_groups = np.array_split(
+                np.arange(self._n_days, dtype=np.int64),
+                self._n_chunks
+            )
+
+            self._chunk_day_bounds = np.asarray(
+                [[grp[0], grp[-1] + 1] for grp in day_groups],
+                dtype=np.int64
+            )
+
+            self._chunk_row_bounds = np.asarray(
+                [[self._day_start_idx[grp[0]], self._day_stop_idx[grp[-1]]] for grp in day_groups],
+                dtype=np.int64
+            )
+
+        #fallback row chunking
+        else:
+            if self._n_chunks > n_rows:
+                raise ValueError(
+                    f'wf_windows={self._n_chunks} exceeds row count={n_rows}.'
+                )
+
+            edges = np.floor(
+                np.linspace(0, n_rows, self._n_chunks + 1)
+            ).astype(np.int64)
+            edges[-1] = n_rows
+
+            self._n_days = 1
+            self._day_start_idx = np.asarray([0], dtype=np.int64)
+            self._day_stop_idx  = np.asarray([n_rows], dtype=np.int64)
+
+            self._chunk_day_bounds = np.asarray(
+                [[i, i + 1] for i in range(self._n_chunks)],
+                dtype=np.int64
+            )
+
+            self._chunk_row_bounds = np.column_stack(
+                (edges[:-1], edges[1:])
+            ).astype(np.int64)
+
+        self._chunk_row_idx = [
+            np.arange(lo, hi, dtype=np.int64)
+            for lo, hi in self._chunk_row_bounds
+        ]
+
+    def get_chunk_slice(self, chunk_num: int | None = None) -> slice:
+        '''
+        Return half-open row slice for one chunk.
+        If chunk_num is None, return full slice.
+        '''
+        if chunk_num is None:
+            return slice(None)
+
+        chunk_num = int(chunk_num)
+
+        if chunk_num < 0 or chunk_num >= self._n_chunks:
+            raise IndexError(
+                f'chunk_num={chunk_num} out of bounds for _n_chunks={self._n_chunks}.'
+            )
+
+        lo, hi = self._chunk_row_bounds[chunk_num]
+        return slice(int(lo), int(hi))
+
+    def get_chunk_rows(self, chunk_num: int | None = None) -> np.ndarray:
+        '''
+        Return explicit row indices for one chunk.
+        If chunk_num is None, return all row indices.
+        '''
+        if chunk_num is None:
+            return np.arange(self._X_inst.shape[0], dtype=np.int64)
+
+        chunk_num = int(chunk_num)
+
+        if chunk_num < 0 or chunk_num >= self._n_chunks:
+            raise IndexError(
+                f'chunk_num={chunk_num} out of bounds for _n_chunks={self._n_chunks}.'
+            )
+
+        return self._chunk_row_idx[chunk_num]
+
+    def get_chunk_bounds(self, chunk_num: int) -> tuple[int, int]:
+        '''
+        Return raw row bounds (lo, hi) for one chunk.
+        '''
+        chunk_num = int(chunk_num)
+
+        if chunk_num < 0 or chunk_num >= self._n_chunks:
+            raise IndexError(
+                f'chunk_num={chunk_num} out of bounds for _n_chunks={self._n_chunks}.'
+            )
+
+        lo, hi = self._chunk_row_bounds[chunk_num]
+        return int(lo), int(hi)
 
 
 
@@ -2554,6 +2709,464 @@ def instantiate_from_ops_chunked_intraday(
     population,
     *,
     transform_ops,
+    chunk_num: int | None = None,
+    chunk_B: int = 16,
+    verbosity: int = 0,
+    sanitize_final: bool = True,
+):
+    """
+    Intraday segmented instantiation on population._X_inst of shape (N, G).
+
+    Chunk behavior
+    --------------
+    - If chunk_num is None, instantiate all rows.
+    - If chunk_num is an int, instantiate only that chunk, where the chunk
+      row bounds are inferred from population.
+
+    Intraday day behavior
+    ---------------------
+    - population._time_terminals must be True
+    - population._structure must equal 'Intraday'
+    - time-of-day column is population._tod_idx if present, else population._T_idx[-2]
+    - every exact zero in that time-of-day column is treated as the start of a new day
+      within the selected chunk
+    - instantiation is run separately on each day segment inside the selected chunk
+
+    This preserves intraday resets for:
+    - rolling / window-like transforms
+    - self-referencing behavior
+    - value initialization from t0 within each day segment
+
+    Verbosity
+    ---------
+    0 : silent
+    1 : print number of counted days + total timing
+    2 : add per-day timing + replacement summary
+    3 : add per-op timing
+    4 : add per-batch timing / debug details
+
+    Returns
+    -------
+    stats : dict
+        Timing and replacement statistics.
+
+    Notes
+    -----
+    - population._X_inst is updated in place
+    - only the selected chunk rows are cleared / instantiated / sanitized
+    - this function requires:
+        _VAR_TO_BIT
+        _VAR_TO_COL
+        _FUNC_ID_TO_NAME
+        F_AS
+        build_operation_list
+      to exist in scope
+    """
+    t0_all = time.perf_counter()
+
+    # ------------------------------------------------------------
+    # population validation
+    # ------------------------------------------------------------
+    if not hasattr(population, "_time_terminals"):
+        raise AttributeError("population must have attribute '_time_terminals'")
+    if population._time_terminals is not True:
+        raise ValueError("population._time_terminals must be True")
+
+    if not hasattr(population, "_structure"):
+        raise AttributeError("population must have attribute '_structure'")
+    if population._structure != "Intraday":
+        raise ValueError(
+            f"population._structure must be 'Intraday', got {population._structure!r}"
+        )
+
+    if not hasattr(population, "_instructions"):
+        raise AttributeError("population must have attribute '_instructions'")
+    if not hasattr(population, "_X_inst"):
+        raise AttributeError("population must have attribute '_X_inst'")
+    if not hasattr(population, "_T_idx"):
+        raise AttributeError("population must have attribute '_T_idx'")
+
+    instructions = population._instructions
+    X_out = population._X_inst
+
+    if not isinstance(instructions, np.ndarray):
+        raise TypeError("population._instructions must be a numpy ndarray")
+    if not isinstance(X_out, np.ndarray):
+        raise TypeError("population._X_inst must be a numpy ndarray")
+
+    if instructions.ndim != 2 or instructions.shape[1] < 10:
+        raise ValueError("population._instructions must be shape (G,11) or have cols 0..9")
+    if X_out.ndim != 2:
+        raise ValueError("population._X_inst must be 2D with shape (N, G)")
+
+    N, Gx = X_out.shape
+    G = instructions.shape[0]
+
+    if Gx != G:
+        raise ValueError(
+            f"population._X_inst.shape[1]={Gx} must equal number of instructions G={G}"
+        )
+
+    if hasattr(population, "_tod_idx") and population._tod_idx is not None:
+        tod_col = int(population._tod_idx)
+    else:
+        if len(population._T_idx) < 2:
+            raise ValueError("population._T_idx must have at least two entries so _T_idx[-2] exists")
+        tod_col = int(population._T_idx[-2])
+
+    if tod_col < 0 or tod_col >= G:
+        raise ValueError(
+            f"time-of-day column index {tod_col} is out of bounds for G={G}"
+        )
+
+    def _log(level: int, msg: str):
+        if verbosity >= level:
+            print(msg)
+
+    # ------------------------------------------------------------
+    # resolve selected chunk rows
+    # ------------------------------------------------------------
+    if chunk_num is None:
+        row_lo = 0
+        row_hi = N
+    else:
+        if hasattr(population, "get_chunk_bounds"):
+            row_lo, row_hi = population.get_chunk_bounds(chunk_num)
+        elif hasattr(population, "get_chunk_slice"):
+            row_sl = population.get_chunk_slice(chunk_num)
+            row_lo = 0 if row_sl.start is None else int(row_sl.start)
+            row_hi = N if row_sl.stop is None else int(row_sl.stop)
+        else:
+            raise AttributeError(
+                "population must provide get_chunk_bounds(chunk_num) or get_chunk_slice(chunk_num)"
+            )
+
+    row_lo = int(row_lo)
+    row_hi = int(row_hi)
+
+    if row_lo < 0 or row_hi > N or row_lo >= row_hi:
+        raise ValueError(
+            f"Invalid selected chunk row bounds [{row_lo}:{row_hi}) for N={N}"
+        )
+
+    X_chunk = X_out[row_lo:row_hi, :]
+    N_chunk = X_chunk.shape[0]
+
+    if verbosity >= 1:
+        _log(
+            1,
+            f"[intraday] chunk_num={chunk_num} rows=[{row_lo}:{row_hi}) N_chunk={N_chunk}"
+        )
+
+    # ------------------------------------------------------------
+    # enforce zero baseline only inside selected chunk
+    # ------------------------------------------------------------
+    keep = np.unique(
+        np.concatenate((population._T_idx, population._E_idx))
+    ).astype(np.int64)
+
+    _kept = X_chunk[:, keep].copy()
+    X_chunk.fill(0.0)
+    X_chunk[:, keep] = _kept
+    del _kept
+
+    # ------------------------------------------------------------
+    # detect day starts only within selected chunk
+    # ------------------------------------------------------------
+    tod = X_chunk[:, tod_col]
+    day_starts_local = np.flatnonzero(tod == 0)
+
+    if day_starts_local.size == 0:
+        raise ValueError(
+            f"No zeros were found in the time-of-day column at index {tod_col} "
+            f"within selected rows [{row_lo}:{row_hi})"
+        )
+
+    if day_starts_local[0] != 0:
+        raise ValueError(
+            f"First zero in the selected chunk occurs at local row {int(day_starts_local[0])}, not 0. "
+            "This means the chunk does not begin at a day boundary."
+        )
+
+    day_ends_local = np.empty_like(day_starts_local)
+    day_ends_local[:-1] = day_starts_local[1:]
+    day_ends_local[-1] = N_chunk
+
+    days_counted = int(day_starts_local.size)
+
+    day_starts_abs = row_lo + day_starts_local
+    day_ends_abs = row_lo + day_ends_local
+
+    if verbosity >= 1:
+        _log(1, f"[intraday] counted days in chunk={days_counted}")
+
+    # ------------------------------------------------------------
+    # build schedule once
+    # ------------------------------------------------------------
+    op_list = build_operation_list(instructions)
+    Bmax = int(chunk_B)
+
+    const_flags  = instructions[:, 3].astype(np.uint32, copy=False)
+    sensor_flags = instructions[:, 4].astype(np.uint32, copy=False)
+
+    rep_nan = defaultdict(int)
+    rep_inf = defaultdict(int)
+
+    op_times = defaultdict(float)
+    op_counts = defaultdict(int)
+    day_times = []
+
+    def _sanitize_inplace(arr: np.ndarray, key):
+        nan_mask = np.isnan(arr)
+        if nan_mask.any():
+            rep_nan[key] += int(nan_mask.sum())
+
+        fin_mask = np.isfinite(arr)
+        if (~fin_mask).any():
+            rep_inf[key] += int((~fin_mask).sum() - nan_mask.sum())
+
+        np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+
+    def _fill_series(X_seg: np.ndarray, var_code: str, idx_batch: np.ndarray, buf: np.ndarray, func_id: int):
+        """
+        Fill buf[:, :B] using one day/segment slice X_seg of shape (Ns, G):
+          - CONST flag  => broadcast scalar down Ns
+          - SENSOR flag => gather parent series from X_seg[:, parents]
+          - else        => 0.0
+
+        Sanitizes NaN/Inf -> 0 in place.
+        """
+        B = idx_batch.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_batch]
+        sf = sensor_flags[idx_batch]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        raw = instructions[idx_batch, col]
+
+        out_view = buf[:, :B]
+        out_view.fill(0.0)
+
+        if np.any(is_sensor):
+            disp = raw[is_sensor].astype(np.int64, copy=False)
+
+            if np.any(disp >= 0):
+                bad = disp[disp >= 0][:10]
+                raise ValueError(
+                    f"{var_code}: expected negative displacement for sensor slots; got {bad}"
+                )
+
+            parents = idx_batch[is_sensor] + disp
+            if np.any(parents < 0) or np.any(parents >= G):
+                bad = parents[(parents < 0) | (parents >= G)][:10]
+                raise ValueError(
+                    f"{var_code}: parent out of bounds (first bad: {bad})"
+                )
+
+            # gather only from current day segment to preserve intraday reset behavior
+            out_view[:, is_sensor] = X_seg[:, parents]
+
+        if np.any(is_const):
+            cvals = raw[is_const].astype(X_seg.dtype, copy=False)
+            out_view[:, is_const] = cvals[None, :]
+
+        stage = "input_x" if var_code == "x" else "input_a"
+        _sanitize_inplace(out_view, (stage, func_id))
+
+        if verbosity >= 4:
+            _log(
+                4,
+                f"    [{stage}] segN={X_seg.shape[0]} B={B} "
+                f"const={int(is_const.sum())} sensor={int(is_sensor.sum())}"
+            )
+
+        return out_view
+
+    def _param_vec(var_code: str, idx_batch: np.ndarray, cast, default, clamp_min=None):
+        """
+        Per-gene parameter vector (delta/kappa).
+        Sensor-flagged params are invalid.
+        """
+        B = idx_batch.size
+        bit = np.uint32(_VAR_TO_BIT[var_code])
+        col = _VAR_TO_COL[var_code]
+
+        cf = const_flags[idx_batch]
+        sf = sensor_flags[idx_batch]
+        is_const  = ((cf >> bit) & np.uint32(1)).astype(bool)
+        is_sensor = ((sf >> bit) & np.uint32(1)).astype(bool)
+
+        if np.any(is_sensor):
+            raise ValueError(f"{var_code}: unexpectedly sensor-flagged for param vector")
+
+        raw = instructions[idx_batch, col]
+        out = np.empty(B, dtype=cast)
+        out[:] = cast(default)
+
+        if np.any(is_const):
+            out[is_const] = raw[is_const].astype(cast, copy=False)
+
+        if clamp_min is not None:
+            out = np.maximum(out, cast(clamp_min))
+
+        return out
+
+    # ------------------------------------------------------------
+    # per-day segmented instantiation inside selected chunk
+    # ------------------------------------------------------------
+    for day_i, (start_local, end_local) in enumerate(zip(day_starts_local, day_ends_local), start=1):
+        t0_day = time.perf_counter()
+
+        start_abs = row_lo + int(start_local)
+        end_abs = row_lo + int(end_local)
+
+        X_seg = X_chunk[start_local:end_local, :]
+        Ns = X_seg.shape[0]
+
+        if Ns <= 0:
+            continue
+
+        x_buf = np.empty((Ns, Bmax), dtype=X_seg.dtype)
+        a_buf = np.empty((Ns, Bmax), dtype=X_seg.dtype)
+        y_buf = np.empty((Ns, Bmax), dtype=X_seg.dtype)
+
+        for func_id, gene_idx in op_list:
+            fid = int(func_id)
+            if fid == 0:
+                continue
+
+            name = _FUNC_ID_TO_NAME.get(fid, f"fid_{fid}")
+            used_vars = F_AS(fid)
+
+            gene_idx = np.asarray(gene_idx, dtype=np.int64).reshape(-1)
+            if gene_idx.size == 0:
+                continue
+
+            t0_op = time.perf_counter()
+
+            for start in range(0, gene_idx.size, Bmax):
+                idx_batch = gene_idx[start:start + Bmax]
+                B = idx_batch.size
+
+                t0_batch = time.perf_counter()
+
+                x_view = _fill_series(X_seg, "x", idx_batch, x_buf, fid)
+
+                alpha_arg = None
+                if "a" in used_vars:
+                    a_view = _fill_series(X_seg, "a", idx_batch, a_buf, fid)
+                    alpha_arg = a_view
+
+                delta1_vec = None
+                delta2_vec = None
+                kappa_vec  = None
+
+                if "d" in used_vars:
+                    delta1_vec = _param_vec("d", idx_batch, cast=np.int64, default=2, clamp_min=2)
+                if "dd" in used_vars:
+                    delta2_vec = _param_vec("dd", idx_batch, cast=np.int64, default=2, clamp_min=2)
+                if "k" in used_vars:
+                    kappa_vec = _param_vec("k", idx_batch, cast=np.float32, default=1.0, clamp_min=None)
+
+                y_view = y_buf[:, :B]
+                y_view.fill(0.0)
+
+                transform_ops.apply(
+                    fid,
+                    x_view,
+                    alpha=alpha_arg,
+                    delta1=delta1_vec,
+                    delta2=delta2_vec,
+                    kappa=kappa_vec,
+                    out=y_view,
+                    in_place=False,
+                )
+
+                _sanitize_inplace(y_view, ("output", fid))
+
+                # write back only into this day segment of this selected chunk
+                X_seg[:, idx_batch] = y_view
+
+                if verbosity >= 4:
+                    _log(
+                        4,
+                        f"  [chunk={chunk_num}] [day={day_i:4d}] [batch] {name} fid={fid} "
+                        f"rows=[{start_abs}:{end_abs}) gene_start={start} B={B} "
+                        f"dt={(time.perf_counter()-t0_batch)*1000:.1f}ms"
+                    )
+
+            dt_op = time.perf_counter() - t0_op
+            op_times[fid] += dt_op
+            op_counts[fid] += int(gene_idx.size)
+
+            if verbosity >= 3:
+                _log(
+                    3,
+                    f"[chunk={chunk_num}] [day={day_i:4d}] [op] {name:5s} fid={fid:2d} "
+                    f"genes={gene_idx.size:6d} seg_rows={Ns:6d} time={dt_op:.3f}s"
+                )
+
+        dt_day = time.perf_counter() - t0_day
+        day_times.append(float(dt_day))
+
+        if verbosity >= 2:
+            _log(
+                2,
+                f"[chunk={chunk_num}] [day={day_i:4d}] rows=[{start_abs}:{end_abs}) "
+                f"Nseg={Ns} time={dt_day:.3f}s"
+            )
+
+    # ------------------------------------------------------------
+    # final sanitize only on selected chunk
+    # ------------------------------------------------------------
+    if sanitize_final:
+        _sanitize_inplace(X_chunk, ("final", -1))
+
+    total_time_s = time.perf_counter() - t0_all
+
+    stats = {
+        "chunk_num": None if chunk_num is None else int(chunk_num),
+        "chunk_row_lo": int(row_lo),
+        "chunk_row_hi": int(row_hi),
+        "chunk_rows": int(N_chunk),
+        "days_counted": int(days_counted),
+        "time_of_day_col": int(tod_col),
+        "day_starts_local": day_starts_local.copy(),
+        "day_ends_local": day_ends_local.copy(),
+        "day_starts": day_starts_abs.copy(),
+        "day_ends": day_ends_abs.copy(),
+        "total_time_s": float(total_time_s),
+        "day_times_s": day_times,
+        "op_times_s": dict(op_times),
+        "op_gene_counts": dict(op_counts),
+        "replaced_nan": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_nan.items()},
+        "replaced_inf": {f"{k[0]}:{k[1]}": int(v) for k, v in rep_inf.items()},
+    }
+
+    if verbosity >= 1:
+        _log(1, f"[intraday] chunk_num={chunk_num} total_time={total_time_s:.3f}s")
+
+    if verbosity >= 2:
+        total_nan = sum(rep_nan.values())
+        total_inf = sum(rep_inf.values())
+        _log(2, f"[sanitize] total replaced in selected chunk: NaN={total_nan}, Inf={total_inf}")
+        if sanitize_final:
+            _log(
+                2,
+                f"[sanitize] final pass replaced in selected chunk: "
+                f"NaN={rep_nan.get(('final', -1), 0)}, "
+                f"Inf={rep_inf.get(('final', -1), 0)}"
+            )
+
+    return stats
+
+def instantiate_from_ops_chunked_intraday_final_NO_WF(
+    population,
+    *,
+    transform_ops,
     chunk_B: int = 16,
     verbosity: int = 0,
     sanitize_final: bool = True,
@@ -2960,6 +3573,7 @@ def initialize(
     grmr_p_mttn :   float=  0.0,
     grmr_p_csvr :   float=  0.0,
     chunk_size  :   float   =   0.1,
+    wf_windows  :   int =   1,
     verbose     :   int =   0
 ):
     '''
@@ -2991,7 +3605,8 @@ def initialize(
         max_size=pop_size,
         chunk_size=chunk_size,
         include_time=incl_time,
-        structure=structure
+        structure=structure,
+        wf_windows=wf_windows
     )
     if(verbose>1):print('Population initialized')
     

@@ -30,7 +30,7 @@
       "Name": "GP Self Test Run"
     },
     {
-      "Time": null,
+      "Time": "2.17:10:42.9136832",
       "Name": "Standard Viz Library"
     },
     {
@@ -122,7 +122,7 @@
       "Name": "Compile Results"
     }
   ],
-  "CurrentSplitIndex": 7,
+  "CurrentSplitIndex": 8,
   "CurrentSplitTime": null,
-  "CurrentTime": "2.17:10:27.3775414"
+  "CurrentTime": "2.18:35:59.9839826"
 }
