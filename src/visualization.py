@@ -839,3 +839,234 @@ def visualize_participation_surfaces(
 			_imshow(BD, f"b(p,q)+d(p) heatmap (m={m:g}, n={n:g})")
 
 		plt.show()
+          
+import copy
+import numpy as np
+import matplotlib.pyplot as plt
+
+import initialization as _I
+import evaluation as _E
+
+
+def demo_chunk_scope(
+    data_file: str = '../data/spy5m.csv',
+    pop_size: int = 300,
+    chunk_size: float = 0.1,
+    seed: int | None = 0,
+    solver_kwargs: dict | None = None,
+    verbose: int = 0,
+    eps: float = 1e-12,
+):
+    """
+    Simple visual demonstration that:
+    1) chunk_num=None instantiates/evaluates the whole row range
+    2) with wf_windows=2, chunk_num=0 and chunk_num=1 instantiate/evaluate only their own windows
+
+    What is plotted
+    ----------------
+    A) no-chunk run:
+       row_activity_full[row] = how many legal gene columns are nonzero at that row
+       this should show activity across the full usable row range
+
+    B) two-window runs:
+       row_activity_chunk0[row] = activity after evaluating only chunk 0
+       row_activity_chunk1[row] = activity after evaluating only chunk 1
+       these should light up only their own chunk regions
+
+    C) gene-wise outputs:
+       F for full, chunk0, chunk1
+       p for full, chunk0, chunk1
+       q for full, chunk0, chunk1
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    if solver_kwargs is None:
+        solver_kwargs = {}
+
+    def _legal_gene_idx(pop):
+        gidx = np.asarray(getattr(pop, "_G_idx", np.asarray([], dtype=np.int64)), dtype=np.int64)
+        if gidx.size:
+            return gidx
+        all_idx = np.arange(pop._X_inst.shape[1], dtype=np.int64)
+        keep = np.union1d(np.asarray(pop._T_idx, dtype=np.int64), np.asarray(pop._E_idx, dtype=np.int64))
+        return np.setdiff1d(all_idx, keep, assume_unique=False)
+
+    def _row_activity(pop, eps=1e-12):
+        gidx = _legal_gene_idx(pop)
+        Xg = pop._X_inst[:, gidx]
+        return np.count_nonzero(np.abs(Xg) > eps, axis=1)
+
+    # ------------------------------------------------------------
+    # 1) no chunk_num path
+    # ------------------------------------------------------------
+    X_full, grammar_full = _I.initialize(
+        structure='Intraday',
+        incl_time=True,
+        data_file=data_file,
+        pop_size=pop_size,
+        chunk_size=chunk_size,
+        wf_windows=1,
+        verbose=verbose,
+    )
+
+    solver_full = _E.Solver(X_full, **solver_kwargs)
+    eval_full, inst_full = _E.evaluate(
+        population=X_full,
+        solver=solver_full,
+        chunk_num=None,
+    )
+
+    row_activity_full = _row_activity(X_full, eps=eps)
+    x_full = np.arange(X_full._X_inst.shape[0], dtype=np.int64)
+
+    # ------------------------------------------------------------
+    # 2) two-window path, each chunk on its own clean copy
+    # ------------------------------------------------------------
+    X_two_base, grammar_two = _I.initialize(
+        structure='Intraday',
+        incl_time=True,
+        data_file=data_file,
+        pop_size=pop_size,
+        chunk_size=chunk_size,
+        wf_windows=2,
+        verbose=verbose,
+    )
+
+    # chunk 0 only
+    X_c0 = copy.deepcopy(X_two_base)
+    solver_c0 = _E.Solver(X_c0, **solver_kwargs)
+    eval_c0, inst_c0 = _E.evaluate(
+        population=X_c0,
+        solver=solver_c0,
+        chunk_num=0,
+    )
+    row_activity_c0 = _row_activity(X_c0, eps=eps)
+
+    # chunk 1 only
+    X_c1 = copy.deepcopy(X_two_base)
+    solver_c1 = _E.Solver(X_c1, **solver_kwargs)
+    eval_c1, inst_c1 = _E.evaluate(
+        population=X_c1,
+        solver=solver_c1,
+        chunk_num=1,
+    )
+    row_activity_c1 = _row_activity(X_c1, eps=eps)
+
+    x_two = np.arange(X_two_base._X_inst.shape[0], dtype=np.int64)
+    bounds0 = tuple(map(int, eval_c0["chunk_row_bounds"]))
+    bounds1 = tuple(map(int, eval_c1["chunk_row_bounds"]))
+
+    # ------------------------------------------------------------
+    # prints
+    # ------------------------------------------------------------
+    print("no chunk_num run")
+    print("  chunk bounds used:", eval_full["chunk_row_bounds"])
+    print("  F mean/std:", float(np.nanmean(eval_full["F"])), float(np.nanstd(eval_full["F"])))
+    print("  p mean/std:", float(np.nanmean(eval_full["p"])), float(np.nanstd(eval_full["p"])))
+    print("  q mean/std:", float(np.nanmean(eval_full["q"])), float(np.nanstd(eval_full["q"])))
+    print()
+
+    print("two-window run")
+    print("  chunk 0 bounds:", bounds0)
+    print("  chunk 1 bounds:", bounds1)
+    print("  chunk 0 F mean/std:", float(np.nanmean(eval_c0["F"])), float(np.nanstd(eval_c0["F"])))
+    print("  chunk 1 F mean/std:", float(np.nanmean(eval_c1["F"])), float(np.nanstd(eval_c1["F"])))
+    print("  chunk 0 p mean/std:", float(np.nanmean(eval_c0["p"])), float(np.nanstd(eval_c0["p"])))
+    print("  chunk 1 p mean/std:", float(np.nanmean(eval_c1["p"])), float(np.nanstd(eval_c1["p"])))
+    print("  chunk 0 q mean/std:", float(np.nanmean(eval_c0["q"])), float(np.nanstd(eval_c0["q"])))
+    print("  chunk 1 q mean/std:", float(np.nanmean(eval_c1["q"])), float(np.nanstd(eval_c1["q"])))
+
+    # ------------------------------------------------------------
+    # figure 1: no chunk_num
+    # ------------------------------------------------------------
+    fig1, ax1 = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
+
+    ax1[0].plot(x_full, row_activity_full, lw=1.0)
+    ax1[0].set_ylabel('active gene count')
+    ax1[0].set_title('no chunk_num | row activity after evaluate(..., chunk_num=None)')
+
+    ax1[1].plot(np.asarray(eval_full["F"], dtype=np.float32), lw=1.0, label='F')
+    ax1[1].set_ylabel('fitness')
+    ax1[1].set_xlabel('gene index')
+    ax1[1].legend(loc='upper right')
+
+    plt.tight_layout()
+    plt.show()
+
+    # ------------------------------------------------------------
+    # figure 2: chunk-local instantiation only
+    # ------------------------------------------------------------
+    fig2, ax2 = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
+
+    ax2[0].plot(x_two, row_activity_c0, lw=1.0, label='after chunk 0 only')
+    ax2[0].axvspan(bounds0[0], bounds0[1], alpha=0.15)
+    ax2[0].set_ylabel('active gene count')
+    ax2[0].set_title('two windows | evaluating chunk 0 only should instantiate only chunk 0 rows')
+    ax2[0].legend(loc='upper right')
+
+    ax2[1].plot(x_two, row_activity_c1, lw=1.0, label='after chunk 1 only')
+    ax2[1].axvspan(bounds1[0], bounds1[1], alpha=0.15)
+    ax2[1].set_ylabel('active gene count')
+    ax2[1].set_xlabel('row index')
+    ax2[1].set_title('two windows | evaluating chunk 1 only should instantiate only chunk 1 rows')
+    ax2[1].legend(loc='upper right')
+
+    plt.tight_layout()
+    plt.show()
+
+    # ------------------------------------------------------------
+    # figure 3: chunk-local evaluation outputs
+    # ------------------------------------------------------------
+    fig3, ax3 = plt.subplots(3, 1, figsize=(15, 10), sharex=True)
+
+    ax3[0].plot(np.asarray(eval_full["F"], dtype=np.float32), lw=0.8, alpha=0.7, label='full F')
+    ax3[0].plot(np.asarray(eval_c0["F"], dtype=np.float32), lw=0.9, label='chunk 0 F')
+    ax3[0].plot(np.asarray(eval_c1["F"], dtype=np.float32), lw=0.9, label='chunk 1 F')
+    ax3[0].set_ylabel('F')
+    ax3[0].set_title('gene-wise fitness changes by evaluation window')
+    ax3[0].legend(loc='upper right')
+
+    ax3[1].plot(np.asarray(eval_full["p"], dtype=np.float32), lw=0.8, alpha=0.7, label='full p')
+    ax3[1].plot(np.asarray(eval_c0["p"], dtype=np.float32), lw=0.9, label='chunk 0 p')
+    ax3[1].plot(np.asarray(eval_c1["p"], dtype=np.float32), lw=0.9, label='chunk 1 p')
+    ax3[1].set_ylabel('p')
+    ax3[1].set_title('gene-wise p changes by window')
+    ax3[1].legend(loc='upper right')
+
+    ax3[2].plot(np.asarray(eval_full["q"], dtype=np.float32), lw=0.8, alpha=0.7, label='full q')
+    ax3[2].plot(np.asarray(eval_c0["q"], dtype=np.float32), lw=0.9, label='chunk 0 q')
+    ax3[2].plot(np.asarray(eval_c1["q"], dtype=np.float32), lw=0.9, label='chunk 1 q')
+    ax3[2].set_ylabel('q')
+    ax3[2].set_xlabel('gene index')
+    ax3[2].set_title('gene-wise q changes by window')
+    ax3[2].legend(loc='upper right')
+
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        "no_chunk": {
+            "population": X_full,
+            "grammar": grammar_full,
+            "evaluation": eval_full,
+            "instantiation_stats": inst_full,
+            "row_activity": row_activity_full,
+        },
+        "two_windows": {
+            "base_population": X_two_base,
+            "grammar": grammar_two,
+            "chunk0": {
+                "population": X_c0,
+                "evaluation": eval_c0,
+                "instantiation_stats": inst_c0,
+                "row_activity": row_activity_c0,
+            },
+            "chunk1": {
+                "population": X_c1,
+                "evaluation": eval_c1,
+                "instantiation_stats": inst_c1,
+                "row_activity": row_activity_c1,
+            },
+        },
+    }
