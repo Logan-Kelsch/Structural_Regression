@@ -1,0 +1,128 @@
+{
+  "TimingMethod": 0,
+  "Splits": [
+    {
+      "Time": "01:35:48.4905668",
+      "Name": "T_func op"
+    },
+    {
+      "Time": "13:31:07.4990411",
+      "Name": "MEP Structure"
+    },
+    {
+      "Time": "16:27:12.8292304",
+      "Name": "Instantiate & Null G"
+    },
+    {
+      "Time": "17:20:38.4590822",
+      "Name": "GP Mod Initialization"
+    },
+    {
+      "Time": "1.14:10:21.0951871",
+      "Name": "GP Mod Evaluation"
+    },
+    {
+      "Time": "1.22:12:47.2552194",
+      "Name": "GP Mod Reproduction"
+    },
+    {
+      "Time": "2.16:43:40.0664385",
+      "Name": "GP Self Test Run"
+    },
+    {
+      "Time": "2.17:10:42.9136832",
+      "Name": "Standard Viz Library"
+    },
+    {
+      "Time": null,
+      "Name": "WF Test Run"
+    },
+    {
+      "Time": null,
+      "Name": "Init G Structure"
+    },
+    {
+      "Time": null,
+      "Name": "Init G Iterable"
+    },
+    {
+      "Time": null,
+      "Name": "Grammar Self Test"
+    },
+    {
+      "Time": null,
+      "Name": "WF Init Grammar Test"
+    },
+    {
+      "Time": null,
+      "Name": "Initialization Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Evaluation Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Reproduction Fin"
+    },
+    {
+      "Time": null,
+      "Name": "GP Fin & Shallow Hunt"
+    },
+    {
+      "Time": null,
+      "Name": "More G Structures"
+    },
+    {
+      "Time": null,
+      "Name": "Serialization"
+    },
+    {
+      "Time": null,
+      "Name": "Shallow G Hunt"
+    },
+    {
+      "Time": null,
+      "Name": "Verbosity & Timing"
+    },
+    {
+      "Time": null,
+      "Name": "Init Interface Design"
+    },
+    {
+      "Time": null,
+      "Name": "Init Live Model Perf Viz"
+    },
+    {
+      "Time": null,
+      "Name": "Init Live Structure Viz"
+    },
+    {
+      "Time": null,
+      "Name": "Interface Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Grammar Fin"
+    },
+    {
+      "Time": null,
+      "Name": "Deep Model Hunt"
+    },
+    {
+      "Time": null,
+      "Name": "Methods Survey"
+    },
+    {
+      "Time": null,
+      "Name": "Various Symbol Val"
+    },
+    {
+      "Time": null,
+      "Name": "Compile Results"
+    }
+  ],
+  "CurrentSplitIndex": 8,
+  "CurrentSplitTime": null,
+  "CurrentTime": "2.18:50:15.1354349"
+}

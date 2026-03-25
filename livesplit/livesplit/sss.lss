@@ -1,0 +1,600 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Run version="1.7.0">
+  <GameIcon />
+  <GameName>Structural Regression</GameName>
+  <CategoryName>
+  </CategoryName>
+  <LayoutPath>
+  </LayoutPath>
+  <Metadata>
+    <Run id="" />
+    <Platform usesEmulator="False">
+    </Platform>
+    <Region>
+    </Region>
+    <Variables />
+    <CustomVariables />
+  </Metadata>
+  <Offset>00:00:00</Offset>
+  <AttemptCount>10</AttemptCount>
+  <AttemptHistory>
+    <Attempt id="1" started="01/30/2026 18:42:11" isStartedSynced="True" ended="01/30/2026 18:44:49" isEndedSynced="True">
+      <RealTime>00:02:10.4380869</RealTime>
+      <PauseTime>00:00:28.1517599</PauseTime>
+    </Attempt>
+    <Attempt id="2" started="01/30/2026 18:45:39" isStartedSynced="True" ended="01/30/2026 18:45:42" isEndedSynced="True">
+      <RealTime>00:00:01.6735401</RealTime>
+      <PauseTime>00:00:01.3692979</PauseTime>
+    </Attempt>
+    <Attempt id="3" started="01/30/2026 18:45:44" isStartedSynced="True" ended="01/30/2026 18:45:45" isEndedSynced="True">
+      <RealTime>00:00:00.9616313</RealTime>
+    </Attempt>
+    <Attempt id="4" started="01/30/2026 20:18:41" isStartedSynced="False" ended="01/30/2026 20:19:52" isEndedSynced="True">
+      <PauseTime>00:00:59.4728032</PauseTime>
+    </Attempt>
+    <Attempt id="5" started="01/30/2026 20:23:24" isStartedSynced="False" ended="01/30/2026 20:23:31" isEndedSynced="False">
+      <PauseTime>00:00:04.1692803</PauseTime>
+    </Attempt>
+    <Attempt id="6" started="01/30/2026 20:23:36" isStartedSynced="False" ended="01/30/2026 20:23:55" isEndedSynced="False">
+      <PauseTime>00:00:10.1336580</PauseTime>
+    </Attempt>
+    <Attempt id="7" started="01/30/2026 20:27:21" isStartedSynced="False" ended="01/30/2026 22:52:36" isEndedSynced="True">
+      <PauseTime>01:31:52.6045959</PauseTime>
+    </Attempt>
+    <Attempt id="8" started="02/03/2026 00:21:44" isStartedSynced="False" ended="02/03/2026 00:33:51" isEndedSynced="True">
+      <PauseTime>-01:23:34.4707516</PauseTime>
+    </Attempt>
+    <Attempt id="9" started="02/03/2026 14:29:13" isStartedSynced="False" ended="02/04/2026 03:15:00" isEndedSynced="True">
+      <PauseTime>08:41:16.3606033</PauseTime>
+    </Attempt>
+    <Attempt id="10" started="02/19/2026 16:10:52" isStartedSynced="False" ended="02/19/2026 16:38:25" isEndedSynced="True">
+      <PauseTime>-13:04:01.7662122</PauseTime>
+    </Attempt>
+    <Attempt id="11" started="02/19/2026 16:57:54" isStartedSynced="True" ended="02/19/2026 16:59:16" isEndedSynced="True">
+      <PauseTime>-13:30:14.7668636</PauseTime>
+    </Attempt>
+  </AttemptHistory>
+  <Segments>
+    <Segment>
+      <Name>T_func op</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>03:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>02:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="1">
+          <RealTime>10:00:00</RealTime>
+        </Time>
+        <Time id="2">
+          <RealTime>10:00:00</RealTime>
+        </Time>
+        <Time id="3">
+          <RealTime>10:00:00</RealTime>
+        </Time>
+        <Time id="4">
+          <RealTime>03:00:00</RealTime>
+        </Time>
+        <Time id="6">
+          <RealTime>03:00:00</RealTime>
+        </Time>
+        <Time id="9">
+          <RealTime>02:00:00</RealTime>
+        </Time>
+        <Time id="10">
+          <RealTime>02:00:00</RealTime>
+        </Time>
+        <Time id="11">
+          <RealTime>02:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>MEP Structure</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>11:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>08:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="4">
+          <RealTime>08:00:00</RealTime>
+        </Time>
+        <Time id="10">
+          <RealTime>11:55:19.0084743</RealTime>
+        </Time>
+        <Time id="11">
+          <RealTime>11:55:19.0084743</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Instantiate &amp; Null G</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>17:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>06:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+        <Time id="4">
+          <RealTime>10:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>GP Mod Initialization</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>21:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>04:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>04:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>GP Mod Evaluation</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>1.13:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>16:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>16:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>GP Mod Reproduction</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>1.21:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>08:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>08:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>GP Self Test Run</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>1.23:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>02:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>02:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Standard Viz Library</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>2.02:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>03:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>03:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>WF Test Run</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>2.07:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>05:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>05:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Init G Structure</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>2.11:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>04:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>04:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Init G Iterable</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>2.17:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>06:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Grammar Self Test</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>2.19:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>02:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>02:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>WF Init Grammar Test</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>3.03:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>08:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>08:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Initialization Fin</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>3.09:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>06:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Evaluation Fin</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>4.05:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>20:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>20:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Reproduction Fin</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>4.13:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>08:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>08:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>GP Fin &amp; Shallow Hunt</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>4.19:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>06:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>More G Structures</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>5.19:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>1.00:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>1.00:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Serialization</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>5.23:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>04:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Shallow G Hunt</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>6.05:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>06:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Verbosity &amp; Timing</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>6.08:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>03:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>04:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Init Interface Design</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>6.12:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>04:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Init Live Model Perf Viz</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>6.18:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>06:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Init Live Structure Viz</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>6.22:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>04:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>04:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Interface Fin</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>7.02:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>04:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>04:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Grammar Fin</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>7.08:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>06:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>06:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Deep Model Hunt</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>7.18:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>10:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>10:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Methods Survey</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>8.04:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>10:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>12:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Various Symbol Val</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>8.14:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>10:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>10:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+    <Segment>
+      <Name>Compile Results</Name>
+      <Icon />
+      <SplitTimes>
+        <SplitTime name="Personal Best">
+          <RealTime>9.00:00:00</RealTime>
+        </SplitTime>
+      </SplitTimes>
+      <BestSegmentTime>
+        <RealTime>10:00:00</RealTime>
+      </BestSegmentTime>
+      <SegmentHistory>
+        <Time id="0">
+          <RealTime>10:00:00</RealTime>
+        </Time>
+      </SegmentHistory>
+    </Segment>
+  </Segments>
+  <AutoSplitterSettings />
+</Run>
