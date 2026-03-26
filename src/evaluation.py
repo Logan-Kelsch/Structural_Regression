@@ -2101,6 +2101,1119 @@ def _emission_depends_on_future(emissions, base_offset):
 
 	return emit_dep
 
+import numpy as np
+
+import os
+import numpy as np
+from concurrent.futures import ProcessPoolExecutor
+
+
+import numpy as np
+from concurrent.futures import ProcessPoolExecutor
+
+
+def evaluate_opg_mcpt_fast(
+    population,
+    chunk_num,
+    solver_kwargs=None,
+    solver_class=None,
+    n_sims=2000,
+    template_mode="exact",
+    temperature=1.0,
+    alternative="greater",
+    fill_value=1.0,
+    rng=None,
+    max_pack_retries=64,
+    n_jobs=1,
+    batch_size=None,
+    return_details=False,
+):
+    """
+    Fast shared-null OPG-MCPT evaluation for one chunk.
+
+    This function builds a single OPG null bank from the anomaly geometry on the
+    chosen chunk, then converts each gene's observed return into an empirical
+    Monte Carlo p-value against that shared null.
+
+    The solver is assembled in project style:
+        solver = solver_class(population, **solver_kwargs)
+        raw_emission, evaluation_mask, anomaly_mask = solver.solve(
+            population,
+            chunk_num=chunk_num,
+        )
+
+    Returns
+    -------
+    pvals : np.ndarray, shape (population._max_size,)
+        Full-length p-value array. Only population._G_idx locations are evaluated.
+
+    null_returns : np.ndarray, shape (n_sims,)
+        Shared null distribution values from the Monte Carlo simulations.
+
+    details : dict, optional
+        Returned only when return_details=True.
+    """
+    if solver_class is None:
+        solver_class = Solver
+
+    rng = np.random.default_rng(rng)
+    solver_kwargs = {} if solver_kwargs is None else dict(solver_kwargs)
+
+    solver = solver_class(population, **solver_kwargs)
+    raw_emission, evaluation_mask, anomaly_mask = solver.solve(
+        population,
+        chunk_num=chunk_num,
+    )
+
+    raw_emission = np.asarray(raw_emission, dtype=np.float64).reshape(-1)
+    evaluation_mask = np.asarray(evaluation_mask, dtype=bool).reshape(-1)
+    anomaly_mask = np.asarray(anomaly_mask, dtype=bool).reshape(-1)
+
+    if raw_emission.size != evaluation_mask.size:
+        raise ValueError("raw_emission and evaluation_mask must have the same length")
+    if raw_emission.size != anomaly_mask.size:
+        raise ValueError("raw_emission and anomaly_mask must have the same length")
+
+    X_p = resolve_population_signs(population, chunk_num=chunk_num)
+    R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
+
+    gidx = np.asarray(population._G_idx, dtype=int)
+    max_size = int(population._max_size)
+
+    pvals = np.full(max_size, fill_value, dtype=np.float64)
+    R_full = _opgfast_scatter_gene_values(R, population, fill_value=np.nan)
+
+    opg_mask = anomaly_mask & evaluation_mask
+    m_obs, n_obs = resolve_anomaly_mn(opg_mask)
+    obs_lengths = _opgfast_true_run_lengths(opg_mask)
+
+    if int(obs_lengths.size) != int(m_obs) or int(obs_lengths.sum()) != int(n_obs):
+        m_obs = int(obs_lengths.size)
+        n_obs = int(obs_lengths.sum())
+
+    details = {
+        "raw_emission": raw_emission,
+        "evaluation_mask": evaluation_mask,
+        "anomaly_mask": anomaly_mask,
+        "opg_mask": opg_mask,
+        "X_p": X_p,
+        "R_full": R_full,
+        "gidx": gidx.copy(),
+        "m_obs": int(m_obs),
+        "n_obs": int(n_obs),
+        "obs_lengths": obs_lengths.copy(),
+        "null_returns": None,
+        "n_jobs": int(n_jobs),
+    }
+
+    if m_obs == 0 or n_obs == 0:
+        null_returns = np.empty(0, dtype=np.float64)
+        details["null_returns"] = null_returns
+        if return_details:
+            return pvals, null_returns, details
+        return pvals, null_returns
+
+    seg_starts, seg_lens = _opgfast_segments_from_mask(evaluation_mask)
+    prefix = _opgfast_prefix_sum(raw_emission)
+    template = _opgfast_prepare_template_sampler(
+        obs_lengths=obs_lengths,
+        mode=template_mode,
+        temperature=temperature,
+    )
+
+    null_returns = _opgfast_generate_null_returns(
+        prefix=prefix,
+        seg_starts=seg_starts,
+        seg_lens=seg_lens,
+        template=template,
+        n_sims=int(n_sims),
+        max_pack_retries=int(max_pack_retries),
+        rng=rng,
+        n_jobs=int(n_jobs),
+        batch_size=batch_size,
+    )
+
+    for gi in gidx:
+        obs_return = R_full[gi]
+        pvals[gi] = _opgfast_mcpt_p_value(
+            observed=obs_return,
+            null=null_returns,
+            alternative=alternative,
+        )
+
+    details["null_returns"] = null_returns
+
+    if return_details:
+        return pvals, null_returns, details
+    return pvals, null_returns
+
+
+def _opgfast_generate_null_returns(
+    prefix,
+    seg_starts,
+    seg_lens,
+    template,
+    n_sims,
+    max_pack_retries,
+    rng,
+    n_jobs=1,
+    batch_size=None,
+):
+    """
+    Generate the shared null return bank.
+
+    This is parallel-safe because each simulation is conditionally independent
+    given the shared template and legal segment metadata.
+    """
+    if n_sims <= 0:
+        return np.empty(0, dtype=np.float64)
+
+    if n_jobs <= 1:
+        out = np.empty(n_sims, dtype=np.float64)
+        for i in range(n_sims):
+            lengths = _opgfast_draw_template_lengths_prepared(template, rng)
+            out[i] = _opgfast_sample_null_return_once(
+                prefix=prefix,
+                seg_starts=seg_starts,
+                seg_lens=seg_lens,
+                block_lengths=lengths,
+                rng=rng,
+                max_pack_retries=max_pack_retries,
+            )
+        return out
+
+    if batch_size is None:
+        batch_size = max(8, int(np.ceil(n_sims / (n_jobs * 4))))
+
+    sizes = []
+    remain = n_sims
+    while remain > 0:
+        take = min(batch_size, remain)
+        sizes.append(take)
+        remain -= take
+
+    seeds = rng.integers(0, np.iinfo(np.uint64).max, size=len(sizes), dtype=np.uint64)
+
+    args = [
+        (
+            prefix,
+            seg_starts,
+            seg_lens,
+            template,
+            int(sz),
+            int(max_pack_retries),
+            int(seed),
+        )
+        for sz, seed in zip(sizes, seeds)
+    ]
+
+    with ProcessPoolExecutor(max_workers=n_jobs) as ex:
+        batches = list(ex.map(_opgfast_null_worker_batch, args))
+
+    return np.concatenate(batches, axis=0)
+
+
+def _opgfast_null_worker_batch(args):
+    """
+    Worker batch for multiprocessing null generation.
+    """
+    prefix, seg_starts, seg_lens, template, batch_n, max_pack_retries, seed = args
+    rng = np.random.default_rng(seed)
+
+    out = np.empty(batch_n, dtype=np.float64)
+    for i in range(batch_n):
+        lengths = _opgfast_draw_template_lengths_prepared(template, rng)
+        out[i] = _opgfast_sample_null_return_once(
+            prefix=prefix,
+            seg_starts=seg_starts,
+            seg_lens=seg_lens,
+            block_lengths=lengths,
+            rng=rng,
+            max_pack_retries=max_pack_retries,
+        )
+    return out
+
+
+def _opgfast_sample_null_return_once(
+    prefix,
+    seg_starts,
+    seg_lens,
+    block_lengths,
+    rng,
+    max_pack_retries=64,
+):
+    """
+    Sample one null return directly from interval sums.
+
+    This avoids building a full boolean simulated mask. The return of each block
+    is scored by prefix sums:
+        sum(raw_emission[start:start+L]) = prefix[start+L] - prefix[start]
+    """
+    block_lengths = np.asarray(block_lengths, dtype=np.int32)
+    if block_lengths.size == 0:
+        return 0.0
+
+    n_seg = seg_starts.size
+    seg_used = np.zeros(n_seg, dtype=np.int32)   # total occupied by blocks only
+    seg_k = np.zeros(n_seg, dtype=np.int32)      # number of blocks assigned
+    seg_blocks = [[] for _ in range(n_seg)]
+
+    # assign long blocks first
+    order = np.argsort(block_lengths)[::-1]
+    blocks = block_lengths[order]
+
+    for _ in range(max_pack_retries):
+        for i in range(n_seg):
+            seg_used[i] = 0
+            seg_k[i] = 0
+            seg_blocks[i].clear()
+
+        ok = True
+
+        for L in blocks:
+            feasible = []
+            weights = []
+
+            for i in range(n_seg):
+                # after adding one block, minimum required length is:
+                # existing block sum + new block + internal separators count
+                # separators count becomes seg_k[i] after the add
+                required = seg_used[i] + L + seg_k[i]
+                if required <= seg_lens[i]:
+                    feasible.append(i)
+                    weights.append((seg_lens[i] - required) + 1)
+
+            if not feasible:
+                ok = False
+                break
+
+            feasible = np.asarray(feasible, dtype=np.int32)
+            weights = np.asarray(weights, dtype=np.float64)
+            weights /= weights.sum()
+
+            pick = int(rng.choice(feasible, p=weights))
+            seg_blocks[pick].append(int(L))
+            seg_used[pick] += int(L)
+            seg_k[pick] += 1
+
+        if ok:
+            break
+
+    if not ok:
+        raise RuntimeError(
+            "OPG fast sampler could not assign blocks to legal segments. "
+            "Increase max_pack_retries or simplify the anomaly geometry."
+        )
+
+    total_return = 0.0
+
+    for seg_id in range(n_seg):
+        if not seg_blocks[seg_id]:
+            continue
+
+        blk = np.asarray(seg_blocks[seg_id], dtype=np.int32)
+        rng.shuffle(blk)
+
+        k = blk.size
+        used = int(blk.sum())
+        min_required = used + (k - 1)
+        extra = int(seg_lens[seg_id] - min_required)
+
+        if extra < 0:
+            raise RuntimeError("Segment received an infeasible block assignment.")
+
+        gaps = _opgfast_random_composition(extra, k + 1, rng)
+
+        pos = int(seg_starts[seg_id] + gaps[0])
+
+        for j, L in enumerate(blk):
+            total_return += prefix[pos + L] - prefix[pos]
+            pos += int(L)
+            if j < k - 1:
+                pos += 1 + int(gaps[j + 1])
+
+    return float(total_return)
+
+
+def _opgfast_prepare_template_sampler(obs_lengths, mode="exact", temperature=1.0):
+    """
+    Prepare the length sampler once so expensive template setup is not repeated
+    every simulation.
+    """
+    obs_lengths = np.asarray(obs_lengths, dtype=np.int32)
+
+    if obs_lengths.size == 0:
+        return {
+            "mode": "exact",
+            "obs_lengths": obs_lengths.copy(),
+            "m": 0,
+            "n": 0,
+        }
+
+    m = int(obs_lengths.size)
+    n = int(obs_lengths.sum())
+
+    if mode == "exact":
+        return {
+            "mode": "exact",
+            "obs_lengths": obs_lengths.copy(),
+            "m": m,
+            "n": n,
+        }
+
+    support, counts = np.unique(obs_lengths, return_counts=True)
+    support = support.astype(np.int32)
+    counts = counts.astype(np.float64)
+
+    if mode == "empirical":
+        probs = counts / counts.sum()
+
+    elif mode == "softmax":
+        logits = np.log(counts + 1e-12) / float(temperature)
+        logits -= logits.max()
+        probs = np.exp(logits)
+        probs /= probs.sum()
+
+    else:
+        raise ValueError('template_mode must be "exact", "empirical", or "softmax"')
+
+    feasible = _opgfast_build_feasible_table(
+        support=support,
+        m=m,
+        n=n,
+    )
+
+    if not feasible[m, n]:
+        raise RuntimeError("Could not build a feasible length sampler for the requested m and n.")
+
+    return {
+        "mode": mode,
+        "obs_lengths": obs_lengths.copy(),
+        "support": support,
+        "probs": probs.astype(np.float64),
+        "feasible": feasible,
+        "m": m,
+        "n": n,
+    }
+
+
+def _opgfast_draw_template_lengths_prepared(template, rng):
+    """
+    Draw one simulated set of block lengths from a prepared template.
+    """
+    mode = template["mode"]
+
+    if mode == "exact":
+        out = template["obs_lengths"].copy()
+        rng.shuffle(out)
+        return out
+
+    support = template["support"]
+    probs = template["probs"]
+    feasible = template["feasible"]
+    rem_m = int(template["m"])
+    rem_n = int(template["n"])
+
+    out = np.empty(rem_m, dtype=np.int32)
+
+    for i in range(rem_m):
+        valid = (support <= rem_n) & feasible[rem_m - 1 - i, rem_n - support]
+        idx = np.flatnonzero(valid)
+
+        if idx.size == 0:
+            raise RuntimeError("Prepared length sampler reached an infeasible state.")
+
+        p = probs[idx].copy()
+        p /= p.sum()
+
+        pick_j = int(rng.choice(idx, p=p))
+        pick_s = int(support[pick_j])
+
+        out[i] = pick_s
+        rem_n -= pick_s
+
+    rng.shuffle(out)
+    return out
+
+
+def _opgfast_build_feasible_table(support, m, n):
+    """
+    DP feasibility table for drawing m positive lengths with exact total n
+    from the supplied support.
+    """
+    support = np.asarray(support, dtype=np.int32)
+
+    feasible = np.zeros((m + 1, n + 1), dtype=bool)
+    feasible[0, 0] = True
+
+    for i in range(1, m + 1):
+        for t in range(1, n + 1):
+            ok = False
+            for s in support:
+                if s > t:
+                    break
+                if feasible[i - 1, t - s]:
+                    ok = True
+                    break
+            feasible[i, t] = ok
+
+    return feasible
+
+
+def _opgfast_prefix_sum(x):
+    """
+    Prefix sum with leading zero for O(1) interval scoring.
+    """
+    x = np.asarray(x, dtype=np.float64).reshape(-1)
+    out = np.empty(x.size + 1, dtype=np.float64)
+    out[0] = 0.0
+    out[1:] = np.cumsum(x)
+    return out
+
+
+def _opgfast_segments_from_mask(mask):
+    """
+    Convert a legal evaluation mask into segment starts and lengths.
+    """
+    segs = _opgfast_true_segments(mask)
+    if not segs:
+        return np.empty(0, dtype=np.int32), np.empty(0, dtype=np.int32)
+
+    starts = np.array([a for a, _ in segs], dtype=np.int32)
+    lens = np.array([b - a for a, b in segs], dtype=np.int32)
+    return starts, lens
+
+
+def _opgfast_true_segments(mask):
+    """
+    Return contiguous True segments as (start, stop_exclusive) pairs.
+    """
+    mask = np.asarray(mask, dtype=bool)
+    if mask.size == 0:
+        return []
+
+    x = mask.astype(np.int8)
+    d = np.diff(np.r_[0, x, 0])
+    starts = np.flatnonzero(d == 1)
+    stops = np.flatnonzero(d == -1)
+    return list(zip(starts, stops))
+
+
+def _opgfast_true_run_lengths(mask):
+    """
+    Return lengths of contiguous True runs.
+    """
+    segs = _opgfast_true_segments(mask)
+    if not segs:
+        return np.empty(0, dtype=np.int32)
+    return np.array([b - a for a, b in segs], dtype=np.int32)
+
+
+def _opgfast_random_composition(total, parts, rng):
+    """
+    Uniform random weak composition of 'total' into 'parts' nonnegative integers.
+    """
+    if parts <= 0:
+        raise ValueError("parts must be positive")
+    if total < 0:
+        raise ValueError("total must be nonnegative")
+    if parts == 1:
+        return np.array([total], dtype=np.int32)
+
+    # stars and bars
+    picks = np.sort(
+        rng.choice(total + parts - 1, size=parts - 1, replace=False)
+    )
+    comp = np.diff(np.r_[-1, picks, total + parts - 1]) - 1
+    return comp.astype(np.int32)
+
+
+def _opgfast_mcpt_p_value(observed, null, alternative="greater"):
+    """
+    Empirical Monte Carlo p-value with +1 correction.
+    """
+    null = np.asarray(null, dtype=np.float64)
+
+    if alternative == "greater":
+        return (1.0 + np.sum(null >= observed)) / (null.size + 1.0)
+
+    if alternative == "less":
+        return (1.0 + np.sum(null <= observed)) / (null.size + 1.0)
+
+    if alternative == "two-sided":
+        mu = float(np.mean(null))
+        obs_dev = abs(observed - mu)
+        null_dev = np.abs(null - mu)
+        return (1.0 + np.sum(null_dev >= obs_dev)) / (null.size + 1.0)
+
+    raise ValueError('alternative must be "greater", "less", or "two-sided"')
+
+
+def _opgfast_scatter_gene_values(values, population, fill_value=np.nan):
+    """
+    Scatter gene-aligned values into full population index space.
+
+    Supports:
+        len(values) == population._max_size
+        len(values) == len(population._G_idx)
+    """
+    values = np.asarray(values, dtype=np.float64).reshape(-1)
+    gidx = np.asarray(population._G_idx, dtype=int)
+    max_size = int(population._max_size)
+
+    if values.size == max_size:
+        return values.copy()
+
+    if values.size != gidx.size:
+        raise ValueError(
+            "Gene value array must be length population._max_size or len(population._G_idx)"
+        )
+
+    out = np.full(max_size, fill_value, dtype=np.float64)
+    out[gidx] = values
+    return out
+
+def evaluate_opg_mcpt(
+    population,
+    chunk_num,
+    solver_kwargs=None,
+    solver_class=Solver,
+    n_sims=2000,
+    template_mode="exact",
+    temperature=1.0,
+    alternative="greater",
+    fill_value=1.0,
+    rng=None,
+    max_pack_retries=256,
+    return_details=False,
+):
+    """
+    Evaluate shared OPG-MCPT p-values for all genes on one chunk.
+
+    This function builds a single chunk-level OPG null from the anomaly geometry
+    produced by a solver, then evaluates every gene in population._G_idx against
+    that same null bank.
+
+    The intended use is:
+        solver = solver_class(population, **solver_kwargs)
+        raw_emission, evaluation_mask, anomaly_mask = solver.solve(population, chunk_num=chunk_num)
+
+    The anomaly mask defines the observed optimal participation geometry template:
+        - m = number of consecutive anomaly events
+        - n = total anomaly-true count
+        - run-length distribution of those m events
+
+    A shared null bank is then formed by generating legal random placements that
+    follow that geometry template, and each gene's observed return is converted
+    into an empirical Monte Carlo p-value relative to that null.
+
+    Parameters
+    ----------
+    population : _I.Population
+        Population object to evaluate.
+
+    chunk_num : int | None
+        Chunk index to evaluate. This is passed into both solver.solve(...) and
+        resolve_population_signs(...). If None, the solver/sign resolver should
+        interpret that as full-axis evaluation.
+
+    solver_kwargs : dict | None, default=None
+        Keyword arguments used to assemble the solver exactly as:
+            solver = solver_class(population, **solver_kwargs)
+        These are the same parameters your Solver.__init__ accepts, such as:
+            t_vec, t_mode, emission, offset, AD_cond
+
+    solver_class : type, default=Solver
+        Solver-like class used to resolve raw_emission, evaluation_mask, and
+        anomaly_mask. It must support:
+            solver = solver_class(population, **solver_kwargs)
+            raw_emission, evaluation_mask, anomaly_mask = solver.solve(population, chunk_num=chunk_num)
+
+        In your project this is typically _E.Solver.
+
+    n_sims : int, default=2000
+        Number of Monte Carlo null permutations to generate.
+
+    template_mode : {"exact", "empirical", "softmax"}, default="exact"
+        How to generate simulated OPG block lengths from the observed anomaly
+        run-length distribution.
+
+        "exact":
+            Preserve the exact observed run lengths and only randomize placement.
+        "empirical":
+            Sample run lengths from the empirical observed pmf while forcing the
+            simulated geometry to keep the same m and n.
+        "softmax":
+            Same as empirical, but the pmf is softened via a softmax over the
+            observed run-length counts using the provided temperature.
+
+    temperature : float, default=1.0
+        Softmax temperature used only when template_mode == "softmax".
+        Lower values make the distribution sharper around more frequent run lengths.
+
+    alternative : {"greater", "less", "two-sided"}, default="greater"
+        Tail used for the empirical p-value.
+        For trading-style positive-is-better returns, "greater" is usually correct.
+
+    fill_value : float, default=1.0
+        Value assigned to indices not in population._G_idx.
+        For literal p-values, 1.0 is usually the worst logical value.
+
+    rng : None, int, or np.random.Generator, default=None
+        Random source for Monte Carlo sampling.
+
+    max_pack_retries : int, default=256
+        Maximum retries when placing simulated OPG blocks into legal evaluation
+        locations while preserving exact block count and block lengths.
+
+    return_details : bool, default=False
+        If False, return only the full-length p-value array.
+        If True, also return a details dict containing intermediate objects such
+        as observed m/n, observed run lengths, raw observed returns, and null returns.
+
+    Returns
+    -------
+    pvals : np.ndarray, shape (population._max_size,)
+        Full-length p-value vector. Indices not in population._G_idx are set to
+        fill_value. Indices in population._G_idx receive their shared-null OPG-MCPT
+        empirical p-values.
+
+    details : dict, optional
+        Returned only when return_details=True. Includes:
+            raw_emission
+            evaluation_mask
+            anomaly_mask
+            X_p
+            R_full
+            gidx
+            m_obs
+            n_obs
+            obs_lengths
+            null_returns
+    """
+    rng = np.random.default_rng(rng)
+    solver_kwargs = {} if solver_kwargs is None else dict(solver_kwargs)
+
+    # build solver the way your project does it
+    solver = solver_class(population, **solver_kwargs)
+
+    # solver returns chunk-local arrays in your shown implementation
+    raw_emission, evaluation_mask, anomaly_mask = solver.solve(
+        population,
+        chunk_num=chunk_num,
+    )
+
+    raw_emission = np.asarray(raw_emission, dtype=float).reshape(-1)
+    evaluation_mask = np.asarray(evaluation_mask, dtype=bool).reshape(-1)
+    anomaly_mask = np.asarray(anomaly_mask, dtype=bool).reshape(-1)
+
+    if raw_emission.shape[0] != evaluation_mask.shape[0]:
+        raise ValueError("raw_emission and evaluation_mask do not share the same length")
+    if raw_emission.shape[0] != anomaly_mask.shape[0]:
+        raise ValueError("raw_emission and anomaly_mask do not share the same length")
+
+    # gene participation and observed returns from your existing project functions
+    X_p = resolve_population_signs(population, chunk_num=chunk_num)
+    R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
+
+    gidx = np.asarray(population._G_idx, dtype=int)
+    max_size = int(population._max_size)
+
+    pvals = np.full(max_size, fill_value, dtype=float)
+    R_full = _scatter_gene_values_to_full(R, population, fill_value=np.nan)
+
+    # use only legal anomaly positions for the OPG template
+    opg_mask = anomaly_mask & evaluation_mask
+
+    # context-consistent call
+    m_obs, n_obs = resolve_anomaly_mn(opg_mask)
+
+    # actual run lengths from the legal anomaly geometry
+    obs_lengths = _true_run_lengths(opg_mask)
+
+    # keep counts consistent with the geometry actually being permuted
+    if int(obs_lengths.size) != int(m_obs) or int(obs_lengths.sum()) != int(n_obs):
+        m_obs = int(obs_lengths.size)
+        n_obs = int(obs_lengths.sum())
+
+    details = {
+        "raw_emission": raw_emission,
+        "evaluation_mask": evaluation_mask,
+        "anomaly_mask": anomaly_mask,
+        "opg_mask": opg_mask,
+        "X_p": X_p,
+        "R_full": R_full,
+        "gidx": gidx.copy(),
+        "m_obs": int(m_obs),
+        "n_obs": int(n_obs),
+        "obs_lengths": obs_lengths.copy(),
+        "null_returns": None,
+    }
+
+    if m_obs == 0 or n_obs == 0:
+        if return_details:
+            return pvals, details
+        return pvals
+
+    legal_segments = _true_segments(evaluation_mask)
+    chunk_len = raw_emission.shape[0]
+
+    # one shared null bank for the whole chunk
+    null_returns = np.empty(int(n_sims), dtype=float)
+
+    for s in range(int(n_sims)):
+        sim_lengths = _draw_opg_template_lengths(
+            obs_lengths=obs_lengths,
+            mode=template_mode,
+            temperature=temperature,
+            rng=rng,
+        )
+
+        sim_mask = _sample_block_mask_on_legal_segments(
+            chunk_len=chunk_len,
+            legal_segments=legal_segments,
+            block_lengths=sim_lengths,
+            rng=rng,
+            max_retries=max_pack_retries,
+        )
+
+        # shared-null return statistic aligned to evaluate_return style
+        null_returns[s] = float(raw_emission[sim_mask].sum())
+
+    # convert observed returns to empirical p-values only at _G_idx
+    for gi in gidx:
+        obs_return = R_full[gi]
+        pvals[gi] = _mcpt_p_value(
+            observed=obs_return,
+            null=null_returns,
+            alternative=alternative,
+        )
+
+    details["null_returns"] = null_returns
+
+    if return_details:
+        return pvals, details
+    return pvals
+
+
+def _scatter_gene_values_to_full(values, population, fill_value=np.nan):
+    """
+    Scatter a gene-value vector into full population index space.
+
+    Supports either:
+        - values already shaped as (population._max_size,)
+        - values shaped as (len(population._G_idx),)
+
+    Returns
+    -------
+    out : np.ndarray, shape (population._max_size,)
+    """
+    values = np.asarray(values, dtype=float).reshape(-1)
+    gidx = np.asarray(population._G_idx, dtype=int)
+    max_size = int(population._max_size)
+
+    if values.size == max_size:
+        return values.copy()
+
+    if values.size != gidx.size:
+        raise ValueError(
+            "Gene value array must be length population._max_size or len(population._G_idx)"
+        )
+
+    out = np.full(max_size, fill_value, dtype=float)
+    out[gidx] = values
+    return out
+
+
+def _mcpt_p_value(observed, null, alternative="greater"):
+    """
+    Empirical Monte Carlo p-value with +1 correction.
+    """
+    null = np.asarray(null, dtype=float)
+
+    if alternative == "greater":
+        return (1.0 + np.sum(null >= observed)) / (null.size + 1.0)
+
+    if alternative == "less":
+        return (1.0 + np.sum(null <= observed)) / (null.size + 1.0)
+
+    if alternative == "two-sided":
+        mu = float(np.mean(null))
+        obs_dev = abs(observed - mu)
+        null_dev = np.abs(null - mu)
+        return (1.0 + np.sum(null_dev >= obs_dev)) / (null.size + 1.0)
+
+    raise ValueError("alternative must be 'greater', 'less', or 'two-sided'")
+
+
+def _true_segments(mask):
+    """
+    Return contiguous True segments as (start, stop_exclusive) pairs.
+    """
+    mask = np.asarray(mask, dtype=bool)
+    if mask.size == 0:
+        return []
+
+    x = mask.astype(np.int8)
+    d = np.diff(np.r_[0, x, 0])
+    starts = np.flatnonzero(d == 1)
+    stops = np.flatnonzero(d == -1)
+    return list(zip(starts, stops))
+
+
+def _true_run_lengths(mask):
+    """
+    Return lengths of contiguous True runs in the supplied boolean mask.
+    """
+    segs = _true_segments(mask)
+    if not segs:
+        return np.empty(0, dtype=int)
+    return np.array([b - a for a, b in segs], dtype=int)
+
+
+def _draw_opg_template_lengths(obs_lengths, mode, temperature, rng):
+    """
+    Draw simulated OPG block lengths from the observed anomaly geometry.
+
+    Modes
+    -----
+    exact:
+        keep exact observed run lengths, only shuffled
+    empirical:
+        sample from empirical run-length pmf while forcing exact observed m and n
+    softmax:
+        same as empirical, but smooth counts through a softmax temperature
+    """
+    obs_lengths = np.asarray(obs_lengths, dtype=int)
+
+    if obs_lengths.size == 0:
+        return obs_lengths.copy()
+
+    if mode == "exact":
+        out = obs_lengths.copy()
+        rng.shuffle(out)
+        return out
+
+    support, counts = np.unique(obs_lengths, return_counts=True)
+    support = support.astype(int)
+    counts = counts.astype(float)
+
+    if mode == "empirical":
+        probs = counts / counts.sum()
+
+    elif mode == "softmax":
+        logits = np.log(counts + 1e-12) / float(temperature)
+        logits -= logits.max()
+        probs = np.exp(logits)
+        probs /= probs.sum()
+
+    else:
+        raise ValueError('template_mode must be "exact", "empirical", or "softmax"')
+
+    return _sample_lengths_fixed_m_fixed_n(
+        support=support,
+        probs=probs,
+        m=int(obs_lengths.size),
+        n=int(obs_lengths.sum()),
+        rng=rng,
+    )
+
+
+def _sample_lengths_fixed_m_fixed_n(support, probs, m, n, rng):
+    """
+    Sample m positive block lengths from support with probabilities probs,
+    conditioned on the exact total sum n.
+
+    This preserves the observed anomaly geometry counts:
+        number of blocks = m
+        total active count = n
+    """
+    support = np.asarray(support, dtype=int)
+    probs = np.asarray(probs, dtype=float)
+
+    if support.ndim != 1 or probs.ndim != 1 or support.size != probs.size:
+        raise ValueError("support and probs must be 1D and same length")
+    if np.any(support <= 0):
+        raise ValueError("support lengths must be positive")
+
+    feasible = np.zeros((m + 1, n + 1), dtype=bool)
+    feasible[0, 0] = True
+
+    for i in range(1, m + 1):
+        for t in range(1, n + 1):
+            ok = False
+            for s in support:
+                if t >= s and feasible[i - 1, t - s]:
+                    ok = True
+                    break
+            feasible[i, t] = ok
+
+    if not feasible[m, n]:
+        raise RuntimeError("Could not sample lengths with the requested fixed m and n")
+
+    out = np.empty(m, dtype=int)
+    rem_m = m
+    rem_n = n
+
+    for i in range(m):
+        candidate_idx = []
+        for j, s in enumerate(support):
+            if rem_n >= s and feasible[rem_m - 1, rem_n - s]:
+                candidate_idx.append(j)
+
+        candidate_idx = np.asarray(candidate_idx, dtype=int)
+        p = probs[candidate_idx]
+        p /= p.sum()
+
+        pick_j = int(rng.choice(candidate_idx, p=p))
+        pick_s = int(support[pick_j])
+
+        out[i] = pick_s
+        rem_m -= 1
+        rem_n -= pick_s
+
+    rng.shuffle(out)
+    return out
+
+
+import numpy as np
+
+
+def _sample_block_mask_on_legal_segments(
+    chunk_len,
+    legal_segments,
+    block_lengths,
+    rng,
+    max_retries=256,
+):
+    """
+    Fast sampler for placing non-touching blocks into legal segments.
+
+    Preserves:
+        - exact block count
+        - exact block lengths
+        - non-touching blocks within a segment
+
+    Strategy:
+        1) assign blocks to feasible legal segments
+        2) within each segment, sample slack allocation across gaps
+    """
+    block_lengths = np.asarray(block_lengths, dtype=int)
+
+    if block_lengths.size == 0:
+        return np.zeros(chunk_len, dtype=bool)
+
+    seg_lens = np.array([b - a for a, b in legal_segments], dtype=int)
+
+    if block_lengths.sum() > seg_lens.sum():
+        raise RuntimeError("Block lengths exceed legal evaluation capacity")
+
+    # sort long blocks first for easier packing
+    order = np.argsort(block_lengths)[::-1]
+    blocks = block_lengths[order]
+
+    for _ in range(max_retries):
+        # per segment: list of assigned block lengths
+        seg_blocks = [[] for _ in legal_segments]
+        seg_used = np.zeros(len(legal_segments), dtype=int)   # sum of block lengths
+        seg_k = np.zeros(len(legal_segments), dtype=int)      # number of blocks
+
+        ok = True
+
+        # assign each block to a feasible segment
+        for L in blocks:
+            feasible = []
+            weights = []
+
+            for i, S in enumerate(seg_lens):
+                # if we add one more block, required length is:
+                # current sum + L + (new_k - 1)
+                new_k = seg_k[i] + 1
+                required = seg_used[i] + L + max(new_k - 1, 0)
+                if required <= S:
+                    feasible.append(i)
+                    # prefer segments with more remaining slack
+                    slack = S - required
+                    weights.append(slack + 1)
+
+            if not feasible:
+                ok = False
+                break
+
+            feasible = np.asarray(feasible, dtype=int)
+            weights = np.asarray(weights, dtype=float)
+            weights /= weights.sum()
+
+            pick = int(rng.choice(feasible, p=weights))
+
+            seg_blocks[pick].append(int(L))
+            seg_used[pick] += int(L)
+            seg_k[pick] += 1
+
+        if not ok:
+            continue
+
+        placed = np.zeros(chunk_len, dtype=bool)
+
+        # now sample exact positions within each segment using random gaps
+        for seg_id, blk_list in enumerate(seg_blocks):
+            if not blk_list:
+                continue
+
+            a, b = legal_segments[seg_id]
+            S = b - a
+            blk = np.array(blk_list, dtype=int)
+
+            # randomize order of blocks within the segment
+            rng.shuffle(blk)
+
+            k = blk.size
+            min_required = blk.sum() + (k - 1)
+            extra = S - min_required
+
+            if extra < 0:
+                ok = False
+                break
+
+            # distribute extra slack across k+1 gaps
+            # gaps = [g0, g1, ..., gk], all >= 0
+            # actual internal gaps become 1 + gi
+            gaps = _random_composition(extra, k + 1, rng)
+
+            pos = a + gaps[0]
+            for j, L in enumerate(blk):
+                placed[pos:pos + L] = True
+                pos += L
+                if j < k - 1:
+                    pos += 1 + gaps[j + 1]
+                else:
+                    pos += gaps[j + 1]
+
+        if ok:
+            return placed
+
+    raise RuntimeError(
+        "Failed to place simulated OPG blocks into legal chunk positions. "
+        "Increase max_retries or simplify the template."
+    )
+
+
+def _random_composition(total, parts, rng):
+    """
+    Sample a random composition of 'total' into 'parts' nonnegative integers.
+    Returns an array of length 'parts' summing to 'total'.
+    """
+    if parts <= 0:
+        raise ValueError("parts must be positive")
+    if total < 0:
+        raise ValueError("total must be nonnegative")
+    if parts == 1:
+        return np.array([total], dtype=int)
+    # stars and bars via sorted cut points
+    cuts = np.sort(rng.integers(0, total + parts - 1, size=parts - 1))
+    arr = np.diff(np.r_[-1, cuts, total + parts - 1]) - 1
+    return arr.astype(int)
+
 
 #NOTE VARIOUS EMISSIONS
 

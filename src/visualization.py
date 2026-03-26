@@ -847,6 +847,132 @@ import matplotlib.pyplot as plt
 import initialization as _I
 import evaluation as _E
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def visualize_opg_mcpt_distribution(
+    population,
+    null_returns,
+    details,
+    gene_indices=None,
+    use_gidx=True,
+    bins=60,
+    density=False,
+    top_n=None,
+    sort_by="return",
+    include_fill=False,
+    line_alpha=0.2,
+    line_width=1.0,
+    title="OPG-MCPT Null Distribution with Gene Returns",
+):
+    """
+    Plot the shared OPG null distribution as a histogram and overlay gene observed
+    returns as vertical lines.
+
+    Parameters
+    ----------
+    population : _I.Population
+        Population object. Used mainly for index context.
+
+    null_returns : np.ndarray
+        Shared null distribution returned by evaluate_opg_mcpt_fast.
+
+    details : dict
+        Details dict returned by evaluate_opg_mcpt_fast(return_details=True).
+        Must contain:
+            "R_full"
+            "gidx"
+
+    gene_indices : array_like | None, default=None
+        Explicit gene indices to overlay. If None, behavior is controlled by
+        use_gidx.
+
+    use_gidx : bool, default=True
+        If gene_indices is None and this is True, overlay only population._G_idx.
+        If False, overlay all non-NaN locations in details["R_full"].
+
+    bins : int, default=60
+        Histogram bin count.
+
+    density : bool, default=False
+        Passed to plt.hist(...).
+
+    top_n : int | None, default=None
+        If provided, only plot the top_n genes after sorting.
+
+    sort_by : {"return", "abs_return"}, default="return"
+        How to rank genes when top_n is used.
+
+    include_fill : bool, default=False
+        If False, ignore non-finite return values.
+
+    line_alpha : float, default=0.2
+        Alpha for gene vertical lines.
+
+    line_width : float, default=1.0
+        Width for gene vertical lines.
+
+    title : str, default="OPG-MCPT Null Distribution with Gene Returns"
+        Plot title.
+
+    Returns
+    -------
+    gene_idx_used : np.ndarray
+        Indices of the genes actually plotted.
+
+    gene_returns_used : np.ndarray
+        Observed returns corresponding to gene_idx_used.
+    """
+    null_returns = np.asarray(null_returns, dtype=float).reshape(-1)
+    R_full = np.asarray(details["R_full"], dtype=float).reshape(-1)
+    gidx = np.asarray(details["gidx"], dtype=int)
+
+    if gene_indices is None:
+        if use_gidx:
+            gene_idx_used = gidx.copy()
+        else:
+            gene_idx_used = np.flatnonzero(np.isfinite(R_full))
+    else:
+        gene_idx_used = np.asarray(gene_indices, dtype=int).reshape(-1)
+
+    gene_returns_used = R_full[gene_idx_used]
+
+    if not include_fill:
+        keep = np.isfinite(gene_returns_used)
+        gene_idx_used = gene_idx_used[keep]
+        gene_returns_used = gene_returns_used[keep]
+
+    if top_n is not None and gene_returns_used.size > top_n:
+        if sort_by == "return":
+            order = np.argsort(gene_returns_used)[::-1]
+        elif sort_by == "abs_return":
+            order = np.argsort(np.abs(gene_returns_used))[::-1]
+        else:
+            raise ValueError('sort_by must be "return" or "abs_return"')
+
+        order = order[:top_n]
+        gene_idx_used = gene_idx_used[order]
+        gene_returns_used = gene_returns_used[order]
+
+    plt.figure(figsize=(10, 6))
+    plt.hist(null_returns, bins=bins, density=density)
+
+    ymin, ymax = plt.ylim()
+
+    for x in gene_returns_used:
+        plt.vlines(x, ymin=0.0, ymax=ymax, alpha=line_alpha, linewidth=line_width)
+
+    if null_returns.size > 0:
+        plt.axvline(np.mean(null_returns), linestyle="--", linewidth=1.5, label="Null Mean")
+
+    plt.title(title)
+    plt.xlabel("Return")
+    plt.ylabel("Density" if density else "Count")
+    plt.legend()
+    plt.show()
+
+    return gene_idx_used, gene_returns_used
 
 def demo_chunk_scope(
     data_file: str = '../data/spy5m.csv',
