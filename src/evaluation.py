@@ -2115,6 +2115,7 @@ from concurrent.futures import ProcessPoolExecutor
 def evaluate_opg_mcpt_fast(
     population,
     chunk_num,
+	survivor_idx,
     solver_kwargs=None,
     solver_class=None,
     n_sims=2000,
@@ -2177,7 +2178,7 @@ def evaluate_opg_mcpt_fast(
     X_p = resolve_population_signs(population, chunk_num=chunk_num)
     R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
 
-    gidx = np.asarray(population._G_idx, dtype=int)
+    gidx = np.asarray(survivor_idx, dtype=int)
     max_size = int(population._max_size)
 
     pvals = np.full(max_size, fill_value, dtype=np.float64)
