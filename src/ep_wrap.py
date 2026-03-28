@@ -1,3 +1,4 @@
+from __future__ import annotations
 import reproduction as _R
 import initialization as _I
 import evaluation as _E
@@ -49,6 +50,446 @@ class Walker:
             return False
 
 
+
+from dataclasses import dataclass
+import math
+from typing import List, Optional, Dict, Any
+
+import matplotlib.pyplot as plt
+
+
+@dataclass
+class _Frame:
+    frame_id: int
+    parent_id: Optional[int]
+    depth: int
+    start: float
+    end: float
+    steps: int
+    inner_steps: int
+    milestones: List[float]
+    index: int = 0
+
+    def next_target(self) -> Optional[float]:
+        if self.index >= len(self.milestones):
+            return None
+        return self.milestones[self.index]
+
+
+class Logwalker:
+    """
+    1D recursive milestone walker.
+
+    Root walk:
+        start -> destination over `steps` milestones
+
+    Milestones follow the halving-step finite-series construction:
+        x_k = s + (d - s) * ((1 - 2^(-k)) / (1 - 2^(-steps)))
+        for k = 1..steps
+
+    Resolution:
+    - Success at current milestone:
+        move there, advance to next milestone
+    - Failure at current milestone:
+        create a nested child walk between:
+            [last successful point, failed target]
+        using current_frame.inner_steps milestones
+
+    Nested step budget:
+    - each frame stores:
+        frame.steps
+        frame.inner_steps = ceil(log_base(frame.steps)), clamped to >= 2
+      where >= 2 means at least one intermediate step exists before the end target
+
+    Exhaustion:
+    - `exhaust_mode='steps'`: exhausted if len(path) >= exwhen
+    - min_walk rule:
+        after a new child frame is created, if that child's own `inner_steps`
+        is less than `min_walk`, then exhaustion flips true immediately.
+
+    Notes:
+    - `path` stores realized position after each resolve()
+    - `history` stores detailed event records
+    - `frames_created` stores all generated frames for plotting/debugging
+    """
+
+    def __init__(
+        self,
+        start: float,
+        destination: float,
+        steps: int,
+        exhaust_mode: str = "steps",
+        exwhen: Optional[int] = None,
+        log_base: float = 2.0,
+        min_walk: int = 1,
+    ) -> None:
+        if steps < 1:
+            raise ValueError("steps must be >= 1")
+        if log_base <= 1:
+            raise ValueError("log_base must be > 1")
+        if min_walk < 1:
+            raise ValueError("min_walk must be >= 1")
+        if exwhen is not None and exwhen < 0:
+            raise ValueError("exwhen must be >= 0 or None")
+
+        self.start = float(start)
+        self.destination = float(destination)
+        self.steps = int(steps)
+
+        self.exhaust_mode = exhaust_mode
+        self.exwhen = math.inf if exwhen is None else int(exwhen)
+        self.log_base = float(log_base)
+        self.min_walk = int(min_walk)
+
+        self.position = self.start
+        self.best_position = self.start
+
+        self.path: List[float] = []
+        self.attempted: List[float] = []
+        self.history: List[Dict[str, Any]] = []
+
+        self._frame_counter = 0
+        self.frames_created: List[Dict[str, Any]] = []
+
+        self._stack: List[_Frame] = []
+        self._min_walk_exhausted = False
+
+        self._frame = self._make_frame(
+            start=self.start,
+            end=self.destination,
+            steps=self.steps,
+            depth=0,
+            parent_id=None,
+        )
+
+        self.milestones = list(self._frame.milestones)
+
+    def __repr__(self) -> str:
+        return (
+            f"Logwalker(position={self.position}, best_position={self.best_position}, "
+            f"current_target={self.current_target()}, depth={self.depth}, "
+            f"exhausted={self.is_exhausted()}, complete={self.is_complete()})"
+        )
+
+    @property
+    def depth(self) -> int:
+        return len(self._stack)
+
+    @property
+    def active_milestones(self) -> List[float]:
+        return list(self._frame.milestones)
+
+    def current_target(self) -> Optional[float]:
+        return self._frame.next_target()
+
+    def is_exhausted(self) -> bool:
+        if self._min_walk_exhausted:
+            return True
+        if self.exhaust_mode == "steps":
+            return len(self.path) >= self.exwhen
+        raise NotImplementedError(f"Unsupported exhaust_mode: {self.exhaust_mode!r}")
+
+    def is_complete(self) -> bool:
+        return (not self._stack) and (self._frame.index >= len(self._frame.milestones))
+
+    def resolve(self, passed: bool) -> float:
+        """
+        Resolve the current target with a boolean pass/fail.
+        Returns the resulting position.
+        """
+        if self.is_exhausted() or self.is_complete():
+            return self.position
+
+        target = self.current_target()
+        if target is None:
+            return self.position
+
+        event: Dict[str, Any] = {
+            "passed": bool(passed),
+            "attempted": target,
+            "position_before": self.position,
+            "best_before": self.best_position,
+            "depth_before": self.depth,
+            "frame_id": self._frame.frame_id,
+            "frame_steps": self._frame.steps,
+            "frame_inner_steps": self._frame.inner_steps,
+            "frame_start": self._frame.start,
+            "frame_end": self._frame.end,
+            "frame_index_before": self._frame.index,
+        }
+
+        self.attempted.append(target)
+
+        if passed:
+            self.position = target
+            self.best_position = target
+            self._frame.index += 1
+            event["action"] = "advance"
+
+            # Bubble completed child successes back into parents.
+            while self._frame.index >= len(self._frame.milestones) and self._stack:
+                parent = self._stack.pop()
+
+                # Parent is waiting at its failed milestone index.
+                parent_target = parent.milestones[parent.index]
+
+                self._frame = parent
+                self.position = parent_target
+                self.best_position = parent_target
+                self._frame.index += 1
+
+                event.setdefault("bubble_successes", []).append(
+                    {
+                        "into_parent_frame_id": self._frame.frame_id,
+                        "accepted_parent_target": parent_target,
+                    }
+                )
+
+        else:
+            last_success = self._last_success_of_current_frame()
+            failed_target = target
+
+            child_steps = self._frame.inner_steps
+
+            # Suspend current frame.
+            parent_frame = self._frame
+            self._stack.append(parent_frame)
+
+            # Create child frame from last success -> failed target.
+            self._frame = self._make_frame(
+                start=last_success,
+                end=failed_target,
+                steps=child_steps,
+                depth=parent_frame.depth + 1,
+                parent_id=parent_frame.frame_id,
+            )
+
+            # On failure, position remains at last successful point.
+            self.position = last_success
+            self.best_position = last_success
+
+            event["action"] = "refine"
+            event["refine_from_frame_id"] = parent_frame.frame_id
+            event["refine_to_frame_id"] = self._frame.frame_id
+            event["refine_start"] = last_success
+            event["refine_end"] = failed_target
+            event["refine_steps"] = child_steps
+            event["refine_inner_steps"] = self._frame.inner_steps
+            event["refine_milestones"] = list(self._frame.milestones)
+
+            # min_walk rule:
+            # if this child would later attempt another nesting with too-small
+            # inner_steps, flip exhaustion immediately.
+            if self._frame.inner_steps < self.min_walk:
+                self._min_walk_exhausted = True
+                event["min_walk_exhausted"] = True
+            else:
+                event["min_walk_exhausted"] = False
+
+        self.path.append(self.position)
+
+        event["position_after"] = self.position
+        event["best_after"] = self.best_position
+        event["depth_after"] = self.depth
+        event["frame_index_after"] = self._frame.index
+        event["next_target"] = self.current_target()
+        event["exhausted_after"] = self.is_exhausted()
+        event["complete_after"] = self.is_complete()
+
+        self.history.append(event)
+        return self.position
+
+    def step(self, passed: bool) -> float:
+        """Alias for resolve()."""
+        return self.resolve(passed)
+
+    def reset(self) -> None:
+        self.position = self.start
+        self.best_position = self.start
+
+        self.path.clear()
+        self.attempted.clear()
+        self.history.clear()
+        self.frames_created.clear()
+
+        self._frame_counter = 0
+        self._stack.clear()
+        self._min_walk_exhausted = False
+
+        self._frame = self._make_frame(
+            start=self.start,
+            end=self.destination,
+            steps=self.steps,
+            depth=0,
+            parent_id=None,
+        )
+        self.milestones = list(self._frame.milestones)
+
+    def summary(self) -> Dict[str, Any]:
+        return {
+            "start": self.start,
+            "destination": self.destination,
+            "steps": self.steps,
+            "position": self.position,
+            "best_position": self.best_position,
+            "root_milestones": list(self.milestones),
+            "active_milestones": list(self.active_milestones),
+            "current_target": self.current_target(),
+            "path": list(self.path),
+            "attempted": list(self.attempted),
+            "n_steps_taken": len(self.path),
+            "exhausted": self.is_exhausted(),
+            "complete": self.is_complete(),
+            "depth": self.depth,
+            "min_walk": self.min_walk,
+        }
+
+    def plot_structure(self, figsize=(10, 5), show_labels: bool = True) -> None:
+        """
+        Plot all generated frames and their milestone positions.
+        Deeper nesting levels are shown lower on the y-axis.
+        """
+        if not self.frames_created:
+            print("No frame data to plot.")
+            return
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        for rec in self.frames_created:
+            depth = rec["depth"]
+            y = -depth
+
+            s = rec["start"]
+            e = rec["end"]
+            mids = rec["milestones"]
+
+            ax.hlines(y=y, xmin=min(s, e), xmax=max(s, e), linewidth=2)
+            ax.scatter(mids, [y] * len(mids), s=40)
+
+            ax.scatter([s], [y], marker="|", s=250)
+            ax.scatter([e], [y], marker="|", s=250)
+
+            if show_labels:
+                label = (
+                    f"id={rec['frame_id']}  "
+                    f"s={rec['steps']}  "
+                    f"i={rec['inner_steps']}"
+                )
+                ax.text(
+                    x=min(s, e),
+                    y=y + 0.08,
+                    s=label,
+                    fontsize=8,
+                    va="bottom",
+                )
+
+        ax.set_title("Logwalker frame structure")
+        ax.set_xlabel("1D position")
+        ax.set_ylabel("nest depth (negative for display)")
+        ax.grid(True, alpha=0.25)
+        plt.show()
+
+    def plot_path(self, figsize=(10, 4), show_attempts: bool = True) -> None:
+        """
+        Plot realized walker position over decision index.
+        """
+        fig, ax = plt.subplots(figsize=figsize)
+
+        if self.path:
+            x = list(range(1, len(self.path) + 1))
+            ax.plot(x, self.path, marker="o", linewidth=1.5, label="realized position")
+
+        if show_attempts and self.attempted:
+            xa = list(range(1, len(self.attempted) + 1))
+            ax.scatter(xa, self.attempted, s=30, alpha=0.8, label="attempted target")
+
+        ax.axhline(self.start, linestyle="--", linewidth=1, label="start")
+        ax.axhline(self.destination, linestyle="--", linewidth=1, label="destination")
+
+        ax.set_title("Logwalker realized path")
+        ax.set_xlabel("decision index")
+        ax.set_ylabel("position")
+        ax.grid(True, alpha=0.25)
+        ax.legend()
+        plt.show()
+
+    def _make_frame(
+        self,
+        start: float,
+        end: float,
+        steps: int,
+        depth: int,
+        parent_id: Optional[int],
+    ) -> _Frame:
+        frame_id = self._frame_counter
+        self._frame_counter += 1
+
+        inner_steps = self._compute_inner_steps(steps)
+        milestones = self._generate_milestones(start, end, steps)
+
+        frame = _Frame(
+            frame_id=frame_id,
+            parent_id=parent_id,
+            depth=depth,
+            start=float(start),
+            end=float(end),
+            steps=int(steps),
+            inner_steps=int(inner_steps),
+            milestones=milestones,
+            index=0,
+        )
+
+        self.frames_created.append(
+            {
+                "frame_id": frame.frame_id,
+                "parent_id": frame.parent_id,
+                "depth": frame.depth,
+                "start": frame.start,
+                "end": frame.end,
+                "steps": frame.steps,
+                "inner_steps": frame.inner_steps,
+                "milestones": list(frame.milestones),
+            }
+        )
+
+        return frame
+
+    def _last_success_of_current_frame(self) -> float:
+        if self._frame.index == 0:
+            return self._frame.start
+        return self._frame.milestones[self._frame.index - 1]
+
+    def _compute_inner_steps(self, steps: int) -> int:
+        """
+        Compute the next nesting budget.
+
+        Minimum of 2 milestones means:
+        - one intermediate step
+        - one final endpoint
+        """
+        raw = math.log(max(steps, 2), self.log_base)
+        return max(2, int(math.ceil(raw)))
+
+    @staticmethod
+    def _generate_milestones(start: float, destination: float, steps: int) -> List[float]:
+        """
+        x_k = s + (d - s) * ((1 - 2^(-k)) / (1 - 2^(-steps))), k=1..steps
+        """
+        start = float(start)
+        destination = float(destination)
+        steps = int(steps)
+
+        if steps < 1:
+            raise ValueError("steps must be >= 1")
+
+        if steps == 1:
+            return [destination]
+
+        denom = 1.0 - 2.0 ** (-steps)
+        return [
+            start + (destination - start) * ((1.0 - 2.0 ** (-k)) / denom)
+            for k in range(1, steps + 1)
+        ]
 
 
 def evolve_population(
