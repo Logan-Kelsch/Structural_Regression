@@ -527,6 +527,74 @@ def t_COR(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=2, o
     t_jit._COR_out(x_c, a_c, wins, mc, out_c)
     return out_c
 
+# ID 22
+def t_AND(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=1, out=None, in_place=False, prefer_float32=True):
+    if alpha is None:
+        raise ValueError("AND requires alpha matrix")
+    if x.shape != alpha.shape or x.ndim != 2:
+        raise ValueError("x and alpha must match shape (m,n)")
+    m, n = x.shape
+    fdt = np.float32 if prefer_float32 else np.float64
+
+    x_c = _as_c_contig(x)
+    a_c = _as_c_contig(alpha)
+
+    # Treat NaN/Inf as False; nonzero finite as True
+    xb = np.isfinite(x_c) & (x_c != 0)
+    ab = np.isfinite(a_c) & (a_c != 0)
+    bb = xb & ab  # bool result
+
+    if in_place:
+        if not np.issubdtype(x_c.dtype, np.floating):
+            x_c = x_c.astype(fdt, copy=True)
+        x_c[...] = bb.astype(x_c.dtype, copy=False)
+        return x_c
+
+    if out is None:
+        out = np.empty(x.shape, dtype=(x_c.dtype if np.issubdtype(x_c.dtype, np.floating) else fdt))
+    if out.shape != x.shape:
+        raise ValueError("out wrong shape")
+    if not np.issubdtype(out.dtype, np.floating):
+        raise TypeError("out must be float")
+
+    out_c = _as_c_contig(out)
+    out_c[...] = bb.astype(out_c.dtype, copy=False)
+    return out_c
+
+
+# ID 23
+def t_ORR(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=1, out=None, in_place=False, prefer_float32=True):
+    if alpha is None:
+        raise ValueError("ORR requires alpha matrix")
+    if x.shape != alpha.shape or x.ndim != 2:
+        raise ValueError("x and alpha must match shape (m,n)")
+    m, n = x.shape
+    fdt = np.float32 if prefer_float32 else np.float64
+
+    x_c = _as_c_contig(x)
+    a_c = _as_c_contig(alpha)
+
+    xb = np.isfinite(x_c) & (x_c != 0)
+    ab = np.isfinite(a_c) & (a_c != 0)
+    bb = xb | ab
+
+    if in_place:
+        if not np.issubdtype(x_c.dtype, np.floating):
+            x_c = x_c.astype(fdt, copy=True)
+        x_c[...] = bb.astype(x_c.dtype, copy=False)
+        return x_c
+
+    if out is None:
+        out = np.empty(x.shape, dtype=(x_c.dtype if np.issubdtype(x_c.dtype, np.floating) else fdt))
+    if out.shape != x.shape:
+        raise ValueError("out wrong shape")
+    if not np.issubdtype(out.dtype, np.floating):
+        raise TypeError("out must be float")
+
+    out_c = _as_c_contig(out)
+    out_c[...] = bb.astype(out_c.dtype, copy=False)
+    return out_c
+
 
 # --------------------------- unified dispatch ---------------------------
 
@@ -553,6 +621,8 @@ FUNC_TABLE = {
     19: t_SSN,
     20: t_AGR,
     21: t_COR,
+    22: t_AND,
+    23: t_ORR
 }
 
 

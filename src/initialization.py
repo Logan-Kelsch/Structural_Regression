@@ -27,7 +27,7 @@ class Grammar:
     '''
     def __init__(
         self,
-        type    :   str,
+        type    :   str = 'Null',
         max_delta_lookback  :   int =   48,
         p_mutation  :   float   =   0.05,
         p_crossover :   float   =   0.025,
@@ -37,6 +37,72 @@ class Grammar:
         self._mdl = max_delta_lookback
         self._p_mutation = p_mutation
         self._p_crossover = p_crossover
+
+        self._tq1d = None
+
+        match(type):
+            case 'Null':
+                pass
+
+            case 'tq1d':
+                #actual long term score vector containing quality values which
+                #will be interpreted for probabilistic selection after softmax transformation
+                self._tq1d = np.ones(23, np.float)
+                
+
+            case _:
+                raise ValueError(f'Cannot interpret Grammar type "{type}"')
+
+    def softmax_sample_uint16(
+        self,
+        rng: np.random.Generator,
+        n: int,
+        base: float = np.e,
+    ) -> np.ndarray:
+        """
+        Sample n values in {1, ..., len(tq1d)} according to softmax(tq1d).
+
+        Parameters
+        ----------
+        rng
+            NumPy random generator.
+        n
+            Number of samples to draw.
+        tq1d
+            1D array of logits/weights. For your case this should have length 23.
+        base
+            Softmax base. Default is np.e.
+            Probabilities are proportional to base ** tq1d.
+            If base == 1, this becomes uniform.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape (n,) with dtype uint16 containing sampled values
+            in the range [1, len(tq1d)].
+        """
+        tq1d = self._tq1d
+
+        if tq1d.ndim != 1:
+            raise ValueError(f"tq1d must be 1D, got shape {tq1d.shape}")
+        if len(tq1d) == 0:
+            raise ValueError("tq1d must not be empty")
+        if base <= 0:
+            raise ValueError(f"base must be > 0, got {base}")
+
+        values = np.arange(1, len(tq1d) + 1, dtype=np.uint16)
+
+        if base == 1:
+            probs = np.full(len(tq1d), 1.0 / len(tq1d), dtype=np.float64)
+        else:
+            # stable softmax with arbitrary base:
+            # probs ∝ base ** tq1d = exp(log(base) * tq1d)
+            scaled = np.log(base) * tq1d
+            scaled -= np.max(scaled)
+            weights = np.exp(scaled)
+            probs = weights / weights.sum()
+
+        return rng.choice(values, size=n, p=probs).astype(np.uint16)
         
 
 import numpy as np
@@ -310,6 +376,8 @@ def F_IDS():
 	19.	SSN	-	x
 	20.	AGR	-	x, a, d
 	21.	COR	-	x, a, d
+    22. AND -   x, a
+    23. ORR -   x, a
 
 	PARAMETER ORDER
 	---------------
@@ -343,6 +411,8 @@ def F_WITH(
 		19:['x'],#ID 19
 		20:['x', 'a', 'd'],#ID 20
 		21:['x', 'a', 'd'],#ID 21
+        22:['x', 'a'],#ID 22
+        23:['x', 'a'],#ID 23
 	}
 	return [k for k, v in f_p.items() if param in v]
 
@@ -370,6 +440,8 @@ def F_AS(id: int):
 		19:['x'],#ID 19
 		20:['x', 'a', 'd'],#ID 20
 		21:['x', 'a', 'd'],#ID 21
+        21:['x', 'a'],#ID 22
+        21:['x', 'a'],#ID 23
 	}
 	return f_p.get(id, [])
 
@@ -1179,6 +1251,70 @@ def generate_instructions(
             chunk_size = gen_size
 
         match(grm_prior._type):
+
+            case 'tq1d':
+                
+                #in this grammar we will have some resolved probabalistic structure 
+                #thought this through a bit, we will have all saved unique evaluations
+                #we will have some transition matrix (default of 1s)
+                #for each iteration that we want to make, we take some collection of survived genes
+                #extract p values from validation window
+                #for each instance that some transition exists in the tree
+                #we will add a transformed value to the transition probability matrix
+                #this transformation is ln(k))/2p 
+                # where p is the pvalue for that transition
+                # and where k is the number of times that transition appeared in that solution tree.
+                #I am picking this as I want exponential reward as we approach p=0
+                #and punishment for any instance worse off than chance (0.5)
+
+                #given how the direction of what is random and what uses our probability distribution
+                #and how one would be breadth and one would be depth, we will do the following.
+                #for all genes that we are creating,
+                # we pull its transformation id from the tq 1d vector in which we have iterated
+                # then we randomly select the sensor indices
+
+                # keep shape (chunk_size, 11); last col unused by design
+                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+
+                # populate new pop indices after everything currently legal
+                start_idx = int(pop_prior._L_idx.max())
+                inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
+
+                # random function ids
+                inst_inst[:, 1] = grm_prior.softmax_sample_uint16(rng, inst_inst.shape[0])
+
+                func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
+
+                # used flags
+                flags_u32 = FUNC_to_USED_FLAGS(func_ids)
+                inst_inst[:, 2] = flags_u32
+
+                # const flags
+                flags_u32 = FUNC_to_nonx_FLAGS(func_ids)
+                inst_inst[:, 3] = flags_u32
+
+                # sensor flags
+                flags_u32 = FLAGS_to_SENSOR_FLAGS(inst_inst[:, 2], inst_inst[:, 3])
+                inst_inst[:, 4] = flags_u32
+
+                # current order: a, d, dd, k -> 6,7,8,9
+                v_cols = {6: 'UA0', 7: 'STEIS', 8: 'STEIS', 9: 'ITS'}
+
+                const_flags = inst_inst[:, 3].astype(np.uint32, copy=False)
+                for c, kind in v_cols.items():
+                    const_mask = (const_flags & (np.uint32(1) << np.uint32(c))) != 0
+                    if kind == 'UA0':
+                        inst_inst = fill_const_UA0(inst_inst, const_mask, c, rng)
+                    elif kind == 'STEIS':
+                        inst_inst = fill_const_STEIS(grm_prior._mdl, const_mask, inst_inst, c, 2.0, 2.0, rng)
+                    elif kind == 'ITS':
+                        inst_inst = fill_const_ITS(inst_inst, const_mask, c, 1.0, rng)
+
+                # sensors / refs
+                inst_inst = fill_sensor_UNIFORM(inst_inst, inst_inst[:, 4], legal_idx=pop_prior._L_idx)
+
+                pass
+
             case 'Null':
                 # keep shape (chunk_size, 11); last col unused by design
                 inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
@@ -1188,7 +1324,7 @@ def generate_instructions(
                 inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
 
                 # random function ids
-                inst_inst[:, 1] = rng.integers(1, 22, size=inst_inst.shape[0], dtype=np.uint16)
+                inst_inst[:, 1] = rng.integers(1, 24, size=inst_inst.shape[0], dtype=np.uint16)
 
                 func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
 
@@ -1228,6 +1364,10 @@ def generate_instructions(
         gen_size -= chunk_size
         if gen_size > 0 and verbose:
             print(f'{gen_size} Generations Remaining.')
+
+
+
+
 
 def generate_instructions_old(
     pop_prior   :   Population,
