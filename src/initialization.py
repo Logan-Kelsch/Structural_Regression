@@ -31,6 +31,7 @@ class Grammar:
         max_delta_lookback  :   int =   48,
         p_mutation  :   float   =   0.05,
         p_crossover :   float   =   0.025,
+        alpha_sensor_freq   :   float   =   0.5,
         spec_gram_args  :   dict    =   None
     ):
         self._type = type
@@ -39,6 +40,7 @@ class Grammar:
         self._p_crossover = p_crossover
 
         self._tq1d = None
+        self._alpha_sensor_freq = None
 
         match(type):
             case 'Null':
@@ -47,7 +49,8 @@ class Grammar:
             case 'tq1d':
                 #actual long term score vector containing quality values which
                 #will be interpreted for probabilistic selection after softmax transformation
-                self._tq1d = np.ones(23, np.float)
+                self._tq1d = np.ones(23, np.float32)
+                self._alpha_sensor_freq = alpha_sensor_freq
                 
 
             case _:
@@ -440,8 +443,8 @@ def F_AS(id: int):
 		19:['x'],#ID 19
 		20:['x', 'a', 'd'],#ID 20
 		21:['x', 'a', 'd'],#ID 21
-        21:['x', 'a'],#ID 22
-        21:['x', 'a'],#ID 23
+        22:['x', 'a'],#ID 22
+        23:['x', 'a'],#ID 23
 	}
 	return f_p.get(id, [])
 
@@ -505,8 +508,106 @@ def fill_sensor_UNIFORM(inst_inst, flags_u32, legal_idx, rng=None, inplace=True)
     return out
 
 
+import numpy as np
+
+
+# bit positions for x, a, d, dd, k
+BIT_X  = np.uint32(5)
+BIT_A  = np.uint32(6)
+BIT_D  = np.uint32(7)
+BIT_DD = np.uint32(8)
+BIT_K  = np.uint32(9)
+
+MASK_X  = np.uint32(1) << BIT_X
+MASK_A  = np.uint32(1) << BIT_A
+MASK_D  = np.uint32(1) << BIT_D
+MASK_DD = np.uint32(1) << BIT_DD
+MASK_K  = np.uint32(1) << BIT_K
+
+MASK_VARS_5_TO_9 = MASK_X | MASK_A | MASK_D | MASK_DD | MASK_K
+
 
 def FUNC_to_USED_FLAGS(func_ids):
+    """
+    Map each function id -> used variable bits over positions 5..9
+    corresponding to x, a, d, dd, k.
+    """
+    fids = np.asarray(func_ids, dtype=np.int32)
+
+    max_id = int(fids.max()) if fids.size else 0
+    max_id = max(max_id, 0)
+
+    table = np.zeros(max_id + 1, dtype=np.uint32)
+    for i in range(max_id + 1):
+        vlocs = V_to_LOC(F_AS(i))
+        table[i] = np.uint32(VLOC_to_FLAG(vlocs))
+
+    out = np.zeros(fids.shape, dtype=np.uint32)
+    in_range = (fids >= 0) & (fids <= max_id)
+    out[in_range] = table[fids[in_range]]
+
+    # safety: only keep x,a,d,dd,k bits
+    out &= MASK_VARS_5_TO_9
+    return out
+
+
+def USED_to_SENSOR_FLAGS(used_flags, alpha_sensor_freq=0.0, rng=None):
+    """
+    Build sensor flags from used flags with the rule:
+
+    - x is ALWAYS a sensor if used
+    - a is a sensor with probability alpha_sensor_freq if used
+    - d, dd, k are never sensors here
+
+    Parameters
+    ----------
+    used_flags : array-like
+        uint32 flags with variable bits in 5..9
+    alpha_sensor_freq : float
+        Probability that a used alpha becomes a sensor
+    rng : np.random.Generator or None
+        Optional RNG for reproducibility
+
+    Returns
+    -------
+    sensor_flags : np.ndarray dtype=np.uint32
+    """
+    if not (0.0 <= alpha_sensor_freq <= 1.0):
+        raise ValueError("alpha_sensor_freq must be between 0.0 and 1.0")
+
+    used_u32 = np.asarray(used_flags, dtype=np.uint32)
+    rng = np.random.default_rng() if rng is None else rng
+
+    sensor = np.zeros(used_u32.shape, dtype=np.uint32)
+
+    # x always sensor if used
+    x_used = (used_u32 & MASK_X) != 0
+    sensor[x_used] |= MASK_X
+
+    # alpha sensor with probability alpha_sensor_freq, but only if alpha is used
+    a_used = (used_u32 & MASK_A) != 0
+    if np.any(a_used) and alpha_sensor_freq > 0.0:
+        a_draw = rng.random(used_u32.shape) < alpha_sensor_freq
+        a_sensor = a_used & a_draw
+        sensor[a_sensor] |= MASK_A
+
+    return sensor & MASK_VARS_5_TO_9
+
+
+def USED_and_SENSOR_to_CONST_FLAGS(used_flags, sensor_flags):
+    """
+    Const flags are exactly the used variable bits that are not sensors.
+
+    Guarantees:
+        used = const | sensor
+        const & sensor = 0
+    """
+    used_u32 = np.asarray(used_flags, dtype=np.uint32) & MASK_VARS_5_TO_9
+    sensor_u32 = np.asarray(sensor_flags, dtype=np.uint32) & MASK_VARS_5_TO_9
+    return used_u32 & ~sensor_u32
+
+
+def FUNC_to_USED_FLAGS_old(func_ids):
     """
     Map each function-id -> required variable locations (cols 3..6) -> uint32 bit-flag.
     Uses the user-provided helpers: F_AS, V_to_LOC, VLOC_to_FLAG.
@@ -778,6 +879,8 @@ def generate_instructions(
 
     match(grm_prior._type):
         case 'Null':
+            pass
+        case 'tq1d':
             pass
         case _:
             raise ValueError('Cannot interpret grammar prior in generate_instructions. Illegal type.')
@@ -1285,17 +1388,36 @@ def generate_instructions(
 
                 func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
 
+                alpha_sensor_freq = grm_prior._alpha_sensor_freq
+                #rng = np.random.default_rng(seed)
+
                 # used flags
-                flags_u32 = FUNC_to_USED_FLAGS(func_ids)
-                inst_inst[:, 2] = flags_u32
+                used_flags = FUNC_to_USED_FLAGS(func_ids)
+                inst_inst[:, 2] = used_flags
+
+                # sensor flags: x always sensor, alpha sometimes sensor
+                sensor_flags = USED_to_SENSOR_FLAGS(
+                    used_flags,
+                    alpha_sensor_freq=alpha_sensor_freq,
+                    rng=rng
+                )
+                inst_inst[:, 4] = sensor_flags
+
+                # const flags: everything used that is not sensor
+                const_flags = USED_and_SENSOR_to_CONST_FLAGS(used_flags, sensor_flags)
+                inst_inst[:, 3] = const_flags
+
+                # used flags
+                #flags_u32 = FUNC_to_USED_FLAGS(func_ids)
+                #inst_inst[:, 2] = flags_u32
 
                 # const flags
-                flags_u32 = FUNC_to_nonx_FLAGS(func_ids)
-                inst_inst[:, 3] = flags_u32
+                #flags_u32 = FUNC_to_nonx_FLAGS(func_ids)
+                #inst_inst[:, 3] = flags_u32
 
                 # sensor flags
-                flags_u32 = FLAGS_to_SENSOR_FLAGS(inst_inst[:, 2], inst_inst[:, 3])
-                inst_inst[:, 4] = flags_u32
+                #flags_u32 = FLAGS_to_SENSOR_FLAGS(inst_inst[:, 2], inst_inst[:, 3])
+                #inst_inst[:, 4] = flags_u32
 
                 # current order: a, d, dd, k -> 6,7,8,9
                 v_cols = {6: 'UA0', 7: 'STEIS', 8: 'STEIS', 9: 'ITS'}
@@ -3712,6 +3834,7 @@ def initialize(
     grmr_mdl    :   int | tuple =   240,
     grmr_p_mttn :   float=  0.0,
     grmr_p_csvr :   float=  0.0,
+    grmr_a_sens :   float=  0.5,
     chunk_size  :   float   =   0.1,
     wf_windows  :   int =   1,
     verbose     :   int =   0
@@ -3755,7 +3878,8 @@ def initialize(
         type=grmr_type,
         max_delta_lookback=grmr_mdl,
         p_crossover=grmr_p_csvr,
-        p_mutation=grmr_p_mttn
+        p_mutation=grmr_p_mttn,
+        alpha_sensor_freq=grmr_a_sens
     )
     if(verbose>1):print('Grammar Initialized')
 

@@ -316,6 +316,12 @@ def t_HKP(x, alpha=None, delta1=None, delta2=None, kappa=None, *, out=None, in_p
         out = np.empty_like(x_c, dtype=(x_c.dtype if np.issubdtype(x_c.dtype, np.floating) else fdt))
     out_c = _as_c_contig(out)
     t_jit._HKP_out(x_c, decays, out_c)
+
+    #we doin a little experimenting out in these parts
+    #4/9/26
+    out_c -= 1
+    #dont tell nobody about this shit shhhhhh
+
     return out_c
 
 
@@ -527,21 +533,63 @@ def t_COR(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=2, o
     t_jit._COR_out(x_c, a_c, wins, mc, out_c)
     return out_c
 
+def _alpha_to_bool_mask(alpha, x_shape):
+    """
+    Normalize alpha into a boolean mask of shape x_shape.
+
+    Accepted alpha forms
+    --------------------
+    - scalar
+    - vector of length x_shape[0]
+    - column vector of shape (x_shape[0], 1)
+    - full matrix of shape x_shape
+
+    Truth rule for alpha:
+        finite and > 0
+    """
+    m, n = x_shape
+    a = np.asarray(alpha)
+
+    # scalar alpha
+    if a.ndim == 0:
+        return np.full((m, n), bool(np.isfinite(a) and (a > 0)), dtype=bool)
+
+    # vector alpha of length m
+    if a.ndim == 1:
+        if a.shape[0] != m:
+            raise ValueError("alpha vector must have length x.shape[0]")
+        av = np.isfinite(a) & (a > 0)
+        return np.broadcast_to(av[:, None], (m, n))
+
+    # column vector alpha of shape (m,1)
+    if a.ndim == 2 and a.shape == (m, 1):
+        av = np.isfinite(a[:, 0]) & (a[:, 0] > 0)
+        return np.broadcast_to(av[:, None], (m, n))
+
+    # full matrix alpha matching x
+    if a.ndim == 2 and a.shape == (m, n):
+        a_c = _as_c_contig(a)
+        return np.isfinite(a_c) & (a_c > 0)
+
+    raise ValueError("alpha must be scalar, shape (m,), shape (m,1), or match x.shape")
+
 # ID 22
 def t_AND(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=1, out=None, in_place=False, prefer_float32=True):
     if alpha is None:
         raise ValueError("AND requires alpha matrix")
-    if x.shape != alpha.shape or x.ndim != 2:
+    if x.ndim != 2:
         raise ValueError("x and alpha must match shape (m,n)")
     m, n = x.shape
     fdt = np.float32 if prefer_float32 else np.float64
 
     x_c = _as_c_contig(x)
-    a_c = _as_c_contig(alpha)
 
-    # Treat NaN/Inf as False; nonzero finite as True
+    # Treat NaN/Inf as False; nonzero finite as True for x
     xb = np.isfinite(x_c) & (x_c != 0)
-    ab = np.isfinite(a_c) & (a_c != 0)
+
+    # alpha may be scalar, vector(len=m), column vector(m,1), or full matrix(m,n)
+    ab = _alpha_to_bool_mask(alpha, x.shape)
+
     bb = xb & ab  # bool result
 
     if in_place:
@@ -566,16 +614,19 @@ def t_AND(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=1, o
 def t_ORR(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=1, out=None, in_place=False, prefer_float32=True):
     if alpha is None:
         raise ValueError("ORR requires alpha matrix")
-    if x.shape != alpha.shape or x.ndim != 2:
+    if x.ndim != 2:
         raise ValueError("x and alpha must match shape (m,n)")
     m, n = x.shape
     fdt = np.float32 if prefer_float32 else np.float64
 
     x_c = _as_c_contig(x)
-    a_c = _as_c_contig(alpha)
 
+    # Treat NaN/Inf as False; nonzero finite as True for x
     xb = np.isfinite(x_c) & (x_c != 0)
-    ab = np.isfinite(a_c) & (a_c != 0)
+
+    # alpha may be scalar, vector(len=m), column vector(m,1), or full matrix(m,n)
+    ab = _alpha_to_bool_mask(alpha, x.shape)
+
     bb = xb | ab
 
     if in_place:
@@ -594,6 +645,8 @@ def t_ORR(x, alpha=None, delta1=None, delta2=None, kappa=None, *, min_count=1, o
     out_c = _as_c_contig(out)
     out_c[...] = bb.astype(out_c.dtype, copy=False)
     return out_c
+
+
 
 
 # --------------------------- unified dispatch ---------------------------
