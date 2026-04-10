@@ -40,7 +40,7 @@ class Grammar:
         self._p_crossover = p_crossover
 
         self._tq1d = None
-        self._alpha_sensor_freq = None
+        self._alpha_sensor_freq = alpha_sensor_freq
 
         match(type):
             case 'Null':
@@ -50,11 +50,11 @@ class Grammar:
                 #actual long term score vector containing quality values which
                 #will be interpreted for probabilistic selection after softmax transformation
                 self._tq1d = np.ones(23, np.float32)
-                self._alpha_sensor_freq = alpha_sensor_freq
-                
+
 
             case _:
                 raise ValueError(f'Cannot interpret Grammar type "{type}"')
+        
 
     def softmax_sample_uint16(
         self,
@@ -106,6 +106,23 @@ class Grammar:
             probs = weights / weights.sum()
 
         return rng.choice(values, size=n, p=probs).astype(np.uint16)
+    
+    def update(
+        self,
+        tq_vec
+    ):
+        match(self._type):
+            case 'Null':
+                pass
+
+            case 'tq1d':
+
+                if(tq_vec.shape[0]==self._tq1d.shape[0]+1):
+                    self._tq1d += tq_vec[1:]
+                elif(tq_vec.shape[0]==self._tq1d.shape[0]):
+                    self._tq1d += tq_vec
+                else:
+                    raise ValueError(f"Grammar update for tq1d mode can't interpret the tq_vec shape correctly.")
         
 
 import numpy as np

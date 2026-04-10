@@ -641,6 +641,7 @@ def solver_inner(
     initialization_kwargs,
     solver_kwargs,
     logwalker_kwargs,
+    chunk_num = 0,
     purge_thresh = 0.05,
 ):
     walker = Logwalker(**logwalker_kwargs)
@@ -652,10 +653,10 @@ def solver_inner(
         early_stop=0.1,
         initialization_kwargs=initialization_kwargs,
         solver_kwargs=solver_kwargs,
-        chunk_num=0
+        chunk_num=chunk_num
     )
 
-    _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=0)
+    _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
 
     # dynamic walker-controlled threshold term
     solver_kwargs["emission"].append({"ID": 5, "alpha": 0.0})
@@ -685,7 +686,7 @@ def solver_inner(
             break_extinction=True,
             initialization_kwargs=initialization_kwargs,
             solver_kwargs=solver_kwargs,
-            chunk_num=0
+            chunk_num=chunk_num
         )
 
         success = _util.is_successful_evolution(evaluation)
@@ -698,7 +699,7 @@ def solver_inner(
             s_idx = np.where(evaluation["F"] > 0)[0]
             #does not clean population if it will end up breaking this loop
             if(not walker.is_complete() and not walker.is_exhausted()):
-                s_idx = _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=0)
+                s_idx = _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
             i += 1
             print(
                 f"SUCCESS | position={walker.position:.6f} | "

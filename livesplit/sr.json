@@ -38,11 +38,11 @@
       "Name": "WF Test Run"
     },
     {
-      "Time": null,
+      "Time": "3.10:08:08.5647732",
       "Name": "Init G Structure"
     },
     {
-      "Time": null,
+      "Time": "3.10:08:19.8657761",
       "Name": "Init G Iterable"
     },
     {
@@ -122,7 +122,7 @@
       "Name": "Compile Results"
     }
   ],
-  "CurrentSplitIndex": 9,
+  "CurrentSplitIndex": 11,
   "CurrentSplitTime": null,
-  "CurrentTime": "3.09:39:04.8774052"
+  "CurrentTime": "3.10:08:30.7476651"
 }
