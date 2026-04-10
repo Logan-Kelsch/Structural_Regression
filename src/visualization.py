@@ -850,8 +850,101 @@ import evaluation as _E
 import numpy as np
 import matplotlib.pyplot as plt
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 def visualize_opg_mcpt_distribution(
+    population,
+    null_returns,
+    details,
+    good_idx,
+    gene_indices=None,
+    use_gidx=True,
+    bins=60,
+    density=False,
+    top_n=None,
+    sort_by="score",
+    include_fill=False,
+    line_alpha=0.2,
+    line_width=1.0,
+    title=None,
+):
+    """
+    Plot the shared OPG null distribution as a histogram and overlay gene observed
+    scores as vertical lines.
+
+    Despite the parameter name null_returns for backwards compatibility, the values
+    supplied are treated generically as the chosen null score distribution.
+    """
+    null_scores = np.asarray(null_returns, dtype=float).reshape(-1)
+
+    observed_scores_full = np.asarray(
+        details.get("observed_scores_full", details.get("R_full")),
+        dtype=float,
+    ).reshape(-1)
+
+    gidx = np.asarray(details["gidx"], dtype=int)
+    score_label = details.get("score_label", "Score")
+
+    gidx = np.asarray(details["gidx"], dtype=int)  # evaluated genes only
+
+    if gene_indices is not None:
+        gene_idx_used = np.asarray(gene_indices, dtype=int).reshape(-1)
+
+    elif good_idx is not None:
+        good_idx = np.asarray(good_idx, dtype=int).reshape(-1)
+        gene_idx_used = good_idx[np.isin(good_idx, gidx)]
+
+    elif use_gidx:
+        gene_idx_used = gidx.copy()
+
+    else:
+        gene_idx_used = np.flatnonzero(np.isfinite(observed_scores_full))
+
+    gene_scores_used = observed_scores_full[gene_idx_used]
+
+    if not include_fill:
+        keep = np.isfinite(gene_scores_used)
+        gene_idx_used = gene_idx_used[keep]
+        gene_scores_used = gene_scores_used[keep]
+
+    if top_n is not None and gene_scores_used.size > top_n:
+        if sort_by == "score":
+            order = np.argsort(gene_scores_used)[::-1]
+        elif sort_by == "abs_score":
+            order = np.argsort(np.abs(gene_scores_used))[::-1]
+        else:
+            raise ValueError('sort_by must be "score" or "abs_score"')
+
+        order = order[:top_n]
+        gene_idx_used = gene_idx_used[order]
+        gene_scores_used = gene_scores_used[order]
+
+    if title is None:
+        title = f"OPG-MCPT {score_label} Distribution with Gene Scores"
+
+    plt.figure(figsize=(10, 6))
+    plt.hist(null_scores, bins=bins, density=density)
+
+    ymin, ymax = plt.ylim()
+
+    for x in gene_scores_used:
+        plt.vlines(x, ymin=0.0, ymax=ymax, alpha=line_alpha, linewidth=line_width)
+
+    if null_scores.size > 0:
+        plt.axvline(np.mean(null_scores), linestyle="--", linewidth=1.5, label="Null Mean")
+
+    plt.title(title)
+    plt.xlabel(score_label)
+    plt.ylabel("Density" if density else "Count")
+    plt.legend()
+    plt.show()
+
+    return gene_idx_used, gene_scores_used
+
+
+def visualize_opg_mcpt_distribution_old(
     population,
     null_returns,
     details,

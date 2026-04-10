@@ -622,3 +622,104 @@ def evolve_population(
         return X, G, evaluation
     
 
+
+from importlib import reload
+import ep_wrap as ep
+import evaluation as _E
+import visualization as _V
+import initialization as _I
+import reproduction as _R
+import numpy as np
+import utility as _util
+import matplotlib.pyplot as plt
+from copy import deepcopy
+
+
+
+
+def solver_inner(
+    initialization_kwargs,
+    solver_kwargs,
+    logwalker_kwargs,
+    purge_thresh = 0.05,
+):
+    walker = Logwalker(**logwalker_kwargs)
+
+    i = 0
+
+    X, G, evaluation = ep.evolve_population(
+        iterations=10,
+        early_stop=0.1,
+        initialization_kwargs=initialization_kwargs,
+        solver_kwargs=solver_kwargs,
+        chunk_num=0
+    )
+
+    _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=0)
+
+    # dynamic walker-controlled threshold term
+    solver_kwargs["emission"].append({"ID": 5, "alpha": 0.0})
+
+    while True:
+
+        # stop checks belong at top, before trying to set/evaluate a new target
+        if walker.is_complete():
+            print("Logwalker reached destination.")
+            break
+
+        if walker.is_exhausted():
+            print("Logwalker has been exhausted.")
+            break
+
+        target = walker.current_target()
+        solver_kwargs["emission"][-1]["alpha"] = target
+
+        # keep previous state so failed attempts can be discarded
+        X_prev = deepcopy(X)
+        G_prev = deepcopy(G)
+
+        X_try, G_try, evaluation = ep.evolve_population(
+            X, G,
+            iterations=15,
+            early_stop=0.25,
+            break_extinction=True,
+            initialization_kwargs=initialization_kwargs,
+            solver_kwargs=solver_kwargs,
+            chunk_num=0
+        )
+
+        success = _util.is_successful_evolution(evaluation)
+
+        # resolve the walker only after success/failure is known for the current target
+        walker.step(success)
+
+        if success:
+            X, G = deepcopy(X_try), deepcopy(G_try)
+            s_idx = np.where(evaluation["F"] > 0)[0]
+            #does not clean population if it will end up breaking this loop
+            if(not walker.is_complete() and not walker.is_exhausted()):
+                s_idx = _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=0)
+            i += 1
+            print(
+                f"SUCCESS | position={walker.position:.6f} | "
+                f"next_target={walker.current_target()}"
+            )
+        else:
+            X, G = deepcopy(X_prev), deepcopy(G_prev)
+            i -= 1
+            print(
+                f"FAILURE | position={walker.position:.6f} | "
+                f"refined_target={walker.current_target()}"
+            )
+        
+
+        # stop checks again after the walker has updated
+        if walker.is_complete():
+            print("Logwalker reached destination.")
+            break
+
+        if walker.is_exhausted():
+            print("Logwalker has been exhausted.")
+            break
+    
+    return X, G, s_idx, walker, evaluation
