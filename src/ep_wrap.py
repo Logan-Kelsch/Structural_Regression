@@ -3,6 +3,7 @@ import reproduction as _R
 import initialization as _I
 import evaluation as _E
 import numpy as np
+import sys
 
 
 
@@ -576,16 +577,24 @@ def evolve_population(
         if(i==0):
             #initial print of solution stats
             ftcount = np.unique_counts(evaluation['svecs']['anomaly_mask'])[1]
-            print(f'F:{ftcount[0]} T:{ftcount[1]} P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}%')
-
-        print(f'Gen {i}: {qgenes} Quality Genes. ', end='')
+            #print()
 
         if(break_extinction and qgenes==0):
-            print('All genes failed, breaking loop.')
+            #print('All genes failed, breaking loop.')
             break
 
+        sys.stdout.write("\r\033[2K")
+        if(qgenes<10):
+            sys.stdout.write(f"P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}% Gen {i} |" + "_" * min(qgenes, 29) + str(qgenes) + "_" * (29 - min(qgenes, 29)) + "| ")
+        else:
+            sys.stdout.write(f"P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}% Gen {i} |" + "_" * min(qgenes, 28) + str(qgenes) + "_" * (28 - min(qgenes, 28)) + "| ")
+        sys.stdout.flush()
+        #print(f'Gen {i}: {qgenes} Quality Genes. ', end='')
+
+        print("1" if True else "2")
+
         
-        print('Reproducting...')
+        #print('Reproducting...')
 
         reproduction_stats = _R.reproduce(X,G, selector, evaluation)
 
@@ -599,10 +608,9 @@ def evolve_population(
 
         #break case for enough success to end iteration
         if(early_stop > 0 and (qgenes / X._max_size) > early_stop):
-            print(f'Success Reached ({early_stop:.2f}) in Population. Breaking evolution loop.')
+            #print(f'Success Reached ({early_stop:.2f}) in Population. Breaking evolution loop.')
             break
 
-    print()
 
 
     #final gene evaluation
@@ -641,6 +649,7 @@ def solver_inner(
     initialization_kwargs,
     solver_kwargs,
     logwalker_kwargs,
+    G = None,
     chunk_num = 0,
     purge_thresh = 0.05,
 ):
@@ -649,12 +658,14 @@ def solver_inner(
     i = 0
 
     X, G, evaluation = ep.evolve_population(
+        G=G,
         iterations=10,
         early_stop=0.1,
         initialization_kwargs=initialization_kwargs,
         solver_kwargs=solver_kwargs,
         chunk_num=chunk_num
     )
+    print()
 
     _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
 
@@ -702,16 +713,16 @@ def solver_inner(
                 s_idx = _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
             i += 1
             print(
-                f"SUCCESS | position={walker.position:.6f} | "
-                f"next_target={walker.current_target()}"
+                f"SUCCESS | @ {walker.position:.4f} "
+                f"-> {walker.current_target():.4f}"
             )
         else:
             X, G = deepcopy(X_prev), deepcopy(G_prev)
             i -= 1
-            print(
-                f"FAILURE | position={walker.position:.6f} | "
-                f"refined_target={walker.current_target()}"
-            )
+            #print(
+            #    f"FAILURE | @ {walker.position:.4f} "
+            #    f"-> {walker.current_target():.4f}"
+            #)
         
 
         # stop checks again after the walker has updated
