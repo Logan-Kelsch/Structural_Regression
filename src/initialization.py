@@ -148,7 +148,7 @@ class Grammar:
                 self._t_count += tc_vec
                 self._t_cum += tq_vec
                 self._t_mu = self._t_cum/(self._t_count + 1)
-                self._UCB1 = self._t_mu + 0.25 * np.sqrt(np.log(self._t + 1) / (self._t_count + 1))
+                self._UCB1 = self._t_mu + np.sqrt(2) * np.clip(np.sqrt(np.log(self._t + 1) / (self._t_count + 1)), None, 1)
 
         
 
