@@ -585,13 +585,11 @@ def evolve_population(
 
         sys.stdout.write("\r\033[2K")
         if(qgenes<10):
-            sys.stdout.write(f"P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}% Gen {i} |" + "_" * min(qgenes, 29) + str(qgenes) + "_" * (29 - min(qgenes, 29)) + "| ")
+            sys.stdout.write(f"P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}% Gen {i+1}\t|" + "_" * min(qgenes, 29) + str(qgenes) + "_" * (29 - min(qgenes, 29)) + "| ")
         else:
-            sys.stdout.write(f"P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}% Gen {i} |" + "_" * min(qgenes, 28) + str(qgenes) + "_" * (28 - min(qgenes, 28)) + "| ")
+            sys.stdout.write(f"P:{100*(ftcount[1]/(ftcount[0]+ftcount[1])):.2f}% Gen {i+1}\t|" + "_" * min(qgenes, 28) + str(qgenes) + "_" * (28 - min(qgenes, 28)) + "| ")
         sys.stdout.flush()
         #print(f'Gen {i}: {qgenes} Quality Genes. ', end='')
-
-        print("1" if True else "2")
 
         
         #print('Reproducting...')
@@ -659,7 +657,7 @@ def solver_inner(
 
     X, G, evaluation = ep.evolve_population(
         G=G,
-        iterations=10,
+        iterations=100,
         early_stop=0.1,
         initialization_kwargs=initialization_kwargs,
         solver_kwargs=solver_kwargs,
@@ -713,8 +711,8 @@ def solver_inner(
                 s_idx = _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
             i += 1
             print(
-                f"SUCCESS | @ {walker.position:.4f} "
-                f"-> {walker.current_target():.4f}"
+                f" @ {walker.position:.4f} "
+                f"-> {walker.current_target():.4f}" if walker.current_target() is not None else ""
             )
         else:
             X, G = deepcopy(X_prev), deepcopy(G_prev)

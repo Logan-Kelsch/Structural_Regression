@@ -38,9 +38,16 @@ class Grammar:
         self._mdl = max_delta_lookback
         self._p_mutation = p_mutation
         self._p_crossover = p_crossover
+        self._alpha_sensor_freq = alpha_sensor_freq
 
         self._tq1d = None
-        self._alpha_sensor_freq = alpha_sensor_freq
+
+        self._t_count = None
+        self._t_cum = None
+        self._t_mu = None
+        self._UCB1 = None
+        self._t = None
+        
 
         match(type):
             case 'Null':
@@ -50,6 +57,13 @@ class Grammar:
                 #actual long term score vector containing quality values which
                 #will be interpreted for probabilistic selection after softmax transformation
                 self._tq1d = np.ones(23, np.float32)
+
+            case 'UCB1':
+                self._t_count = np.zeros(23, np.float32)
+                self._t_cum = np.zeros(23, np.float32)
+                self._t_mu = np.zeros(23, np.float32)
+                self._UCB1 = np.zeros(23, np.float32)
+                self._t = 0
 
 
             case _:
@@ -84,7 +98,11 @@ class Grammar:
             Array of shape (n,) with dtype uint16 containing sampled values
             in the range [1, len(tq1d)].
         """
-        tq1d = self._tq1d
+        match(self._type):
+            case 'tq1d':
+                tq1d = self._tq1d
+            case 'UCB1':
+                tq1d = self._UCB1
 
         if tq1d.ndim != 1:
             raise ValueError(f"tq1d must be 1D, got shape {tq1d.shape}")
@@ -109,7 +127,8 @@ class Grammar:
     
     def update(
         self,
-        tq_vec
+        tq_vec = None,
+        tc_vec = None
     ):
         match(self._type):
             case 'Null':
@@ -123,7 +142,18 @@ class Grammar:
                     self._tq1d += tq_vec
                 else:
                     raise ValueError(f"Grammar update for tq1d mode can't interpret the tq_vec shape correctly.")
+            case 'UCB1':
+
+                self._t += np.sum(tc_vec)
+                self._t_count += tc_vec
+                self._t_cum += tq_vec
+                self._t_mu[self._t_count>0] = self._t_cum[self._t_count>0]/self._t_count[self._t_count>0]
+                self._t_mu[tc_vec==0] = 0
+                self._UCB1 = self._t_mu + np.sqrt(np.log(self._t + 1) / (self._t_count + 1))
+
         
+
+
 
 import numpy as np
 
@@ -899,6 +929,8 @@ def generate_instructions(
             pass
         case 'tq1d':
             pass
+        case 'UCB1':
+            pass
         case _:
             raise ValueError('Cannot interpret grammar prior in generate_instructions. Illegal type.')
 
@@ -1371,6 +1403,94 @@ def generate_instructions(
             chunk_size = gen_size
 
         match(grm_prior._type):
+
+            case 'UCB1':
+                
+                #quick copy and pasting the tq1d format
+                #this one is simply a recreation of UCB1 with a small
+                #adjustment of logic being that the counts for t and n
+                #will be only considering transformation function counts
+                #from models that survive and are tested out of sample.
+
+                #in this grammar we will have some resolved probabalistic structure 
+                #thought this through a bit, we will have all saved unique evaluations
+                #we will have some transition matrix (default of 1s)
+                #for each iteration that we want to make, we take some collection of survived genes
+                #extract p values from validation window
+                #for each instance that some transition exists in the tree
+                #we will add a transformed value to the transition probability matrix
+                #this transformation is ln(k))/2p 
+                # where p is the pvalue for that transition
+                # and where k is the number of times that transition appeared in that solution tree.
+                #I am picking this as I want exponential reward as we approach p=0
+                #and punishment for any instance worse off than chance (0.5)
+
+                #given how the direction of what is random and what uses our probability distribution
+                #and how one would be breadth and one would be depth, we will do the following.
+                #for all genes that we are creating,
+                # we pull its transformation id from the tq 1d vector in which we have iterated
+                # then we randomly select the sensor indices
+
+                # keep shape (chunk_size, 11); last col unused by design
+                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+
+                # populate new pop indices after everything currently legal
+                start_idx = int(pop_prior._L_idx.max())
+                inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
+
+                # random function ids
+                inst_inst[:, 1] = grm_prior.softmax_sample_uint16(rng, inst_inst.shape[0])
+
+                func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
+
+                alpha_sensor_freq = grm_prior._alpha_sensor_freq
+                #rng = np.random.default_rng(seed)
+
+                # used flags
+                used_flags = FUNC_to_USED_FLAGS(func_ids)
+                inst_inst[:, 2] = used_flags
+
+                # sensor flags: x always sensor, alpha sometimes sensor
+                sensor_flags = USED_to_SENSOR_FLAGS(
+                    used_flags,
+                    alpha_sensor_freq=alpha_sensor_freq,
+                    rng=rng
+                )
+                inst_inst[:, 4] = sensor_flags
+
+                # const flags: everything used that is not sensor
+                const_flags = USED_and_SENSOR_to_CONST_FLAGS(used_flags, sensor_flags)
+                inst_inst[:, 3] = const_flags
+
+                # used flags
+                #flags_u32 = FUNC_to_USED_FLAGS(func_ids)
+                #inst_inst[:, 2] = flags_u32
+
+                # const flags
+                #flags_u32 = FUNC_to_nonx_FLAGS(func_ids)
+                #inst_inst[:, 3] = flags_u32
+
+                # sensor flags
+                #flags_u32 = FLAGS_to_SENSOR_FLAGS(inst_inst[:, 2], inst_inst[:, 3])
+                #inst_inst[:, 4] = flags_u32
+
+                # current order: a, d, dd, k -> 6,7,8,9
+                v_cols = {6: 'UA0', 7: 'STEIS', 8: 'STEIS', 9: 'ITS'}
+
+                const_flags = inst_inst[:, 3].astype(np.uint32, copy=False)
+                for c, kind in v_cols.items():
+                    const_mask = (const_flags & (np.uint32(1) << np.uint32(c))) != 0
+                    if kind == 'UA0':
+                        inst_inst = fill_const_UA0(inst_inst, const_mask, c, rng)
+                    elif kind == 'STEIS':
+                        inst_inst = fill_const_STEIS(grm_prior._mdl, const_mask, inst_inst, c, 2.0, 2.0, rng)
+                    elif kind == 'ITS':
+                        inst_inst = fill_const_ITS(inst_inst, const_mask, c, 1.0, rng)
+
+                # sensors / refs
+                inst_inst = fill_sensor_UNIFORM(inst_inst, inst_inst[:, 4], legal_idx=pop_prior._L_idx)
+
+                pass
 
             case 'tq1d':
                 
@@ -3847,6 +3967,7 @@ def initialize(
     epoch_idx   :   list=   [0],
     hlocv_idx   :   list=   [1,2,3,4],
     pop_size    :   int =   1000,
+    grmr_prior  :   any = None,
     grmr_type   :   str =   'Null',
     grmr_mdl    :   int | tuple =   240,
     grmr_p_mttn :   float=  0.0,
@@ -3890,14 +4011,19 @@ def initialize(
     )
     if(verbose>1):print('Population initialized')
     
-    #generate our grammar variable and pass all parameters
-    grammar = Grammar(
-        type=grmr_type,
-        max_delta_lookback=grmr_mdl,
-        p_crossover=grmr_p_csvr,
-        p_mutation=grmr_p_mttn,
-        alpha_sensor_freq=grmr_a_sens
-    )
+    if(grmr_prior is None):
+        print('IN INITIALIZE: GRAMMAR PRIOR IS NONE\n')
+        #generate our grammar variable and pass all parameters
+        grammar = Grammar(
+            type=grmr_type,
+            max_delta_lookback=grmr_mdl,
+            p_crossover=grmr_p_csvr,
+            p_mutation=grmr_p_mttn,
+            alpha_sensor_freq=grmr_a_sens
+        )
+    else:
+        print('IN INITIALIZE: GRAMMAR PRIOR EXISTS.\n')
+        grammar = grmr_prior
     if(verbose>1):print('Grammar Initialized')
 
     if(verbose>0):print('Initializations complete')

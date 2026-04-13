@@ -877,7 +877,11 @@ def visualize_opg_mcpt_distribution(
     Despite the parameter name null_returns for backwards compatibility, the values
     supplied are treated generically as the chosen null score distribution.
     """
+    
+
     null_scores = np.asarray(null_returns, dtype=float).reshape(-1)
+
+    
 
     observed_scores_full = np.asarray(
         details.get("observed_scores_full", details.get("R_full")),
