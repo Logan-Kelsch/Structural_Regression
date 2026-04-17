@@ -928,7 +928,7 @@ def visualize_opg_mcpt_distribution(
     if title is None:
         title = f"OPG-MCPT {score_label} Distribution with Gene Scores"
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(5,3))
     plt.hist(null_scores, bins=bins, density=density)
 
     ymin, ymax = plt.ylim()

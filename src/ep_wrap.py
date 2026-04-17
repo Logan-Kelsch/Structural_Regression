@@ -123,6 +123,7 @@ class Logwalker:
         exwhen: Optional[int] = None,
         log_base: float = 2.0,
         min_walk: int = 1,
+        nest_mode: str = 'log'
     ) -> None:
         if steps < 1:
             raise ValueError("steps must be >= 1")
@@ -136,7 +137,8 @@ class Logwalker:
         self.start = float(start)
         self.destination = float(destination)
         self.steps = int(steps)
-
+        
+        self.nest_mode = nest_mode
         self.exhaust_mode = exhaust_mode
         self.exwhen = math.inf if exwhen is None else int(exwhen)
         self.log_base = float(log_base)
@@ -468,7 +470,11 @@ class Logwalker:
         - one intermediate step
         - one final endpoint
         """
-        raw = math.log(max(steps, 2), self.log_base)
+        match(self.nest_mode):
+            case 'log':
+                raw = math.log(max(steps, 2), self.log_base)
+            case 'half':
+                raw = max(steps / 2, 2)
         return max(2, int(math.ceil(raw)))
 
     @staticmethod
@@ -655,6 +661,9 @@ def solver_inner(
 
     i = 0
 
+    # dynamic walker-controlled threshold term
+    solver_kwargs["emission"].append({"ID": 5, "alpha": walker.start})
+
     X, G, evaluation = ep.evolve_population(
         G=G,
         iterations=100,
@@ -665,10 +674,9 @@ def solver_inner(
     )
     print()
 
-    _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
+    s_idx = _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
 
-    # dynamic walker-controlled threshold term
-    solver_kwargs["emission"].append({"ID": 5, "alpha": 0.0})
+    
 
     while True:
 
@@ -683,6 +691,8 @@ def solver_inner(
 
         target = walker.current_target()
         solver_kwargs["emission"][-1]["alpha"] = target
+        #tuples are immutable so little clunky
+        solver_kwargs["AD_cond"] = (solver_kwargs["AD_cond"][0], target)
 
         # keep previous state so failed attempts can be discarded
         X_prev = deepcopy(X)

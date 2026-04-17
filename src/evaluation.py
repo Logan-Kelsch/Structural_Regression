@@ -1466,7 +1466,10 @@ def evaluate_participation(m: float, n: float, p, q):
     b = np.zeros_like(p, dtype=float)
 
     # p == 0 => force b to -10
-    b[mask_zero] = -10.0
+    #b[mask_zero] = -10.0
+    #there is no way....... huge bug holding this project up
+    # p == 0 => force b to 10
+    b[mask_zero] = 10.0
 
     if np.any(mask_nz):
         p_nz = p[mask_nz]
@@ -3777,6 +3780,10 @@ import numpy as np
 import initialization as _I
 
 
+import numpy as np
+import initialization as _I
+
+
 def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
     """
     Parameters
@@ -3814,8 +3821,8 @@ def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
         empty_s = np.empty(0, dtype=sidx_scores.dtype if sidx_scores.size else np.float64)
         return empty_i, empty_s, empty_i.copy(), empty_s.copy()
 
-    # Optional safety: collapse duplicate scored indices by keeping the best score
-    # "Best" currently means max score.
+    # collapse duplicate scored indices by keeping the best score
+    # best now means minimum score
     uniq_best = {}
     uniq_order = []
     for idx, score in zip(s_idx, sidx_scores):
@@ -3824,7 +3831,7 @@ def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
             uniq_best[idx] = score
             uniq_order.append(idx)
         else:
-            if score <= uniq_best[idx]:   # change to < if lower score is better
+            if score < uniq_best[idx]:
                 uniq_best[idx] = score
 
     s_idx = np.asarray(uniq_order, dtype=np.int64)
@@ -3832,17 +3839,17 @@ def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
 
     scored_set = set(int(i) for i in s_idx)
 
-    # Cache family tree for each scored index
+    # cache family tree for each scored index
     fam_cache = {}
     fam_set_cache = {}
     for idx in s_idx:
         fam = np.asarray(_I.family_tree_indices(X._instructions, int(idx)), dtype=np.int64).ravel()
 
-        # Ensure the node itself is included
+        # ensure the node itself is included
         if fam.size == 0 or int(idx) not in fam:
             fam = np.concatenate(([int(idx)], fam))
 
-        # Preserve order, remove duplicates
+        # preserve order, remove duplicates
         seen = set()
         fam_ordered = []
         for node in fam:
@@ -3854,7 +3861,7 @@ def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
         fam_cache[int(idx)] = np.asarray(fam_ordered, dtype=np.int64)
         fam_set_cache[int(idx)] = seen
 
-    # Remove scored indices that contain any other scored index in their family
+    # remove scored indices that contain any other scored index in their family
     keep_mask = np.ones(s_idx.shape[0], dtype=bool)
     for k, idx in enumerate(s_idx):
         idx = int(idx)
@@ -3871,7 +3878,8 @@ def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
         empty_s = np.empty(0, dtype=sidx_scores.dtype)
         return kept_s_idx, kept_scores, empty_i, empty_s
 
-    # Assign each family node the best score among surviving scored indices that use it
+    # assign each family node the best score among surviving scored indices that use it
+    # best now means minimum score
     node_best_score = {}
     node_order = []
 
@@ -3883,7 +3891,7 @@ def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
                 node_best_score[node] = score
                 node_order.append(node)
             else:
-                if score > node_best_score[node]:   # change to < if lower score is better
+                if score < node_best_score[node]:
                     node_best_score[node] = score
 
     family_idx = np.asarray(node_order, dtype=np.int64)
@@ -3966,4 +3974,18 @@ emission_minmax_breakout = [
 
     # -1
     {"ID": 5, "alpha": 1.0},
+]
+
+emission_vol_expand = [
+    {"ID": 18, "x": "tvec", "delta1": 12, "min_count": 2},            # future-aligned dispersion
+    {"ID": "divide"},
+    {"ID": 18, "x": "tvec", "offset": False, "delta1": 12, "min_count": 2},  # current dispersion
+    {"ID": 5, "alpha": 1.0},                                          # (future/current) - 1
+]
+
+emission_volu_expand = [
+    {"ID": 3, "x": "tvec", "delta1": 12, "min_count": 2},             # future-aligned avg volume
+    {"ID": "divide"},
+    {"ID": 3, "x": "tvec", "offset": False, "delta1": 12, "min_count": 2},  # current avg volume
+    {"ID": 5, "alpha": 1.0},                                          # (future/current) - 1
 ]
