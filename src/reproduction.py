@@ -288,6 +288,238 @@ def _resolve_chunk_rows(population, chunk_num=None):
 
 def purge_indistinguishable(population, evaluation, threshold=0.02, chunk_num=None):
     """
+    Purge highly similar surviving gene columns from population._G_idx using
+    their instantiated output behavior and return the surviving gene indices in
+    their NEW post-flush locations.
+
+    Parameters
+    ----------
+    population : object
+        Population-like object expected to contain at least:
+        - population._X_inst : np.ndarray, shape (n_rows, n_cols)
+            Instantiated matrix whose columns are compared for similarity.
+        - population._G_idx : array-like of int
+            Gene column indices eligible for purge comparison.
+        - population._instructions : np.ndarray
+            Instruction matrix used to recover all family-tree ancestors before flush.
+
+        Optional chunk helpers supported when chunk_num is not None:
+        - population.get_chunk_bounds(chunk_num)
+        - population.get_chunk_slice(chunk_num)
+        - population._chunk_row_bounds
+
+    evaluation : dict
+        Evaluation dictionary expected to contain:
+        - evaluation["F"] : 1d np.ndarray
+            Fitness vector indexed by column/gene position.
+            Only genes in population._G_idx with F > 0 are considered.
+
+    threshold : float, default=0.02
+        Similarity threshold in abs-correlation distance space:
+            distance(i, j) = 1 - abs(corr(i, j))
+        If distance <= threshold, the two genes are treated as indistinguishable
+        and one of them is removed.
+        Example:
+            threshold = 0.02 means any pair with |corr| >= 0.98 is considered too similar.
+
+    chunk_num : int | None, default=None
+        Row-scope selector for comparison:
+        - None : compare genes across all rows in population._X_inst
+        - int  : compare genes only on that walk-forward chunk's rows
+
+    Functionality
+    -------------
+    1) Select candidate genes from population._G_idx with positive fitness.
+    2) Restrict comparison rows to either the whole matrix or one chunk.
+    3) Compute pairwise abs-correlation similarity between candidate columns.
+    4) Remove one member of each too-similar pair using:
+        - higher F survives
+        - if F ties, lower original column index survives
+    5) Recover all required ancestor columns using family_tree_indices(...).
+    6) Flush the population so survivors and dependencies are compacted.
+    7) Return the surviving candidate genes in their NEW locations after flush.
+
+    Return
+    ------
+    selected_new : np.ndarray, dtype=int64
+        1d sorted array of surviving gene column indices AFTER flush_population(...)
+        has remapped them into their new compacted column locations.
+
+    Notes
+    -----
+    - This function mutates population via flush_population(...).
+    - Similarity is measured on instantiated values, not on instruction text.
+    - Constant columns are handled safely:
+        - identical constants are treated as perfectly correlated
+        - unrelated constant-vs-nonconstant pairs remain distance 1
+    """
+    import numpy as np
+    import initialization as _I
+
+    X = np.asarray(population._X_inst)
+
+    if X.ndim != 2:
+        raise ValueError("population._X_inst must be a 2d array")
+
+    # resolve row scope
+    if chunk_num is None:
+        X_rows = X
+    else:
+        chunk_num = int(chunk_num)
+
+        if hasattr(population, "get_chunk_bounds"):
+            row_lo, row_hi = population.get_chunk_bounds(chunk_num)
+
+        elif hasattr(population, "get_chunk_slice"):
+            row_sl = population.get_chunk_slice(chunk_num)
+            row_lo = 0 if row_sl.start is None else int(row_sl.start)
+            row_hi = X.shape[0] if row_sl.stop is None else int(row_sl.stop)
+
+        elif hasattr(population, "_chunk_row_bounds"):
+            row_lo, row_hi = population._chunk_row_bounds[chunk_num]
+            row_lo = int(row_lo)
+            row_hi = int(row_hi)
+
+        else:
+            raise AttributeError(
+                "population must provide get_chunk_bounds(chunk_num), "
+                "get_chunk_slice(chunk_num), or _chunk_row_bounds"
+            )
+
+        if row_lo < 0 or row_hi > X.shape[0] or row_lo >= row_hi:
+            raise ValueError(
+                f"Invalid chunk bounds [{row_lo}:{row_hi}) for X with {X.shape[0]} rows"
+            )
+
+        X_rows = X[row_lo:row_hi, :]
+
+    G_idx = np.asarray(population._G_idx, dtype=np.int64)
+    F = np.asarray(evaluation["F"])
+
+    if F.ndim != 1:
+        raise ValueError('evaluation["F"] must be a 1d array')
+    if np.any(G_idx < 0) or np.any(G_idx >= X_rows.shape[1]):
+        raise ValueError("population._G_idx contains invalid column indices")
+    if np.any(G_idx >= F.shape[0]):
+        raise ValueError('evaluation["F"] is too short for indices in population._G_idx')
+
+    # only compare positive-fitness genes
+    pos_mask = F[G_idx] > 0
+    cols = G_idx[pos_mask]
+
+    # early case
+    if cols.size <= 1:
+        survivors = _I.family_tree_indices(
+            population._instructions,
+            cols,
+            include_terminals=True
+        )
+        g_map = flush_population(population, survivors)
+
+        if isinstance(g_map, dict):
+            selected_new = np.asarray(
+                [g_map[c] for c in cols if c in g_map],
+                dtype=np.int64
+            )
+        else:
+            g_map = np.asarray(g_map)
+            selected_new = np.asarray(g_map[cols], dtype=np.int64)
+            if np.issubdtype(selected_new.dtype, np.integer):
+                selected_new = selected_new[selected_new >= 0]
+
+        selected_new.sort()
+        return selected_new
+
+    X_sub = X_rows[:, cols].astype(np.float64, copy=False)
+    F_sub = F[cols].astype(np.float64, copy=False)
+    n_models = cols.size
+
+    # build robust abs-correlation matrix
+    std = X_sub.std(axis=0)
+    nonconst = std > 0
+    abs_corr = np.zeros((n_models, n_models), dtype=np.float64)
+
+    if np.any(nonconst):
+        Xn = X_sub[:, nonconst]
+        corr_nc = np.corrcoef(Xn, rowvar=False)
+        corr_nc = np.nan_to_num(corr_nc, nan=0.0)
+        abs_corr[np.ix_(nonconst, nonconst)] = np.abs(corr_nc)
+
+    # explicit constant-column handling
+    const_idx = np.where(~nonconst)[0]
+    if const_idx.size:
+        for a in range(const_idx.size):
+            ia = const_idx[a]
+            abs_corr[ia, ia] = 1.0
+            for b in range(a + 1, const_idx.size):
+                ib = const_idx[b]
+                if np.all(X_sub[:, ia] == X_sub[:, ib]):
+                    abs_corr[ia, ib] = 1.0
+                    abs_corr[ib, ia] = 1.0
+
+    np.fill_diagonal(abs_corr, 1.0)
+
+    # keep stronger model from each too-similar pair
+    alive = np.ones(n_models, dtype=bool)
+
+    # higher F first; for ties, lower original col index first
+    order = np.lexsort((cols, -F_sub))
+
+    for i in order:
+        if not alive[i]:
+            continue
+
+        for j in range(n_models):
+            if j == i or not alive[j]:
+                continue
+
+            dist = 1.0 - abs_corr[i, j]
+            if dist <= threshold:
+                if F_sub[i] > F_sub[j]:
+                    alive[j] = False
+                elif F_sub[i] < F_sub[j]:
+                    alive[i] = False
+                    break
+                else:
+                    if cols[i] < cols[j]:
+                        alive[j] = False
+                    else:
+                        alive[i] = False
+                        break
+
+    selected_old = np.sort(cols[alive])
+
+    survivors = _I.family_tree_indices(
+        population._instructions,
+        selected_old,
+        include_terminals=True
+    )
+    g_map = flush_population(population, survivors)
+
+    # remap selected survivors into NEW compacted locations
+    if isinstance(g_map, dict):
+        selected_new = np.asarray(
+            [g_map[c] for c in selected_old if c in g_map],
+            dtype=np.int64
+        )
+    else:
+        g_map = np.asarray(g_map)
+
+        if g_map.ndim != 1:
+            raise ValueError("flush_population remap must be dict or 1d array")
+
+        if np.any(selected_old < 0) or np.any(selected_old >= g_map.shape[0]):
+            raise ValueError("selected survivor indices out of bounds for returned remap")
+
+        selected_new = np.asarray(g_map[selected_old], dtype=np.int64)
+        if np.issubdtype(selected_new.dtype, np.integer):
+            selected_new = selected_new[selected_new >= 0]
+
+    selected_new.sort()
+    return selected_new
+
+def purge_indistinguishable_old(population, evaluation, threshold=0.02, chunk_num=None):
+    """
     Return the surviving model indices c from population._G_idx such that:
       1) evaluation["F"][c] > 0
       2) models that are too similar are purged using abs-correlation distance

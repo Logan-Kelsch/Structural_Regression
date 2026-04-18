@@ -716,9 +716,16 @@ def solver_inner(
         if success:
             X, G = deepcopy(X_try), deepcopy(G_try)
             s_idx = np.where(evaluation["F"] > 0)[0]
+            #print()
+
             #does not clean population if it will end up breaking this loop
             if(not walker.is_complete() and not walker.is_exhausted()):
+                #print('\ns_idx BEFORE purge:', s_idx)
+                #print('\nG_idx BEFORE purge:', X._G_idx)
                 s_idx = _R.purge_indistinguishable(X, evaluation, threshold=purge_thresh, chunk_num=chunk_num)
+                #print('\ns_idx AFTER  purge:', s_idx)
+                #print('\nG_idx AFTER  purge:', X._G_idx)
+                #print()
             i += 1
             print(
                 f" @ {walker.position:.4f} "
@@ -731,6 +738,9 @@ def solver_inner(
             #    f"FAILURE | @ {walker.position:.4f} "
             #    f"-> {walker.current_target():.4f}"
             #)
+
+        #print('INNER: s_idx rn: ', s_idx)
+        #print('INNER: G_idx rn: ', X._G_idx)
         
 
         # stop checks again after the walker has updated
