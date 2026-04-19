@@ -3252,6 +3252,429 @@ def _opgfast_scatter_gene_values(values, population, fill_value=np.nan):
     out[gidx] = values
     return out
 
+import numpy as np
+
+
+def build_opg_null_bank_fast(
+    population=None,
+    chunk_num=None,
+    solver=None,
+    solver_kwargs=None,
+    solver_class=None,
+    raw_emission=None,
+    evaluation_mask=None,
+    anomaly_mask=None,
+    n_sims=2000,
+    template_mode="exact",
+    temperature=1.0,
+    score_mode="ev",
+    score_fn=None,
+    rng=None,
+    max_pack_retries=64,
+    n_jobs=1,
+    batch_size=None,
+    null_dtype="float32",
+    return_details=False,
+):
+    """
+    Build and store the shared OPG null bank once for a given chunk.
+
+    This function is the simulation-heavy stage. It resolves the chunk-level
+    raw emission and anomaly geometry, generates the shared null distribution,
+    and stores the minimal context needed to evaluate genes later without
+    rerunning the simulations.
+
+    You may call this in one of two ways:
+
+    1) Project-style solver resolution:
+        null_context = build_opg_null_bank_fast(
+            population=X,
+            chunk_num=1,
+            solver_kwargs=solver_kwargs,
+            solver_class=_E.Solver,
+            ...
+        )
+
+    2) Direct precomputed arrays:
+        null_context = build_opg_null_bank_fast(
+            chunk_num=1,
+            raw_emission=raw_emission,
+            evaluation_mask=evaluation_mask,
+            anomaly_mask=anomaly_mask,
+            ...
+        )
+
+    Parameters
+    ----------
+    population : _I.Population | None, default=None
+        Population used only if raw_emission/evaluation_mask/anomaly_mask are
+        not already provided and a solver must be resolved.
+
+    chunk_num : int | None, default=None
+        Chunk index used for solver resolution and later re-used by the gene
+        scoring stage.
+
+    solver : object | None, default=None
+        Optional already-constructed solver instance. Must support:
+            raw_emission, evaluation_mask, anomaly_mask = solver.solve(population, chunk_num=chunk_num)
+
+    solver_kwargs : dict | None, default=None
+        Keyword args used only if solver must be constructed via solver_class.
+
+    solver_class : type | None, default=None
+        Solver-like class used only if solver is None and raw arrays are not
+        already provided. If None, this function uses Solver from the module.
+
+    raw_emission : array_like | None, default=None
+        Optional precomputed raw emission for the selected chunk.
+
+    evaluation_mask : array_like | None, default=None
+        Optional precomputed legal evaluation mask for the selected chunk.
+
+    anomaly_mask : array_like | None, default=None
+        Optional precomputed anomaly mask for the selected chunk.
+
+    n_sims : int, default=2000
+        Number of null simulations.
+
+    template_mode : {"exact", "empirical", "softmax"}, default="exact"
+        How simulated block lengths are drawn from the observed anomaly geometry.
+
+    temperature : float, default=1.0
+        Softmax temperature used only when template_mode == "softmax".
+
+    score_mode : {"ev", "return", "per_block"}, default="ev"
+        Score metric used for the null distribution and later gene scoring.
+
+    score_fn : callable | None, default=None
+        Optional custom score function:
+            score_fn(sum_value, active_count, block_count) -> scalar
+
+    rng : None, int, or np.random.Generator, default=None
+        Random source.
+
+    max_pack_retries : int, default=64
+        Maximum retries allowed for random block-to-segment assignment.
+
+    n_jobs : int, default=1
+        Number of worker processes for null generation.
+
+    batch_size : int | None, default=None
+        Simulations per worker batch.
+
+    null_dtype : {"float16", "float32", "float64"} or dtype, default="float32"
+        Storage dtype for the generated null bank.
+
+    return_details : bool, default=False
+        If True, return (null_context, details). Otherwise return null_context.
+
+    Returns
+    -------
+    null_context : dict
+        Reusable context for later gene scoring. Contains:
+            chunk_num
+            raw_emission
+            evaluation_mask
+            anomaly_mask
+            opg_mask
+            obs_lengths
+            m_obs
+            n_obs
+            null_scores
+            null_mean
+            null_std
+            score_mode
+            score_label
+            template_mode
+            temperature
+
+    details : dict, optional
+        Returned only when return_details=True.
+    """
+    if solver_class is None:
+        solver_class = Solver
+
+    if score_fn is not None and n_jobs > 1:
+        raise ValueError("For custom score_fn, use n_jobs=1 unless the function is safely pickleable.")
+
+    rng = np.random.default_rng(rng)
+    solver_kwargs = {} if solver_kwargs is None else dict(solver_kwargs)
+
+    have_direct_arrays = (
+        raw_emission is not None and
+        evaluation_mask is not None and
+        anomaly_mask is not None
+    )
+
+    if not have_direct_arrays:
+        if solver is None:
+            if population is None:
+                raise ValueError(
+                    "build_opg_null_bank_fast needs either "
+                    "(raw_emission, evaluation_mask, anomaly_mask) or "
+                    "(population plus solver/solver_class information)."
+                )
+            solver = solver_class(population, **solver_kwargs)
+
+        if population is None:
+            raise ValueError(
+                "When using solver.solve(...), population must be provided because "
+                "your Solver.solve signature requires it."
+            )
+
+        raw_emission, evaluation_mask, anomaly_mask = solver.solve(
+            population,
+            chunk_num=chunk_num,
+        )
+
+    raw_emission = np.asarray(raw_emission, dtype=np.float64).reshape(-1)
+    evaluation_mask = np.asarray(evaluation_mask, dtype=bool).reshape(-1)
+    anomaly_mask = np.asarray(anomaly_mask, dtype=bool).reshape(-1)
+
+    if raw_emission.size != evaluation_mask.size:
+        raise ValueError("raw_emission and evaluation_mask must have the same length")
+    if raw_emission.size != anomaly_mask.size:
+        raise ValueError("raw_emission and anomaly_mask must have the same length")
+
+    opg_mask = anomaly_mask & evaluation_mask
+    m_obs, n_obs = resolve_anomaly_mn(opg_mask)
+    obs_lengths = _opgfast_true_run_lengths(opg_mask)
+
+    if int(obs_lengths.size) != int(m_obs) or int(obs_lengths.sum()) != int(n_obs):
+        m_obs = int(obs_lengths.size)
+        n_obs = int(obs_lengths.sum())
+
+    if m_obs == 0 or n_obs == 0:
+        null_scores = np.empty(0, dtype=np.dtype(null_dtype))
+        null_mean = np.nan
+        null_std = np.nan
+    else:
+        seg_starts, seg_lens = _opgfast_segments_from_mask(evaluation_mask)
+        prefix = _opgfast_prefix_sum(raw_emission)
+        template = _opgfast_prepare_template_sampler(
+            obs_lengths=obs_lengths,
+            mode=template_mode,
+            temperature=temperature,
+        )
+
+        null_scores = _opgfast_generate_null_scores(
+            prefix=prefix,
+            seg_starts=seg_starts,
+            seg_lens=seg_lens,
+            template=template,
+            n_sims=int(n_sims),
+            score_mode=score_mode,
+            score_fn=score_fn,
+            max_pack_retries=int(max_pack_retries),
+            rng=rng,
+            n_jobs=int(n_jobs),
+            batch_size=batch_size,
+        ).astype(np.dtype(null_dtype), copy=False)
+
+        null_mean = float(np.mean(null_scores, dtype=np.float64))
+        null_std = float(np.std(null_scores, dtype=np.float64, ddof=0))
+
+    null_context = {
+        "chunk_num": chunk_num,
+        "raw_emission": raw_emission.astype(np.float32, copy=False),
+        "evaluation_mask": evaluation_mask,
+        "anomaly_mask": anomaly_mask,
+        "opg_mask": opg_mask,
+        "obs_lengths": obs_lengths.astype(np.int32, copy=False),
+        "m_obs": int(m_obs),
+        "n_obs": int(n_obs),
+        "null_scores": null_scores,
+        "null_mean": null_mean,
+        "null_std": null_std,
+        "score_mode": score_mode,
+        "score_label": _opgfast_score_label(score_mode, score_fn),
+        "template_mode": template_mode,
+        "temperature": temperature,
+    }
+
+    details = {
+        "null_context": null_context,
+        "n_sims": int(n_sims),
+        "n_jobs": int(n_jobs),
+        "null_dtype": str(np.dtype(null_dtype)),
+    }
+
+    if return_details:
+        return null_context, details
+    return null_context
+
+
+def evaluate_genes_from_opg_null_fast(
+    population,
+    good_idx,
+    null_context,
+    fill_value=1.0,
+    z_fill_value=np.nan,
+    visualize=False,
+    viz_kwargs=None,
+    return_details=False,
+):
+    """
+    Score selected genes against a precomputed shared OPG null bank.
+
+    This function is the cheap stage. It does not rerun any simulations.
+    It computes each selected gene's observed score on the stored chunk context,
+    then returns:
+        - empirical p-values against the stored null bank
+        - z-scores relative to the stored null bank mean/std
+
+    Parameters
+    ----------
+    population : _I.Population
+        Population containing the genes to score.
+
+    good_idx : array_like | None
+        Gene indices to evaluate, expected in full population index space.
+        If None, all indices in population._G_idx are evaluated.
+
+    null_context : dict
+        Output of build_opg_null_bank_fast(...).
+
+    fill_value : float, default=1.0
+        P-value fill for non-evaluated locations.
+
+    z_fill_value : float, default=np.nan
+        Z-score fill for non-evaluated locations.
+
+    visualize : bool, default=False
+        If True, plot the shared null histogram and overlay selected gene scores.
+
+    viz_kwargs : dict | None, default=None
+        Optional keyword args passed into visualize_opg_mcpt_distribution(...).
+
+    return_details : bool, default=False
+        If True, also return a details dict.
+
+    Returns
+    -------
+    pvals : np.ndarray, shape (population._max_size,)
+        Full-length p-value vector.
+
+    zscores : np.ndarray, shape (population._max_size,)
+        Full-length z-score vector.
+
+    details : dict, optional
+        Returned only when return_details=True.
+    """
+    viz_kwargs = {} if viz_kwargs is None else dict(viz_kwargs)
+
+    chunk_num = null_context["chunk_num"]
+    raw_emission = np.asarray(null_context["raw_emission"], dtype=np.float64).reshape(-1)
+    evaluation_mask = np.asarray(null_context["evaluation_mask"], dtype=bool).reshape(-1)
+    null_scores = np.asarray(null_context["null_scores"], dtype=np.float64).reshape(-1)
+    score_mode = null_context["score_mode"]
+    score_label = null_context["score_label"]
+    null_mean = float(null_context["null_mean"]) if np.size(null_context["null_mean"]) else np.nan
+    null_std = float(null_context["null_std"]) if np.size(null_context["null_std"]) else np.nan
+
+    all_gidx = np.asarray(population._G_idx, dtype=int)
+    max_size = int(population._max_size)
+
+    if good_idx is None:
+        gidx = all_gidx.copy()
+    else:
+        good_idx = np.asarray(good_idx, dtype=int).reshape(-1)
+        gidx = good_idx[np.isin(good_idx, all_gidx)]
+
+    pvals = np.full(max_size, fill_value, dtype=np.float64)
+    zscores = np.full(max_size, z_fill_value, dtype=np.float64)
+
+    if gidx.size == 0 or null_scores.size == 0:
+        observed_scores_full = np.full(max_size, np.nan, dtype=np.float64)
+        details = {
+            "gidx": gidx.copy(),
+            "all_gidx": all_gidx.copy(),
+            "good_idx": None if good_idx is None else np.asarray(good_idx, dtype=int).copy(),
+            "observed_scores_full": observed_scores_full,
+            "null_scores": null_scores,
+            "score_label": score_label,
+            "null_mean": null_mean,
+            "null_std": null_std,
+        }
+        if visualize:
+            print("No valid genes or null scores available to visualize.")
+        if return_details:
+            return pvals, zscores, details
+        return pvals, zscores
+
+    X_p = resolve_population_signs(population, chunk_num=chunk_num)
+    R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
+
+    X_all = _opgfast_extract_gene_matrix(X_p, population)
+    R_all = _opgfast_extract_gene_vector(R, population)
+
+    legal_gene_mask_all = X_all & evaluation_mask[:, None]
+    p_all = np.sum(legal_gene_mask_all, axis=0).astype(np.int32)
+    q_all = _opgfast_column_run_counts(legal_gene_mask_all)
+
+    sel_mask = np.isin(all_gidx, gidx)
+    sel_pos = np.flatnonzero(sel_mask)
+
+    R_g = R_all[sel_pos]
+    p_g = p_all[sel_pos]
+    q_g = q_all[sel_pos]
+
+    observed_scores_g = np.empty(gidx.size, dtype=np.float64)
+    for j in range(gidx.size):
+        observed_scores_g[j] = _opgfast_score_from_components(
+            sum_value=float(R_g[j]),
+            active_count=int(p_g[j]),
+            block_count=int(q_g[j]),
+            score_mode=score_mode,
+            score_fn=None,
+        )
+
+    observed_scores_full = np.full(max_size, np.nan, dtype=np.float64)
+    observed_scores_full[gidx] = observed_scores_g
+
+    for gi, obs_score in zip(gidx, observed_scores_g):
+        pvals[gi] = _opgfast_mcpt_p_value(
+            observed=obs_score,
+            null=null_scores,
+            alternative="greater",
+        )
+
+        if np.isfinite(null_std) and null_std > 0:
+            zscores[gi] = (obs_score - null_mean) / null_std
+        else:
+            zscores[gi] = z_fill_value
+
+    details = {
+        "gidx": gidx.copy(),
+        "all_gidx": all_gidx.copy(),
+        "good_idx": None if good_idx is None else np.asarray(good_idx, dtype=int).copy(),
+        "observed_scores_full": observed_scores_full,
+        "null_scores": null_scores,
+        "score_label": score_label,
+        "null_mean": null_mean,
+        "null_std": null_std,
+        "R_g": R_g,
+        "p_g": p_g,
+        "q_g": q_g,
+    }
+
+    if visualize:
+        if null_scores.size == 0 or gidx.size == 0:
+            print("No valid genes or null scores available to visualize.")
+        else:
+            import visualization as _V
+            _V.visualize_opg_mcpt_distribution(
+                population=population,
+                null_returns=null_scores,
+                details=details,
+                good_idx=gidx,
+                **viz_kwargs,
+            )
+
+    if return_details:
+        return pvals, zscores, details
+    return pvals, zscores
+
 def evaluate_opg_mcpt(
     population,
     chunk_num,
