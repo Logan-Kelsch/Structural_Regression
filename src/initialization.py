@@ -116,6 +116,7 @@ class Grammar:
         n: int,
         vect: any,
         base: float = np.e,
+        samp0: bool = False
     ) -> np.ndarray:
         """
         Sample n values in {1, ..., len(tq1d)} according to softmax(tq1d).
@@ -156,7 +157,10 @@ class Grammar:
         if base <= 0:
             raise ValueError(f"base must be > 0, got {base}")
 
-        values = np.arange(1, len(tq1d) + 1, dtype=np.uint16)
+        if self._type == 'UCB1-tMAT' and samp0:
+            values = np.arange(len(tq1d), dtype=np.uint16)
+        else:
+            values = np.arange(1, len(tq1d) + 1, dtype=np.uint16)
 
         if base == 1:
             probs = np.full(len(tq1d), 1.0 / len(tq1d), dtype=np.float64)
@@ -940,6 +944,12 @@ def fill_const_UA0(arr: np.ndarray,
     out[rows, col] = rng.uniform(-1.0, 1.0, size=n).astype(np.float32, copy=False)
     return out
 
+def presence_to_proportion(
+    presence    :   np.ndarray
+):
+    return np.bincount(presence, minlength=24) / presence.size
+
+
 def generate_instructions(
     pop_prior       : Population,
     grm_prior       : Grammar,
@@ -1459,6 +1469,65 @@ def generate_instructions(
         match(grm_prior._type):
 
             case 'UCB1-tMAT':
+                
+
+                # keep shape (chunk_size, 11); last col unused by design
+                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+
+                # populate new pop indices after everything currently legal
+                start_idx = int(pop_prior._L_idx.max())
+                inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
+
+                #now we need to define what our existing state multiset
+                pres_multiset = pop_prior._instructions[pop_prior._L_idx, 1]
+
+                #now we have a proportion vector length 24 (functions (23) + 1 (terminals))
+                p = np.bincount(pres_multiset, minlength=24) / pres_multiset.size
+
+                #now we have to make the score vector of length (tf (23) + terminal (1))
+                s = np.sum(grm_prior._UCBMAT, axis=1)
+
+                #now we need to make a state prbabilistic selection space with s and p
+                #looks like the most principled approach is adding proportion from log space
+                parent_prob = s + np.log(p)
+
+                #now we need to sample states from this space, actually on a roll right now
+                #caught a case: YES IT DOES SAMPLE [0, tf] HERE!!!!
+                parent_states = grm_prior.softmax_sample_uint16(rng, chunk_size, parent_prob, samp0=True)
+
+                #for this approach I guess we dont need to pull anything too probabilistic
+                #so we will be routing each parent state we grabbed to a child state 1:1
+                #this is allowing us to greedily select parent and child state pretty much with same
+                #single source of decision making being the matrix of UCB1 values.
+                child_states = np.empty(parent_states.shape[0])
+
+                for i in range(parent_states.shape[0]):
+                    #so for each parent state we look at the local UCB1 evaluation @_UCBMAT[k, :]
+                    #this should be length tf so that we are sampling
+                    #caught a case: YES IT DOES SAMPLE [1, TF] HERE!!!!!
+                    child_states[i] = grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCBMAT[parent_states[i]])
+
+                #and thennnn now that we have child states these truly are functions out
+                inst_inst[:, 1] = child_states
+
+                #so at this point we have the new functions written in with only their Gid and TFid
+                #now we need to fill with flag logic, fill in sampling data FIRST
+                #then we can overwrite the x sensor data with a function translating parent_states
+                #into some kind of random sampling index offset for states we can select from
+
+                #pseudo code:
+                #fill in ALL random sampling for all inst_inst
+                #for i in parent_states:
+                #  x_sensor_vector[i] = find_offset_for_index_for_randomsampled_state_with_this_state(parent_states[i])
+                #overwrite all x sensor values
+                #inst_inst[:, x_sensor_index] = x_sensor_vector
+                #double check that this is good to go?
+
+                
+
+                #I guess we need this
+                alpha_sensor_freq = grm_prior._alpha_sensor_freq
+
                 #SAMPLING
                 # we will take UCBMAT and resolve 
                 # a score for selecting parent nodes for x of new gene
@@ -1468,6 +1537,9 @@ def generate_instructions(
                 # then we will make a proportion vector p (length tf)
                 # out of the multiset of existing states
                 # then we will sample parent idx with softmax(sp)
+                # switched away from softmax(sp) doesnt make sense of proportion
+                # logical way is actually softmax(s + log(p))
+
                 pass
 
                 #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
@@ -1475,20 +1547,15 @@ def generate_instructions(
                 #---- ---- ---- delete after development ---- ---- ----
                 #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
 
-                # keep shape (chunk_size, 11); last col unused by design
-                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+                
 
-                # populate new pop indices after everything currently legal
-                start_idx = int(pop_prior._L_idx.max())
-                inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
+                
 
                 # random function ids
                 inst_inst[:, 1] = grm_prior.softmax_sample_uint16(rng, inst_inst.shape[0])
 
                 func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
 
-                alpha_sensor_freq = grm_prior._alpha_sensor_freq
-                #rng = np.random.default_rng(seed)
 
                 # used flags
                 used_flags = FUNC_to_USED_FLAGS(func_ids)
