@@ -47,6 +47,10 @@ class Grammar:
         self._t_mu = None
         self._UCB1 = None
         self._t = None
+        self._UCBMAT = None
+        self._UCB_EXPLOIT = None
+        self._UCB_EXPLORE = None
+        self._c = None
         
 
         match(type):
@@ -65,6 +69,42 @@ class Grammar:
                 self._UCB1 = np.zeros(23, np.float32)
                 self._t = 0
 
+            case 'UCB1-tMAT':
+                #for this grammatical structure there will be:
+                #some 2d matrix that represents a probabilistic transition matrix
+                #this transition matrix will have probabilities converged
+                # from a stochastic UCB1 interpretation
+                #this can be interpreted as nested.
+                
+                #DESCRIPTION OF DATA STRUCTURES AND SAMPLIGN
+                #DATA STRUCTURES
+                # we will have matrices representing:
+                # UCBMAT - score for each transition
+                # UCB_EXPLOIT - score for each transition
+                # UCB_EXPLORE - score for each transition
+                # t_count - total count for that transition
+                # t - total count of all non terminal nodes
+                # c - coefficient for exploration
+                # t_cum - total result for each transition
+
+                self._UCBMAT = np.zeros((24,23), np.float32)
+                self._UCB_EXPLOIT = np.zeros((24,23), np.float32)
+                self._UCB_EXPLORE = np.zeros((24,23), np.float32)
+                self._t_count = np.zeros((24,23), np.float32)
+                self._t_cum = np.zeros((24,23), np.float32)
+                self._t = 0
+                self._c = 1
+
+                #SAMPLING
+                # we will take UCBMAT and resolve 
+                # a score for selecting parent nodes for x of new gene
+                # this vector is s = np.sum(UCBMAT, axis=1?0???) (length tf)
+                # then we will get the existing state multiset
+                #  which should be all transitions in instructions (_L_idx)
+                # then we will make a proportion vector p (length tf)
+                # out of the multiset of existing states
+                # then we will sample parent idx with softmax(sp)
+
 
             case _:
                 raise ValueError(f'Cannot interpret Grammar type "{type}"')
@@ -74,6 +114,7 @@ class Grammar:
         self,
         rng: np.random.Generator,
         n: int,
+        vect: any,
         base: float = np.e,
     ) -> np.ndarray:
         """
@@ -99,10 +140,14 @@ class Grammar:
             in the range [1, len(tq1d)].
         """
         match(self._type):
+            case 'UCB1-tMAT':
+                tq1d = vect
             case 'tq1d':
                 tq1d = self._tq1d
             case 'UCB1':
                 tq1d = self._UCB1
+            case _:
+                raise ValueError(f"in softmax sampling of grammar: cant interpret self._type = ({self._type})")
 
         if tq1d.ndim != 1:
             raise ValueError(f"tq1d must be 1D, got shape {tq1d.shape}")
@@ -149,6 +194,16 @@ class Grammar:
                 self._t_cum += tq_vec
                 self._t_mu = self._t_cum/(self._t_count + 1)
                 self._UCB1 = self._t_mu + np.clip(np.sqrt(np.log(self._t + 1) / (self._t_count + 1)), None, 1)
+
+            case 'UCB1-tMAT':
+                
+                self._t_count += tc_vec
+                self._t_cum += tq_vec
+                self._t += np.sum(tc_vec, axis=(0, 1))
+                
+                self._UCB_EXPLOIT = self._t_cum/(self._t_count + 1)
+                self._UCB_EXPLORE = np.clip(np.sqrt(self._c * np.log(self._t + 1) / (self._t_count + 1)), None, 1)
+                self._UCBMAT = self._UCB_EXPLOIT + self._UCB_EXPLORE
 
         
 
@@ -1402,6 +1457,84 @@ def generate_instructions(
             chunk_size = gen_size
 
         match(grm_prior._type):
+
+            case 'UCB1-tMAT':
+                #SAMPLING
+                # we will take UCBMAT and resolve 
+                # a score for selecting parent nodes for x of new gene
+                # this vector is s = np.sum(UCBMAT, axis=1?0???) (length tf)
+                # then we will get the existing state multiset
+                #  which should be all transitions in instructions (_L_idx)
+                # then we will make a proportion vector p (length tf)
+                # out of the multiset of existing states
+                # then we will sample parent idx with softmax(sp)
+                pass
+
+                #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
+                #below that pass is the example code stripped from UCB1
+                #---- ---- ---- delete after development ---- ---- ----
+                #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
+
+                # keep shape (chunk_size, 11); last col unused by design
+                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+
+                # populate new pop indices after everything currently legal
+                start_idx = int(pop_prior._L_idx.max())
+                inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
+
+                # random function ids
+                inst_inst[:, 1] = grm_prior.softmax_sample_uint16(rng, inst_inst.shape[0])
+
+                func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
+
+                alpha_sensor_freq = grm_prior._alpha_sensor_freq
+                #rng = np.random.default_rng(seed)
+
+                # used flags
+                used_flags = FUNC_to_USED_FLAGS(func_ids)
+                inst_inst[:, 2] = used_flags
+
+                # sensor flags: x always sensor, alpha sometimes sensor
+                sensor_flags = USED_to_SENSOR_FLAGS(
+                    used_flags,
+                    alpha_sensor_freq=alpha_sensor_freq,
+                    rng=rng
+                )
+                inst_inst[:, 4] = sensor_flags
+
+                # const flags: everything used that is not sensor
+                const_flags = USED_and_SENSOR_to_CONST_FLAGS(used_flags, sensor_flags)
+                inst_inst[:, 3] = const_flags
+
+                # used flags
+                #flags_u32 = FUNC_to_USED_FLAGS(func_ids)
+                #inst_inst[:, 2] = flags_u32
+
+                # const flags
+                #flags_u32 = FUNC_to_nonx_FLAGS(func_ids)
+                #inst_inst[:, 3] = flags_u32
+
+                # sensor flags
+                #flags_u32 = FLAGS_to_SENSOR_FLAGS(inst_inst[:, 2], inst_inst[:, 3])
+                #inst_inst[:, 4] = flags_u32
+
+                # current order: a, d, dd, k -> 6,7,8,9
+                v_cols = {6: 'UA0', 7: 'STEIS', 8: 'STEIS', 9: 'ITS'}
+
+                const_flags = inst_inst[:, 3].astype(np.uint32, copy=False)
+                for c, kind in v_cols.items():
+                    const_mask = (const_flags & (np.uint32(1) << np.uint32(c))) != 0
+                    if kind == 'UA0':
+                        inst_inst = fill_const_UA0(inst_inst, const_mask, c, rng)
+                    elif kind == 'STEIS':
+                        inst_inst = fill_const_STEIS(grm_prior._mdl, const_mask, inst_inst, c, 2.0, 2.0, rng)
+                    elif kind == 'ITS':
+                        inst_inst = fill_const_ITS(inst_inst, const_mask, c, 1.0, rng)
+
+                # sensors / refs
+                inst_inst = fill_sensor_UNIFORM(inst_inst, inst_inst[:, 4], legal_idx=pop_prior._L_idx)
+
+                pass
 
             case 'UCB1':
                 
