@@ -1579,6 +1579,9 @@ def generate_instructions(
                 #so it should be NOW that we have everything filled in, without the
                 #proper placement of parent nodes into x sensor for each
 
+                #function I am about to make will need some masking where indices
+                #will not be raw to instruction but will need to be pulled from _L_idx[newidxs]
+
                 #pseudo code:
                 #fill in ALL random sampling for all inst_inst
                 #for i in parent_states:
@@ -1593,10 +1596,6 @@ def generate_instructions(
                 #below that pass is the example code stripped from UCB1
                 #---- ---- ---- delete after development ---- ---- ----
                 #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
-
-        
-
-                
 
                 pass
 
