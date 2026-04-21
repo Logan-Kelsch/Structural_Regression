@@ -1469,10 +1469,22 @@ def generate_instructions(
         match(grm_prior._type):
 
             case 'UCB1-tMAT':
-                
+
+                #SAMPLING
+                # we will take UCBMAT and resolve 
+                # a score for selecting parent nodes for x of new gene
+                # this vector is s = np.sum(UCBMAT, axis=1?0???) (length tf)
+                # then we will get the existing state multiset
+                #  which should be all transitions in instructions (_L_idx)
+                # then we will make a proportion vector p (length tf)
+                # out of the multiset of existing states
+                # then we will sample parent idx with softmax(sp)
+                # switched away from softmax(sp) doesnt make sense of proportion
+                # logical way is actually softmax(s + log(p))                
 
                 # keep shape (chunk_size, 11); last col unused by design
                 inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+
 
                 # populate new pop indices after everything currently legal
                 start_idx = int(pop_prior._L_idx.max())
@@ -1515,47 +1527,10 @@ def generate_instructions(
                 #then we can overwrite the x sensor data with a function translating parent_states
                 #into some kind of random sampling index offset for states we can select from
 
-                #pseudo code:
-                #fill in ALL random sampling for all inst_inst
-                #for i in parent_states:
-                #  x_sensor_vector[i] = find_offset_for_index_for_randomsampled_state_with_this_state(parent_states[i])
-                #overwrite all x sensor values
-                #inst_inst[:, x_sensor_index] = x_sensor_vector
-                #double check that this is good to go?
-
-                
-
                 #I guess we need this
                 alpha_sensor_freq = grm_prior._alpha_sensor_freq
 
-                #SAMPLING
-                # we will take UCBMAT and resolve 
-                # a score for selecting parent nodes for x of new gene
-                # this vector is s = np.sum(UCBMAT, axis=1?0???) (length tf)
-                # then we will get the existing state multiset
-                #  which should be all transitions in instructions (_L_idx)
-                # then we will make a proportion vector p (length tf)
-                # out of the multiset of existing states
-                # then we will sample parent idx with softmax(sp)
-                # switched away from softmax(sp) doesnt make sense of proportion
-                # logical way is actually softmax(s + log(p))
-
-                pass
-
-                #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
-                #below that pass is the example code stripped from UCB1
-                #---- ---- ---- delete after development ---- ---- ----
-                #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
-
-                
-
-                
-
-                # random function ids
-                inst_inst[:, 1] = grm_prior.softmax_sample_uint16(rng, inst_inst.shape[0])
-
                 func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
-
 
                 # used flags
                 used_flags = FUNC_to_USED_FLAGS(func_ids)
@@ -1600,6 +1575,28 @@ def generate_instructions(
 
                 # sensors / refs
                 inst_inst = fill_sensor_UNIFORM(inst_inst, inst_inst[:, 4], legal_idx=pop_prior._L_idx)
+
+                #so it should be NOW that we have everything filled in, without the
+                #proper placement of parent nodes into x sensor for each
+
+                #pseudo code:
+                #fill in ALL random sampling for all inst_inst
+                #for i in parent_states:
+                #  x_sensor_vector[i] = find_offset_for_index_for_randomsampled_state_with_this_state(parent_states[i])
+                #overwrite all x sensor values
+                #inst_inst[:, x_sensor_index] = x_sensor_vector
+                #double check that this is good to go?
+
+                pass
+
+                #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
+                #below that pass is the example code stripped from UCB1
+                #---- ---- ---- delete after development ---- ---- ----
+                #NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
+
+        
+
+                
 
                 pass
 
