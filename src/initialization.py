@@ -114,7 +114,7 @@ class Grammar:
         self,
         rng: np.random.Generator,
         n: int,
-        vect: any,
+        vect: any = None,
         base: float = np.e,
         samp0: bool = False
     ) -> np.ndarray:
@@ -167,10 +167,20 @@ class Grammar:
         else:
             # stable softmax with arbitrary base:
             # probs ∝ base ** tq1d = exp(log(base) * tq1d)
+
+            floor = 1e-6  # anything <= this is treated as impossible
+
             scaled = np.log(base) * tq1d
             scaled -= np.max(scaled)
             weights = np.exp(scaled)
-            probs = weights / weights.sum()
+
+            weights = np.where(tq1d <= floor, 0.0, weights)
+
+            wsum = weights.sum()
+            if wsum == 0:
+                probs = np.ones_like(weights) / weights.size
+            else:
+                probs = weights / wsum
 
         return rng.choice(values, size=n, p=probs).astype(np.uint16)
     
@@ -995,6 +1005,8 @@ def generate_instructions(
             pass
         case 'UCB1':
             pass
+        case 'UCB1-tMAT':
+            pass
         case _:
             raise ValueError('Cannot interpret grammar prior in generate_instructions. Illegal type.')
 
@@ -1491,8 +1503,9 @@ def generate_instructions(
                 inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
 
                 #now we need to define what our existing state multiset
-                pres_multiset = pop_prior._instructions[pop_prior._L_idx, 1]
+                pres_multiset = pop_prior._instructions[pop_prior._L_idx, 1].astype(np.int32)
 
+                #print(np.bincount(pres_multiset, minlength=24))
                 #now we have a proportion vector length 24 (functions (23) + 1 (terminals))
                 p = np.bincount(pres_multiset, minlength=24) / pres_multiset.size
 
@@ -1501,11 +1514,17 @@ def generate_instructions(
 
                 #now we need to make a state prbabilistic selection space with s and p
                 #looks like the most principled approach is adding proportion from log space
-                parent_prob = s + np.log(p)
+                parent_prob = s + np.log(p + 1e-7)
 
                 #now we need to sample states from this space, actually on a roll right now
                 #caught a case: YES IT DOES SAMPLE [0, tf] HERE!!!!
                 parent_states = grm_prior.softmax_sample_uint16(rng, chunk_size, parent_prob, samp0=True)
+
+                psens_Lidx = np.empty(parent_states.shape[0], dtype=int)
+
+                for i, v in enumerate(parent_states):
+                    matches = np.flatnonzero(pres_multiset == v)
+                    psens_Lidx[i] = np.random.choice(matches)
 
                 #for this approach I guess we dont need to pull anything too probabilistic
                 #so we will be routing each parent state we grabbed to a child state 1:1
@@ -1517,7 +1536,8 @@ def generate_instructions(
                     #so for each parent state we look at the local UCB1 evaluation @_UCBMAT[k, :]
                     #this should be length tf so that we are sampling
                     #caught a case: YES IT DOES SAMPLE [1, TF] HERE!!!!!
-                    child_states[i] = grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCBMAT[parent_states[i]])
+                    #print(grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCBMAT[parent_states[i]]))
+                    child_states[i] = grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCBMAT[parent_states[i]])[0]
 
                 #and thennnn now that we have child states these truly are functions out
                 inst_inst[:, 1] = child_states
@@ -1589,6 +1609,14 @@ def generate_instructions(
                 #overwrite all x sensor values
                 #inst_inst[:, x_sensor_index] = x_sensor_vector
                 #double check that this is good to go?
+
+
+                #holy silly stuff this is what we trying
+                #so I am writing in the x sensors, being offset 
+                #written in place, where we get the randomly selected nodes
+                #and subtract to current idx so that we have the negative offset
+                #lets see if it works?
+                inst_inst[:, 5] = pop_prior._L_idx[psens_Lidx] - inst_inst[:, 0]
 
                 pass
 

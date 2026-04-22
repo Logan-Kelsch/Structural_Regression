@@ -4203,11 +4203,148 @@ import numpy as np
 import initialization as _I
 
 
-import numpy as np
-import initialization as _I
+
+def reduce_scored_family_indices(
+    X,
+    s_idx,
+    sidx_scores,
+    *,
+    return_sorted=False,
+    score_mode="min",
+):
+    """
+    Parameters
+    ----------
+    X : object
+        Must have X._instructions
+    s_idx : array-like
+        Scored indices
+    sidx_scores : array-like
+        Scores parallel to s_idx
+    return_sorted : bool, default=False
+        If True, sort final family_idx ascending
+    score_mode : {"min", "max"}, default="min"
+        Determines what "best" means when collapsing duplicate indices and
+        when assigning a score to shared family nodes.
+
+        "min" : lower score is better
+        "max" : higher score is better
+
+    Returns
+    -------
+    kept_s_idx : np.ndarray
+        Reduced scored indices after removing any scored index whose family
+        contains another scored index.
+    kept_scores : np.ndarray
+        Scores parallel to kept_s_idx
+    family_idx : np.ndarray
+        Unique family indices across kept_s_idx
+    family_scores : np.ndarray
+        Best score parallel to family_idx
+    """
+
+    if score_mode not in ("min", "max"):
+        raise ValueError("score_mode must be 'min' or 'max'")
+
+    s_idx = np.asarray(s_idx, dtype=np.int64).ravel()
+    sidx_scores = np.asarray(sidx_scores).ravel()
+
+    if s_idx.shape[0] != sidx_scores.shape[0]:
+        raise ValueError("s_idx and sidx_scores must be the same length")
+
+    if s_idx.size == 0:
+        empty_i = np.empty(0, dtype=np.int64)
+        empty_s = np.empty(0, dtype=sidx_scores.dtype if sidx_scores.size else np.float64)
+        return empty_i, empty_s, empty_i.copy(), empty_s.copy()
+
+    better = (lambda new, old: new < old) if score_mode == "min" else (lambda new, old: new > old)
+
+    # collapse duplicate scored indices by keeping the best score
+    uniq_best = {}
+    uniq_order = []
+    for idx, score in zip(s_idx, sidx_scores):
+        idx = int(idx)
+        if idx not in uniq_best:
+            uniq_best[idx] = score
+            uniq_order.append(idx)
+        else:
+            if better(score, uniq_best[idx]):
+                uniq_best[idx] = score
+
+    s_idx = np.asarray(uniq_order, dtype=np.int64)
+    sidx_scores = np.asarray([uniq_best[i] for i in uniq_order], dtype=sidx_scores.dtype)
+
+    scored_set = set(int(i) for i in s_idx)
+
+    # cache family tree for each scored index
+    fam_cache = {}
+    fam_set_cache = {}
+    for idx in s_idx:
+        fam = np.asarray(_I.family_tree_indices(X._instructions, int(idx)), dtype=np.int64).ravel()
+
+        # ensure the node itself is included
+        if fam.size == 0 or int(idx) not in fam:
+            fam = np.concatenate(([int(idx)], fam))
+
+        # preserve order, remove duplicates
+        seen = set()
+        fam_ordered = []
+        for node in fam:
+            node = int(node)
+            if node not in seen:
+                seen.add(node)
+                fam_ordered.append(node)
+
+        fam_cache[int(idx)] = np.asarray(fam_ordered, dtype=np.int64)
+        fam_set_cache[int(idx)] = seen
+
+    # remove scored indices that contain any other scored index in their family
+    keep_mask = np.ones(s_idx.shape[0], dtype=bool)
+    for k, idx in enumerate(s_idx):
+        idx = int(idx)
+        other_scored_in_family = fam_set_cache[idx].intersection(scored_set)
+        other_scored_in_family.discard(idx)
+        if len(other_scored_in_family) > 0:
+            keep_mask[k] = False
+
+    kept_s_idx = s_idx[keep_mask]
+    kept_scores = sidx_scores[keep_mask]
+
+    if kept_s_idx.size == 0:
+        empty_i = np.empty(0, dtype=np.int64)
+        empty_s = np.empty(0, dtype=sidx_scores.dtype)
+        return kept_s_idx, kept_scores, empty_i, empty_s
+
+    # assign each family node the best score among surviving scored indices that use it
+    node_best_score = {}
+    node_order = []
+
+    for idx, score in zip(kept_s_idx, kept_scores):
+        fam = fam_cache[int(idx)]
+        for node in fam:
+            node = int(node)
+            if node not in node_best_score:
+                node_best_score[node] = score
+                node_order.append(node)
+            else:
+                if better(score, node_best_score[node]):
+                    node_best_score[node] = score
+
+    family_idx = np.asarray(node_order, dtype=np.int64)
+    family_scores = np.asarray(
+        [node_best_score[int(node)] for node in family_idx],
+        dtype=kept_scores.dtype,
+    )
+
+    if return_sorted:
+        order = np.argsort(family_idx)
+        family_idx = family_idx[order]
+        family_scores = family_scores[order]
+
+    return kept_s_idx, kept_scores, family_idx, family_scores
 
 
-def reduce_scored_family_indices(X, s_idx, sidx_scores, *, return_sorted=False):
+def reduce_scored_family_indices_old(X, s_idx, sidx_scores, *, return_sorted=False):
     """
     Parameters
     ----------
