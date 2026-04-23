@@ -168,19 +168,21 @@ class Grammar:
             # stable softmax with arbitrary base:
             # probs ∝ base ** tq1d = exp(log(base) * tq1d)
 
-            floor = 1e-6  # anything <= this is treated as impossible
+            #floor = 1e-6  # anything <= this is treated as impossible
 
             scaled = np.log(base) * tq1d
             scaled -= np.max(scaled)
             weights = np.exp(scaled)
 
-            weights = np.where(tq1d <= floor, 0.0, weights)
+            #weights = np.where(tq1d <= floor, 0.0, weights)
 
             wsum = weights.sum()
             if wsum == 0:
                 probs = np.ones_like(weights) / weights.size
             else:
                 probs = weights / wsum
+
+        #print("in softmax sample (probs): ", probs)
 
         return rng.choice(values, size=n, p=probs).astype(np.uint16)
     
@@ -1514,7 +1516,11 @@ def generate_instructions(
 
                 #now we need to make a state prbabilistic selection space with s and p
                 #looks like the most principled approach is adding proportion from log space
-                parent_prob = s + np.log(p + 1e-7)
+                parent_prob = s + np.log(p + 1e-12)
+
+                #print('s vector   : ', s)
+                #print('p vector   : ', p)
+                #print('parent prob: ', parent_prob)
 
                 #now we need to sample states from this space, actually on a roll right now
                 #caught a case: YES IT DOES SAMPLE [0, tf] HERE!!!!
