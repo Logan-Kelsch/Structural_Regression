@@ -32,6 +32,8 @@ class Grammar:
         p_mutation  :   float   =   0.05,
         p_crossover :   float   =   0.025,
         alpha_sensor_freq   :   float   =   0.5,
+        node_fitness    :   str =   'count_pop_dead',
+        temp            :   float   =   0.0,
         spec_gram_args  :   dict    =   None
     ):
         self._type = type
@@ -39,6 +41,9 @@ class Grammar:
         self._p_mutation = p_mutation
         self._p_crossover = p_crossover
         self._alpha_sensor_freq = alpha_sensor_freq
+        self._node_fitness = node_fitness
+        self._mode = 'train'
+        self._temp = temp
 
         self._tq1d = None
 
@@ -50,6 +55,7 @@ class Grammar:
         self._UCBMAT = None
         self._UCB_EXPLOIT = None
         self._UCB_EXPLORE = None
+        self._UCB_CONF = None
         self._c = None
         
 
@@ -90,6 +96,7 @@ class Grammar:
                 self._UCBMAT = np.zeros((24,23), np.float32)
                 self._UCB_EXPLOIT = np.zeros((24,23), np.float32)
                 self._UCB_EXPLORE = np.zeros((24,23), np.float32)
+                self._UCB_CONF = np.zeros((24,23), np.float32)
                 self._t_count = np.zeros((24,23), np.float32)
                 self._t_cum = np.zeros((24,23), np.float32)
                 self._t = 0
@@ -188,42 +195,220 @@ class Grammar:
     
     def update(
         self,
-        tq_vec = None,
-        tc_vec = None
+        X,
+        family_idx,
+        family_scores
     ):
         match(self._type):
-            case 'Null':
-                pass
+            case "UCB1-tMAT":
 
-            case 'tq1d':
+                # landing state for each family node
+                family_tfidx = X._instructions[family_idx, 1].astype(int)
 
-                if(tq_vec.shape[0]==self._tq1d.shape[0]+1):
-                    self._tq1d += tq_vec[1:]
-                elif(tq_vec.shape[0]==self._tq1d.shape[0]):
-                    self._tq1d += tq_vec
-                else:
-                    raise ValueError(f"Grammar update for tq1d mode can't interpret the tq_vec shape correctly.")
-            case 'UCB1':
+                # transform p-values to fitness
+                # family_fitness = -np.sqrt(2 * family_scores) + 1
+                # family_fitness = ((0.5 - family_scores) / 0.629961) ** 3 + 0.5
+                family_fitness = np.clip(-np.log(family_scores) / (-np.log(0.05)), None, 1)
 
-                self._t += np.sum(tc_vec)
-                self._t_count += tc_vec
-                self._t_cum += tq_vec
-                self._t_mu = self._t_cum/(self._t_count + 1)
-                self._UCB1 = self._t_mu + np.clip(np.sqrt(np.log(self._t + 1) / (self._t_count + 1)), None, 1)
+                # discard family nodes that land in state 0
+                keep = (family_tfidx != 0)
+                family_idx = family_idx[keep]
+                family_tfidx = family_tfidx[keep]
+                family_scores = family_scores[keep]
+                family_fitness = family_fitness[keep]
 
-            case 'UCB1-tMAT':
-                
-                self._t_count += tc_vec
-                self._t_cum += tq_vec
-                self._t += np.sum(tc_vec, axis=(0, 1))
+                # rows = leaving state 0..23
+                # cols = landing state 1..23 shifted to 0..22
+                local_tq2d = np.zeros((24, 23), dtype=np.float32)
+                local_tfrq2d = np.zeros((24, 23), dtype=np.float32)
+
+                # parent/leaving state for each surviving family node
+                parent_tfidx = np.empty(family_idx.shape[0], dtype=np.int64)
+                for i in range(family_idx.shape[0]):
+                    row = int(family_idx[i])
+                    prow = int(X._instructions[row, 0] + X._instructions[row, 5])
+                    parent_tfidx[i] = int(X._instructions[prow, 1])
+
+                # landing state goes to dim1 with -1 shift because state 0 is not allowed there
+                land_col = family_tfidx - 1
+
+                match (self._node_fitness):
+                    case "count_all":
+                        for i in range(family_idx.shape[0]):
+                            r = parent_tfidx[i]
+                            c = land_col[i]
+                            local_tq2d[r, c] += family_fitness[i]
+                            local_tfrq2d[r, c] += 1
+
+                        nz = local_tfrq2d > 0
+                        local_tq2d[nz] /= local_tfrq2d[nz]
+
+                    case "count_best":
+                        seen = {}
+                        for i in range(family_idx.shape[0]):
+                            key = (int(parent_tfidx[i]), int(land_col[i]))
+                            val = family_fitness[i]
+                            if key not in seen or val > seen[key]:
+                                seen[key] = val
+
+                        for (r, c), val in seen.items():
+                            local_tq2d[r, c] = val
+                            local_tfrq2d[r, c] = 1
+
+                    case "count_worst":
+                        seen = {}
+                        for i in range(family_idx.shape[0]):
+                            key = (int(parent_tfidx[i]), int(land_col[i]))
+                            val = family_fitness[i]
+                            if key not in seen or val < seen[key]:
+                                seen[key] = val
+
+                        for (r, c), val in seen.items():
+                            local_tq2d[r, c] = val
+                            local_tfrq2d[r, c] = 1
+
+                    case "count_pop_null" | "count_pop_dead":
+                        fill_score = 0.5 if self._node_fitness == "count_pop_null" else 1.0
+                        fill_fitness = float(np.clip(-np.log(fill_score) / (-np.log(0.05)), None, 1))
+
+                        # family nodes keep their reduced/propagated fitness
+                        fam_fit_map = {int(family_idx[i]): float(family_fitness[i]) for i in range(family_idx.shape[0])}
+
+                        # use full gene space
+                        pop_idx = np.asarray(X._G_idx, dtype=np.int64)
+
+                        for idx in pop_idx:
+                            idx = int(idx)
+
+                            # landing state
+                            tf = int(X._instructions[idx, 1])
+                            if tf == 0:
+                                continue
+
+                            # leaving state from parent
+                            prow = int(X._instructions[idx, 0] + X._instructions[idx, 5])
+                            ptf = int(X._instructions[prow, 1])
+
+                            # use family fitness if available, otherwise fallback fitness
+                            fit = fam_fit_map.get(idx, fill_fitness)
+
+                            local_tq2d[ptf, tf - 1] += fit
+                            local_tfrq2d[ptf, tf - 1] += 1
+
+                        nz = local_tfrq2d > 0
+                        local_tq2d[nz] /= local_tfrq2d[nz]
+
+                    case _:
+                        raise ValueError(f"unknown node fitness mode: {self._node_fitness}")
+
+                self._t_count += local_tfrq2d
+                self._t_cum += local_tq2d
+                self._t += np.sum(local_tq2d, axis=(0, 1))
                 
                 self._UCB_EXPLOIT = self._t_cum/(self._t_count + 1)
                 self._UCB_EXPLORE = np.clip(np.sqrt(self._c * np.log(self._t + 1) / (self._t_count + 1)), None, 1)
                 self._UCBMAT = self._UCB_EXPLOIT + self._UCB_EXPLORE
+                _tnorm = self._t_count / np.clip(self._t_count.sum(axis=1, keepdims=True), 1, None)
+                self._UCB_CONF = self._UCB_EXPLOIT * (_tnorm ** self._temp)
+                del _tnorm
 
-        
+            case "UCB1":
 
+                # we will need to go get the actual transfomration function IDs
+                # to associate each node to its max downset score
+                family_tfidx = X._instructions[family_idx, 1].astype(int)
 
+                # now we should go ahead and transform the p value 
+                # to our fitness function
+                # family_fitness = -np.sqrt(2 * family_scores) + 1
+                # trying a new one, cubic [0, 1]
+                # family_fitness = ((0.5 - family_scores) / 0.629961) ** 3 + 0.5
+                family_fitness = np.clip(-np.log(family_scores) / (-np.log(0.05)), None, 1)
+                
+                local_tq1d = np.zeros(24, dtype=np.float32)
+                local_tfrq = np.zeros(24, dtype=np.float32)
+
+                match(self._node_fitness):
+                    case "count_all":
+                        for i in range(family_tfidx.shape[0]):
+                            tf = family_tfidx[i]
+                            local_tq1d[tf] += family_fitness[i]
+
+                        val_tf, cnt_tf = np.unique(family_tfidx, return_counts=True)
+
+                        for idx, tf in enumerate(val_tf):
+                            local_tq1d[tf] /= cnt_tf[idx]
+                            local_tfrq[tf] = cnt_tf[idx]
+
+                    case "count_best":
+                        val_tf = np.unique(family_tfidx)
+
+                        for tf in val_tf:
+                            mask = (family_tfidx == tf)
+                            best_fitness = np.max(family_fitness[mask])
+                            local_tq1d[tf] += best_fitness
+                            local_tfrq[tf] = 1
+
+                    case "count_worst":
+                        val_tf = np.unique(family_tfidx)
+
+                        for tf in val_tf:
+                            mask = (family_tfidx == tf)
+                            best_fitness = np.min(family_fitness[mask])
+                            local_tq1d[tf] += best_fitness
+                            local_tfrq[tf] = 1
+
+                    case "count_pop_null" | "count_pop_dead":
+                        fill_score = 0.5 if self._node_fitness == "count_pop_null" else 1.0
+                        fill_fitness = float(np.clip(-np.log(fill_score) / (-np.log(0.05)), None, 1))
+
+                        # family nodes keep their reduced/propagated fitness
+                        fam_fit_map = {int(family_idx[i]): float(family_fitness[i]) for i in range(family_idx.shape[0])}
+
+                        # use full gene space
+                        pop_idx = np.asarray(X._G_idx, dtype=np.int64)
+
+                        for idx in pop_idx:
+                            idx = int(idx)
+                            tf = int(X._instructions[idx, 1])
+
+                            # use family fitness if available, otherwise fallback fitness
+                            fit = fam_fit_map.get(idx, fill_fitness)
+
+                            local_tq1d[tf] += fit
+                            local_tfrq[tf] += 1
+
+                        nz = local_tfrq > 0
+                        local_tq1d[nz] /= local_tfrq[nz]
+
+                    case _:
+                        raise ValueError(f"unknown node fitness mode: {self._node_fitness}")
+
+                local_tq1d[0] = 0
+                local_tfrq[0] = 0
+
+                self._t += np.sum(local_tfrq[1:])
+                self._t_count += local_tfrq[1:]
+                self._t_cum += local_tq1d[1:]
+                self._t_mu = self._t_cum/(self._t_count + 1)
+                self._UCB1 = self._t_mu + np.clip(np.sqrt(np.log(self._t + 1) / (self._t_count + 1)), None, 1)
+
+            case 'tq1d':
+
+                raise ValueError(f"Grammar type 'tq1d' is depricated.")
+            
+            case 'Null':
+                pass
+
+            case _:
+                raise ValueError(f'In Grammar Update: Grammar of type ({self._type}) is not recongized.')
+
+    def mode(
+        self,
+        mode    :   str
+    ):
+        self._mode = mode
+    
 
 import numpy as np
 
@@ -1512,7 +1697,15 @@ def generate_instructions(
                 p = np.bincount(pres_multiset, minlength=24) / pres_multiset.size
 
                 #now we have to make the score vector of length (tf (23) + terminal (1))
-                s = np.sum(grm_prior._UCBMAT, axis=1)
+                match(grm_prior._mode):
+                    case 'train':
+                        #print('sampling from UCB MAT')
+                        #print('sampling from UCB MAT')
+                        s = np.sum(grm_prior._UCBMAT, axis=1)
+                    case 'infer':
+                        #print('sampling from UCB EXPLOIT')
+                        #print('sampling from UCB EXPLOIT')
+                        s = np.sum(grm_prior._UCB_CONF, axis=1)
 
                 #now we need to make a state prbabilistic selection space with s and p
                 #looks like the most principled approach is adding proportion from log space
@@ -1543,7 +1736,15 @@ def generate_instructions(
                     #this should be length tf so that we are sampling
                     #caught a case: YES IT DOES SAMPLE [1, TF] HERE!!!!!
                     #print(grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCBMAT[parent_states[i]]))
-                    child_states[i] = grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCBMAT[parent_states[i]])[0]
+                    match(grm_prior._mode):
+                        case 'train':
+                            #print('sampling from UCB MAT')
+                            #print('sampling from UCB MAT')
+                            child_states[i] = grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCBMAT[parent_states[i]])[0]
+                        case 'infer':
+                            #print('sampling from UCB EXPLOIT')
+                            #print('sampling from UCB EXPLOIT')
+                            child_states[i] = grm_prior.softmax_sample_uint16(rng, 1, grm_prior._UCB_CONF[parent_states[i]])[0]
 
                 #and thennnn now that we have child states these truly are functions out
                 inst_inst[:, 1] = child_states
