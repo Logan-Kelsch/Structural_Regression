@@ -27,13 +27,15 @@ class Grammar:
     '''
     def __init__(
         self,
-        type    :   str = 'Null',
+        type            :   str = 'Null',
         max_delta_lookback  :   int =   48,
-        p_mutation  :   float   =   0.05,
-        p_crossover :   float   =   0.025,
+        p_mutation      :   float   =   0.05,
+        p_crossover     :   float   =   0.025,
         alpha_sensor_freq   :   float   =   0.5,
         node_fitness    :   str =   'count_pop_dead',
+        count_explore   :   bool    =   True,
         temp            :   float   =   0.0,
+        mode            :   str     =   'train',
         spec_gram_args  :   dict    =   None
     ):
         self._type = type
@@ -42,7 +44,14 @@ class Grammar:
         self._p_crossover = p_crossover
         self._alpha_sensor_freq = alpha_sensor_freq
         self._node_fitness = node_fitness
-        self._mode = 'train'
+
+        #count explore will allocate all counting mechanisms into
+        #instruction generation functionality
+        #therefore counts are static within grammar update function (when true)
+        #otherwise (when false) counting mechanism is allocated to grammar update
+        self._count_explore = count_explore
+
+        self._mode = mode
         self._temp = temp
 
         self._tq1d = None
@@ -97,9 +106,11 @@ class Grammar:
                 self._UCB_EXPLOIT = np.zeros((24,23), np.float32)
                 self._UCB_EXPLORE = np.zeros((24,23), np.float32)
                 self._UCB_CONF = np.zeros((24,23), np.float32)
-                self._t_count = np.zeros((24,23), np.float32)
                 self._t_cum = np.zeros((24,23), np.float32)
-                self._t = 0
+                self._EXPLORE_COUNT = np.zeros((24,23), np.float32)
+                self._EXPLOIT_COUNT = np.zeros((24,23), np.float32)
+                self._EXPLORE_T = 0
+                self._EXPLOIT_T = 0
                 self._c = 1
 
                 #SAMPLING
@@ -298,17 +309,30 @@ class Grammar:
                         nz = local_tfrq2d > 0
                         local_tq2d[nz] /= local_tfrq2d[nz]
 
+
                     case _:
                         raise ValueError(f"unknown node fitness mode: {self._node_fitness}")
 
-                self._t_count += local_tfrq2d
+                #here we are counting seperately for exploit members
                 self._t_cum += local_tq2d
-                self._t += np.sum(local_tq2d, axis=(0, 1))
+                self._EXPLOIT_COUNT += local_tfrq2d
+                self._EXPLOIT_T += np.sum(local_tfrq2d, axis=(0, 1))
                 
-                self._UCB_EXPLOIT = self._t_cum/(self._t_count + 1)
-                self._UCB_EXPLORE = np.clip(np.sqrt(self._c * np.log(self._t + 1) / (self._t_count + 1)), None, 1)
+                self._UCB_EXPLOIT = self._t_cum/(self._EXPLOIT_COUNT + 1)
+
+                #if you get confused here, really we have this switch case to protect non functioning
+                #stuff from breaking the system. old mechanism only used counts from models that actually made it to
+                #the final testing, while new mechanism is actually ripping ALL generation stats from instruciton generation
+                #functionality and just expects some sort of stronger constant consideration for a smoother exploration component
+                #old exploration component is very very clunky and NOTE INTERPRETS explored but failed space as unexplored
+                #sooo this is my solution
+                if(self._count_explore is True):
+                    self._UCB_EXPLORE = np.clip(np.sqrt(self._c * np.log(self._EXPLORE_T + 1) / (self._EXPLORE_COUNT + 1)), None, 1)
+                else:
+                    self._UCB_EXPLORE = np.clip(np.sqrt(self._c * np.log(self._EXPLOIT_T + 1) / (self._EXPLOIT_COUNT + 1)), None, 1)
                 self._UCBMAT = self._UCB_EXPLOIT + self._UCB_EXPLORE
-                _tnorm = self._t_count / np.clip(self._t_count.sum(axis=1, keepdims=True), 1, None)
+                #consider that this may need redone 
+                _tnorm = self._EXPLOIT_COUNT / np.clip(self._EXPLOIT_COUNT.sum(axis=1, keepdims=True), 1, None)
                 self._UCB_CONF = self._UCB_EXPLOIT * (_tnorm ** self._temp)
                 del _tnorm
 
@@ -1729,7 +1753,7 @@ def generate_instructions(
                 #so we will be routing each parent state we grabbed to a child state 1:1
                 #this is allowing us to greedily select parent and child state pretty much with same
                 #single source of decision making being the matrix of UCB1 values.
-                child_states = np.empty(parent_states.shape[0])
+                child_states = np.empty(parent_states.shape[0], dtype=int)
 
                 for i in range(parent_states.shape[0]):
                     #so for each parent state we look at the local UCB1 evaluation @_UCBMAT[k, :]
@@ -1748,6 +1772,14 @@ def generate_instructions(
 
                 #and thennnn now that we have child states these truly are functions out
                 inst_inst[:, 1] = child_states
+
+                #quick case for if we are counting entire pool of generations
+                #we would need to tally up all explorations in this generation
+                #and incorporate them into the counts within the grammar
+                if(grm_prior._mode == 'train' and grm_prior._count_explore is True):
+                    for i in range(parent_states.shape[0]):
+                        grm_prior._EXPLORE_COUNT[parent_states[i], child_states[i]-1] += 1                
+                    grm_prior._EXPLORE_T = np.sum(grm_prior._EXPLORE_COUNT, axis=(0, 1))
 
                 #so at this point we have the new functions written in with only their Gid and TFid
                 #now we need to fill with flag logic, fill in sampling data FIRST
