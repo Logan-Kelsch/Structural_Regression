@@ -127,7 +127,8 @@ class Solver:
 
             evaluation_mask = generate_evaluation_mask(
                 Population,
-                self._offset,
+                offset=self._offset,
+                emission=self._emission,
                 chunk_num=chunk_num,
             )
             anomaly_mask = generate_anomaly_mask(raw_emission, self._AD_cond)
@@ -445,7 +446,210 @@ def generate_raw_emission(Population, target_idx, emissions, offset, chunk_num: 
     out_full[:valid_len] = work[:, 0]
     return _remove_buggers(out_full)
 
-def generate_evaluation_mask(Population: _I.Population, offset, chunk_num: int | None = None):
+def _max_int_from_value(v) -> int:
+    """
+    Safely extract the largest nonnegative integer from a scalar or array-like value.
+    Returns 0 for None, strings, invalid values, or empty arrays.
+    """
+    if v is None:
+        return 0
+
+    if isinstance(v, (str, bytes)):
+        return 0
+
+    try:
+        if np.isscalar(v):
+            return max(0, int(v))
+    except Exception:
+        return 0
+
+    try:
+        arr = np.asarray(v)
+
+        if arr.size == 0:
+            return 0
+
+        if not np.issubdtype(arr.dtype, np.number):
+            return 0
+
+        arr = arr[np.isfinite(arr)]
+
+        if arr.size == 0:
+            return 0
+
+        return max(0, int(np.nanmax(arr)))
+    except Exception:
+        return 0
+
+
+def _max_emission_lookback(emission) -> int:
+    """
+    Recursively scan an emission specification for lookback-style parameters.
+
+    This catches normal emission dictionaries like:
+        {"ID": 18, "delta1": 24}
+        {"ID": 15, "delta1": 6, "delta2": 24}
+
+    It also catches nested emissions inside alpha/x/etc. such as:
+        {"ID": 5, "alpha": {"ID": 3, "delta1": 24}}
+    """
+    lookback_keys = {"delta1", "delta2", "lookback", "window", "win"}
+    max_lb = 0
+
+    def visit(obj):
+        nonlocal max_lb
+
+        if obj is None:
+            return
+
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k in lookback_keys:
+                    max_lb = max(max_lb, _max_int_from_value(v))
+
+                if isinstance(v, (dict, list, tuple)):
+                    visit(v)
+
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                visit(item)
+
+    visit(emission)
+    return max_lb
+
+
+def generate_evaluation_mask(
+    Population: _I.Population,
+    offset,
+    emission=None,
+    chunk_num: int | None = None,
+    purge_lookback: int | None = None,
+    fallback_tod_idx: int = 5,
+):
+    """
+    Build a boolean evaluation mask for intraday targets.
+
+    The mask removes rows that should not be evaluated because of either:
+
+    1. Embargo:
+       Forward-looking targets cannot evaluate the final `offset` rows of each day,
+       because those rows would wrap into the next day.
+
+    2. Purge:
+       Rolling / lookback-based emissions cannot safely evaluate the beginning
+       of each day, because their rolling windows may contain previous-day values.
+
+    Parameters
+    ----------
+    Population
+        Population object containing _X_inst and time information.
+
+    offset
+        Forward target offset. This controls the end-of-day embargo.
+
+    emission
+        List of emission dictionaries. The function scans this for delta1,
+        delta2, lookback, window, and win keys to infer purge length.
+
+    chunk_num
+        None returns the full-data mask. An int returns the mask for that chunk.
+
+    purge_lookback
+        Optional manual purge length. If provided, this overrides the value
+        inferred from emission.
+
+    fallback_tod_idx
+        Fallback time-of-day column. Your current structure uses column 5.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean mask of shape (N,), where True means the row is valid
+        for evaluation and False means it should be excluded.
+    """
+    if not hasattr(Population, "_X_inst"):
+        raise AttributeError("Population must have attribute '_X_inst'")
+
+    if not hasattr(Population, "_T_idx"):
+        raise AttributeError("Population must have attribute '_T_idx'")
+
+    X_full = Population._X_inst
+
+    if not isinstance(X_full, np.ndarray):
+        raise TypeError("Population._X_inst must be a numpy ndarray")
+
+    if X_full.ndim != 2:
+        raise ValueError("Population._X_inst must be 2D")
+
+    X, _, _ = _get_chunk_view(Population, chunk_num)
+
+    N, G = X.shape
+
+    if N == 0:
+        return np.zeros(0, dtype=bool)
+
+    try:
+        if hasattr(Population, "_tod_idx") and Population._tod_idx is not None:
+            tod_idx = int(Population._tod_idx)
+        elif getattr(Population, "_time_terminals", False):
+            tod_idx = int(Population._T_idx[-2])
+        else:
+            tod_idx = int(fallback_tod_idx)
+    except Exception as e:
+        raise ValueError("Could not resolve time-of-day column index") from e
+
+    if tod_idx < 0 or tod_idx >= G:
+        raise IndexError(f"time-of-day column index {tod_idx} out of bounds for G={G}")
+
+    offset = int(offset)
+
+    if offset < 0:
+        raise ValueError("offset must be >= 0")
+
+    tod = np.asarray(X[:, tod_idx])
+
+    mask = np.ones(N, dtype=bool)
+
+    # ------------------------------------------------------------
+    # Embargo end-of-day rows where t + offset would cross a day.
+    # ------------------------------------------------------------
+    if offset > 0:
+        if offset >= N:
+            return np.zeros(N, dtype=bool)
+
+        mask[-offset:] = False
+        mask[:-offset] &= tod[offset:] >= tod[:-offset]
+
+    # ------------------------------------------------------------
+    # Purge beginning-of-day rows based on max emission lookback.
+    # Conservative behavior:
+    #   delta1 = 12 purges the first 12 rows of each day.
+    # If you want exact full-window availability for rolling windows
+    # that include the current row, change this to max_lookback - 1.
+    # ------------------------------------------------------------
+    if purge_lookback is None:
+        purge_bars = _max_emission_lookback(emission)
+    else:
+        purge_bars = int(purge_lookback)
+
+    purge_bars = max(0, purge_bars)
+
+    if purge_bars > 0:
+        reset_starts = np.flatnonzero(tod[1:] < tod[:-1]) + 1
+        zero_starts = np.flatnonzero(tod == 0)
+
+        day_starts = np.unique(np.r_[0, reset_starts, zero_starts])
+        day_starts.sort()
+
+        day_ends = np.r_[day_starts[1:], N]
+
+        for s, e in zip(day_starts, day_ends):
+            purge_end = min(e, s + purge_bars)
+            mask[s:purge_end] = False
+
+    return mask
+
+def generate_evaluation_mask_v4(Population: _I.Population, offset, chunk_num: int | None = None):
     """
     Build a boolean mask showing which rows can be validly evaluated
     for a forward-looking target with the given offset, without wrapping
@@ -3598,6 +3802,8 @@ def evaluate_genes_from_opg_null_fast(
         }
         if visualize:
             print("No valid genes or null scores available to visualize.")
+            print("null_scores size: ", null_scores.size)
+            print("gidx size: ", gidx.size)
         if return_details:
             return pvals, zscores, details
         return pvals, zscores
