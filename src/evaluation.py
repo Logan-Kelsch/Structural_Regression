@@ -2314,13 +2314,80 @@ import os
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 
+def _clean_curve_points(p_obs, var_obs, eps=1e-12):
+    p = np.asarray(p_obs, dtype=float)
+    v = np.asarray(var_obs, dtype=float)
 
-import numpy as np
-from concurrent.futures import ProcessPoolExecutor
+    keep = (
+        np.isfinite(p)
+        & np.isfinite(v)
+        & (p > 0)
+        & (p < 1)
+        & (v > 0)
+    )
 
+    p = p[keep]
+    v = v[keep]
 
-import numpy as np
-from concurrent.futures import ProcessPoolExecutor
+    order = np.argsort(p)
+    return p[order], v[order]
+
+def fit_variance_curve(p_obs, var_obs, min_exp=0.05):
+    """
+    Fits:
+        var(p) = c * ((1 - p) ** a) / (p ** b)
+
+    where:
+        p = m / N
+
+    This is useful when chunked sampling without replacement produces
+    higher variance than the standard finite-population correction curve.
+    """
+    p, v = _clean_curve_points(p_obs, var_obs)
+
+    if len(p) < 3:
+        raise ValueError("Need at least 3 valid sample points to fit curve.")
+
+    log_p = np.log(p)
+    log_1mp = np.log1p(-p)
+    log_v = np.log(v)
+
+    # log(var) = log(c) + a * log(1-p) - b * log(p)
+    X = np.column_stack([
+        np.ones_like(p),
+        log_1mp,
+        -log_p,
+    ])
+
+    beta, *_ = np.linalg.lstsq(X, log_v, rcond=None)
+
+    a = max(float(beta[1]), min_exp)
+    b = max(float(beta[2]), min_exp)
+
+    # recalibrate c after exponent clipping
+    log_c = np.mean(log_v - a * log_1mp + b * log_p)
+    c = float(np.exp(log_c))
+
+    def predict(p_new):
+        p_new = np.asarray(p_new, dtype=float)
+        out = np.zeros_like(p_new, dtype=float)
+
+        valid = (p_new > 0) & (p_new < 1)
+        pv = p_new[valid]
+
+        out[valid] = c * ((1.0 - pv) ** a) / (pv ** b)
+        out[p_new >= 1] = 0.0
+
+        return out
+
+    params = {
+        "c": c,
+        "a": a,
+        "b": b,
+        "n_points": len(p),
+    }
+
+    return predict, params
 
 
 def evaluate_opg_mcpt_fast(
