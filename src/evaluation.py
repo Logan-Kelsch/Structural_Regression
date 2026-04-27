@@ -2332,6 +2332,327 @@ def _clean_curve_points(p_obs, var_obs, eps=1e-12):
     order = np.argsort(p)
     return p[order], v[order]
 
+    import numpy as np
+import matplotlib.pyplot as plt
+from copy import deepcopy
+
+
+def set_ad_proxy(solver_kwargs, proxy_value):
+    sk = deepcopy(solver_kwargs)
+
+    cond = list(sk["AD_cond"])
+    cond[1] = proxy_value
+
+    if isinstance(solver_kwargs["AD_cond"], tuple):
+        sk["AD_cond"] = tuple(cond)
+    else:
+        sk["AD_cond"] = cond
+
+    return sk
+
+
+def cheap_survey_proxy_value(
+    population,
+    chunk_num,
+    solver_kwargs,
+    proxy_value,
+    *,
+    solver_class,
+):
+    """
+    Cheaply estimate the presence proportion for one proxy value.
+
+    This function should NOT call build_opg_null_bank_fast.
+
+    It only needs to generate:
+        evaluation_mask
+        anomaly_mask
+
+    Then return:
+        proxy : tested AD_cond[1] value
+        prop  : m / N
+        m     : number of anomaly points inside evaluation mask
+        N     : number of valid evaluation points
+        valid : whether this proxy produced a usable proportion
+
+    You can implement this by directly creating the solver and calling the
+    lightest available method that gives you masks.
+    """
+
+    sk = set_ad_proxy(solver_kwargs, proxy_value)
+
+    pass
+    pass
+    pass
+
+    # needed from this function:
+    # em = evaluation_mask as bool array
+    # am = anomaly_mask as bool array
+    # N = em.sum()
+    # m = (am & em).sum()
+    # prop = m / N if N > 0 else np.nan
+
+    #build a solver with #solver = solver_class(population, **sk)
+    #solve for data with solver.solve(population, chunk_num)
+    #that returns RE EM AM
+
+    solver = solver_class(population, **sk)
+    RE, EM, AM = solver.solve(population, chunk_num)
+
+    EM = np.asarray(EM, dtype=bool)
+    AM = np.asarray(AM, dtype=bool)
+    N = EM.sum()
+    m = (AM & EM).sum()
+    prop = m / N if N > 0 else np.nan
+
+    return {
+        "proxy": float(proxy_value),
+        "prop": prop,
+        "m": m,
+        "N": N,
+        "valid": bool(N>0 and np.isfinite(prop) and m>0),
+    }
+
+
+def find_proxy_for_target_prop(
+    target_prop,
+    population,
+    chunk_num,
+    solver_kwargs,
+    *,
+    solver_class,
+    prop_survey_fn=cheap_survey_proxy_value,
+    proxy_lo=0.0,
+    proxy_hi_start=0.01,
+    hi_growth=2.0,
+    max_expand=20,
+    max_bisect=12,
+):
+    """
+    Finds a proxy value that produces an anomaly proportion near target_prop.
+
+    This function only uses the cheap proportion-survey function.
+    It does NOT call the null bank generation function.
+    """
+
+    results = []
+
+    lo = proxy_lo
+
+    r_lo = prop_survey_fn(
+        population,
+        chunk_num,
+        solver_kwargs,
+        lo,
+        solver_class=solver_class,
+    )
+    results.append(r_lo)
+
+    hi = proxy_hi_start
+
+    for _ in range(max_expand):
+        r_hi = prop_survey_fn(
+            population,
+            chunk_num,
+            solver_kwargs,
+            hi,
+            solver_class=solver_class,
+        )
+        results.append(r_hi)
+
+        hi_prop = r_hi["prop"] if np.isfinite(r_hi["prop"]) else 0.0
+
+        if hi_prop <= target_prop:
+            break
+
+        hi *= hi_growth
+    else:
+        return min(
+            results,
+            key=lambda r: abs(r["prop"] - target_prop)
+            if np.isfinite(r["prop"])
+            else np.inf,
+        )
+
+    for _ in range(max_bisect):
+        mid = 0.5 * (lo + hi)
+
+        r_mid = prop_survey_fn(
+            population,
+            chunk_num,
+            solver_kwargs,
+            mid,
+            solver_class=solver_class,
+        )
+        results.append(r_mid)
+
+        mid_prop = r_mid["prop"] if np.isfinite(r_mid["prop"]) else 0.0
+
+        if mid_prop > target_prop:
+            lo = mid
+        else:
+            hi = mid
+
+    return min(
+        results,
+        key=lambda r: abs(r["prop"] - target_prop)
+        if np.isfinite(r["prop"])
+        else np.inf,
+    )
+
+
+def build_null_for_proxy(
+    population,
+    chunk_num,
+    solver_kwargs,
+    proxy_value,
+    *,
+    solver_class,
+    n_sims=1000,
+    score_mode="ev",
+    rng=42,
+    n_jobs=8,
+    null_dtype="float32",
+):
+    """
+    Expensive step.
+
+    This runs the actual null bank generation one time for a selected proxy.
+    """
+
+    sk = set_ad_proxy(solver_kwargs, proxy_value)
+
+    null_context, null_build_details = build_opg_null_bank_fast(
+        population=population,
+        chunk_num=chunk_num,
+        solver_kwargs=sk,
+        solver_class=solver_class,
+        n_sims=n_sims,
+        score_mode=score_mode,
+        rng=rng,
+        n_jobs=n_jobs,
+        null_dtype=null_dtype,
+        return_details=True,
+    )
+
+    em = np.asarray(null_context["evaluation_mask"], dtype=bool)
+    am = np.asarray(null_context["anomaly_mask"], dtype=bool)
+
+    N = int(em.sum())
+    m = int((am & em).sum())
+
+    prop = m / N if N > 0 else np.nan
+    mean = float(null_context["null_mean"])
+    std = float(null_context["null_std"])
+    var = std ** 2 if np.isfinite(std) else np.nan
+
+    mean_se = std / np.sqrt(n_sims) if np.isfinite(std) else np.nan
+
+    return {
+        "proxy": float(proxy_value),
+        "prop": float(prop),
+        "m": m,
+        "N": N,
+        "mean": mean,
+        "std": std,
+        "var": var,
+        "mean_se": mean_se,
+        "valid": bool((N > 0) and (m > 0) and np.isfinite(var)),
+        "null_context": null_context,
+        "null_build_details": null_build_details,
+    }
+
+
+def make_target_props(p_max=0.50, p_min=0.02, n_targets=12):
+    """
+    Creates target proportions with more density near low proportions.
+    """
+    return np.geomspace(p_max, p_min, n_targets)
+
+def estimate_constant_perm_mean(null_results, n_sims=1000):
+    means = np.array([r["mean"] for r in null_results], dtype=float)
+    vars_ = np.array([r["var"] for r in null_results], dtype=float)
+
+    keep = np.isfinite(means) & np.isfinite(vars_) & (vars_ > 0)
+
+    means = means[keep]
+    vars_ = vars_[keep]
+
+    mean_var = vars_ / n_sims
+    weights = 1.0 / mean_var
+
+    mu_hat = np.sum(weights * means) / np.sum(weights)
+    mu_se = np.sqrt(1.0 / np.sum(weights))
+
+    return mu_hat, mu_se
+
+
+def fit_fpc_power_curve(props, variances, weights=None, min_exp=0.05):
+    """
+    Fits:
+
+        Var(p) = c * (1 - p)^a / p^b
+
+    in log-space.
+    """
+
+    p = np.asarray(props, dtype=float)
+    v = np.asarray(variances, dtype=float)
+
+    keep = (
+        np.isfinite(p)
+        & np.isfinite(v)
+        & (p > 0)
+        & (p < 1)
+        & (v > 0)
+    )
+
+    p = p[keep]
+    v = v[keep]
+
+    if len(p) < 3:
+        raise ValueError("Need at least 3 valid points to fit curve.")
+
+    if weights is None:
+        w = np.sqrt(p)
+    else:
+        w = np.asarray(weights, dtype=float)[keep]
+
+    w = np.clip(w, 1e-8, np.inf)
+
+    y = np.log(v)
+
+    X = np.column_stack([
+        np.ones_like(p),
+        np.log1p(-p),
+        -np.log(p),
+    ])
+
+    Xw = X * np.sqrt(w[:, None])
+    yw = y * np.sqrt(w)
+
+    beta, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
+
+    log_c = float(beta[0])
+    a = max(float(beta[1]), min_exp)
+    b = max(float(beta[2]), min_exp)
+
+    c = float(np.exp(log_c))
+
+    def predict(p_new):
+        p_new = np.asarray(p_new, dtype=float)
+        out = np.zeros_like(p_new, dtype=float)
+
+        valid = (p_new > 0) & (p_new < 1)
+        pv = p_new[valid]
+
+        out[valid] = c * ((1.0 - pv) ** a) / (pv ** b)
+        out[p_new >= 1] = 0.0
+
+        return out
+
+    return predict, {"c": c, "a": a, "b": b}
+
 def fit_variance_curve(p_obs, var_obs, min_exp=0.05):
     """
     Fits:
@@ -2389,6 +2710,405 @@ def fit_variance_curve(p_obs, var_obs, min_exp=0.05):
 
     return predict, params
 
+def fit_FPC_part_prop(
+    X,
+    chunk_num,
+    solver_kwargs,
+    n_sims
+):
+    target_props = make_target_props(
+        p_max=0.9,
+        p_min=0.01,
+        n_targets=20,
+    )
+
+    proxy_results = []
+
+    for tp in target_props:
+        print(f"searching proxy for target prop: {tp:.4f}")
+
+        r = find_proxy_for_target_prop(
+            tp,
+            population=X,
+            chunk_num=chunk_num,
+            solver_kwargs=solver_kwargs,
+            solver_class=Solver,
+            prop_survey_fn=cheap_survey_proxy_value,
+            proxy_lo=0.0,
+            proxy_hi_start=0.01,
+            hi_growth=2.0,
+            max_expand=20,
+            max_bisect=12,
+        )
+
+        print(
+            f"  selected proxy={r['proxy']:.6f}, "
+            f"cheap prop={r['prop']:.6f}, "
+            f"m={r['m']}, "
+            f"N={r['N']}"
+        )
+
+        if r.get("valid", False):
+            proxy_results.append(r)
+
+    print('proxy_results: ', proxy_results)
+
+    null_results = []
+
+    for i, r in enumerate(proxy_results):
+        print(f"building null bank for proxy {i + 1}/{len(proxy_results)}: {r['proxy']:.6f}")
+
+        nr = build_null_for_proxy(
+            population=X,
+            chunk_num=chunk_num,
+            solver_kwargs=solver_kwargs,
+            proxy_value=r["proxy"],
+            solver_class=Solver,
+            n_sims=n_sims,
+            score_mode="ev",
+            rng=42 + i,
+            n_jobs=8,
+            null_dtype="float32",
+        )
+
+        print(
+            f"  prop={nr['prop']:.6f}, "
+            f"mean={nr['mean']:.6f}, "
+            f"std={nr['std']:.6f}, "
+            f"var={nr['var']:.8f}"
+        )
+
+        if nr["valid"]:
+            null_results.append(nr)
+
+
+    props = np.array([r["prop"] for r in null_results])
+    vars_ = np.array([r["var"] for r in null_results])
+    ms = np.array([r["m"] for r in null_results])
+
+    curve, params = fit_fpc_power_curve(
+        props,
+        vars_,
+        weights=np.sqrt(ms),
+    )
+
+    p_grid = np.linspace(
+        max(0.001, props.min() * 0.75),
+        min(0.999, props.max() * 1.05),
+        300,
+    )
+
+    v_fit = curve(p_grid)
+
+    plt.scatter(props, vars_, s=45, alpha=0.9, label="observed null variance")
+    plt.scatter(p_grid, v_fit, s=8, alpha=0.6, label="fitted FPC-style curve")
+    plt.xlabel("presence proportion p = m / N")
+    plt.ylabel("null variance")
+    plt.title("proxy-targeted FPC-style variance curve")
+    plt.legend()
+    plt.show()
+
+    perm_mu, perm_mu_se = estimate_constant_perm_mean(null_results, n_sims=n_sims)
+
+    print("estimated permutation mean:", perm_mu)
+    print("estimated mean SE:", perm_mu_se)
+
+    yhat = curve(props)
+
+    keep = np.isfinite(vars_) & np.isfinite(yhat) & (vars_ > 0) & (yhat > 0)
+
+    log_rmse = np.sqrt(np.mean((np.log(vars_[keep]) - np.log(yhat[keep])) ** 2))
+
+    print("log RMSE:", log_rmse)
+
+    print(params)
+
+    print('returning curve function, params, and est mu as: ', params, perm_mu)
+
+    return curve, params, perm_mu
+
+
+def evaluate_genes_from_opg_fpc_fast(
+    population,
+    good_idx,
+    chunk_num,
+    solver_kwargs,
+    fpc_curve,
+    perm_mu,
+    fpc_params=None,
+    fill_value=1.0,
+    z_fill_value=np.nan,
+    min_var=1e-18,
+    alternative="greater",
+    visualize=False,
+    viz_kwargs=None,
+    return_details=False,
+):
+    """
+    Score selected genes using a proportion-conditioned FPC variance curve.
+
+    Instead of comparing every gene against one shared permutation distribution,
+    this evaluates each gene using:
+
+        p_g      = active_count_g / evaluation_count
+        var_g    = fpc_curve(p_g)
+        std_g    = sqrt(var_g)
+        z_g      = (observed_score_g - perm_mu) / std_g
+        pval_g   = normal-tail probability from z_g
+
+    This assumes the permutation mean is stationary across proportions, while
+    the permutation variance changes as a function of participation proportion.
+
+    Parameters
+    ----------
+    population : _I.Population
+        Population containing genes to score.
+
+    good_idx : array_like | None
+        Gene indices to evaluate. If None, all legal gene indices are evaluated.
+
+    null_context : dict
+        Context containing chunk_num, raw_emission, evaluation_mask, score_mode,
+        and score_label.
+
+    fpc_curve : callable
+        Function mapping proportion p=m/N to permutation variance.
+
+    perm_mu : float
+        Estimated stationary mean of the permutation space.
+
+    fpc_params : dict | None
+        Optional fitted FPC parameter dictionary.
+
+    fill_value : float
+        Fill value for p-values outside evaluated genes.
+
+    z_fill_value : float
+        Fill value for z-scores outside evaluated genes.
+
+    min_var : float
+        Minimum variance floor to avoid division by zero.
+
+    alternative : {"greater", "less", "two-sided"}
+        Tail direction for p-values.
+
+    visualize : bool
+        If True, plot observed scores against proportion and the FPC mean band.
+
+    viz_kwargs : dict | None
+        Optional plotting kwargs.
+
+    return_details : bool
+        If True, return details dictionary.
+
+    Returns
+    -------
+    pvals : np.ndarray
+        Full-length p-value vector.
+
+    zscores : np.ndarray
+        Full-length z-score vector.
+
+    details : dict, optional
+        Returned only when return_details=True.
+    """
+    import math
+
+    viz_kwargs = {} if viz_kwargs is None else dict(viz_kwargs)
+
+    solver = Solver(population, **solver_kwargs)
+    raw_emission, evaluation_mask, AM = solver.solve(population, chunk_num)
+
+    score_mode = "ev"
+    score_label = "EV"
+
+    all_gidx = np.asarray(population._G_idx, dtype=int)
+    max_size = int(population._max_size)
+
+    if good_idx is None:
+        gidx = all_gidx.copy()
+    else:
+        good_idx = np.asarray(good_idx, dtype=int).reshape(-1)
+        gidx = good_idx[np.isin(good_idx, all_gidx)]
+
+    pvals = np.full(max_size, fill_value, dtype=np.float64)
+    zscores = np.full(max_size, z_fill_value, dtype=np.float64)
+
+    observed_scores_full = np.full(max_size, np.nan, dtype=np.float64)
+    prop_full = np.full(max_size, np.nan, dtype=np.float64)
+    fpc_var_full = np.full(max_size, np.nan, dtype=np.float64)
+    fpc_std_full = np.full(max_size, np.nan, dtype=np.float64)
+
+    N_eval = int(evaluation_mask.sum())
+
+    if gidx.size == 0 or N_eval <= 0:
+        details = {
+            "gidx": gidx.copy(),
+            "all_gidx": all_gidx.copy(),
+            "good_idx": None if good_idx is None else np.asarray(good_idx, dtype=int).copy(),
+            "observed_scores_full": observed_scores_full,
+            "prop_full": prop_full,
+            "fpc_var_full": fpc_var_full,
+            "fpc_std_full": fpc_std_full,
+            "score_label": score_label,
+            "perm_mu": float(perm_mu),
+            "fpc_params": fpc_params,
+            "N_eval": N_eval,
+        }
+
+        if visualize:
+            print("No valid genes or evaluation points available to visualize.")
+
+        if return_details:
+            return pvals, zscores, details
+        return pvals, zscores
+
+    X_p = resolve_population_signs(population, chunk_num=chunk_num)
+    R = evaluate_return(population, X_p, raw_emission, evaluation_mask)
+
+    X_all = _opgfast_extract_gene_matrix(X_p, population)
+    R_all = _opgfast_extract_gene_vector(R, population)
+
+    legal_gene_mask_all = X_all & evaluation_mask[:, None]
+
+    p_all = np.sum(legal_gene_mask_all, axis=0).astype(np.int32)
+    q_all = _opgfast_column_run_counts(legal_gene_mask_all)
+
+    sel_mask = np.isin(all_gidx, gidx)
+    sel_pos = np.flatnonzero(sel_mask)
+
+    R_g = R_all[sel_pos]
+    p_g = p_all[sel_pos]
+    q_g = q_all[sel_pos]
+
+    prop_g = p_g.astype(np.float64) / float(N_eval)
+
+    observed_scores_g = np.empty(gidx.size, dtype=np.float64)
+
+    for j in range(gidx.size):
+        observed_scores_g[j] = _opgfast_score_from_components(
+            sum_value=float(R_g[j]),
+            active_count=int(p_g[j]),
+            block_count=int(q_g[j]),
+            score_mode=score_mode,
+            score_fn=None,
+        )
+
+    try:
+        fpc_var_g = np.asarray(fpc_curve(prop_g), dtype=np.float64).reshape(-1)
+    except Exception:
+        fpc_var_g = np.array([fpc_curve(float(p)) for p in prop_g], dtype=np.float64)
+
+    if fpc_var_g.size != prop_g.size:
+        fpc_var_g = np.full(prop_g.size, np.nan, dtype=np.float64)
+
+    fpc_var_g = np.where(np.isfinite(fpc_var_g), fpc_var_g, np.nan)
+    fpc_var_g = np.where(fpc_var_g > min_var, fpc_var_g, np.nan)
+
+    fpc_std_g = np.sqrt(fpc_var_g)
+
+    observed_scores_full[gidx] = observed_scores_g
+    prop_full[gidx] = prop_g
+    fpc_var_full[gidx] = fpc_var_g
+    fpc_std_full[gidx] = fpc_std_g
+
+    sqrt2 = math.sqrt(2.0)
+
+    def _p_from_z(z):
+        if not np.isfinite(z):
+            return fill_value
+
+        if alternative == "greater":
+            return 0.5 * math.erfc(z / sqrt2)
+
+        if alternative == "less":
+            return 0.5 * math.erfc(-z / sqrt2)
+
+        if alternative in ("two-sided", "two_sided", "two sided"):
+            return math.erfc(abs(z) / sqrt2)
+
+        raise ValueError("alternative must be 'greater', 'less', or 'two-sided'")
+
+    for j, gi in enumerate(gidx):
+        obs = observed_scores_g[j]
+        std = fpc_std_g[j]
+
+        if np.isfinite(obs) and np.isfinite(std) and std > 0:
+            z = (obs - float(perm_mu)) / std
+            zscores[gi] = z
+            pvals[gi] = _p_from_z(z)
+        else:
+            zscores[gi] = z_fill_value
+            pvals[gi] = fill_value
+
+    details = {
+        "gidx": gidx.copy(),
+        "all_gidx": all_gidx.copy(),
+        "good_idx": None if good_idx is None else np.asarray(good_idx, dtype=int).copy(),
+
+        "observed_scores_full": observed_scores_full,
+        "prop_full": prop_full,
+        "fpc_var_full": fpc_var_full,
+        "fpc_std_full": fpc_std_full,
+
+        "score_label": score_label,
+        "score_mode": score_mode,
+
+        "perm_mu": float(perm_mu),
+        "fpc_params": fpc_params,
+        "N_eval": N_eval,
+
+        "R_g": R_g,
+        "p_g": p_g,
+        "q_g": q_g,
+        "prop_g": prop_g,
+        "observed_scores_g": observed_scores_g,
+        "fpc_var_g": fpc_var_g,
+        "fpc_std_g": fpc_std_g,
+    }
+
+    if visualize:
+        import matplotlib.pyplot as plt
+
+        keep = (
+            np.isfinite(prop_g)
+            & np.isfinite(observed_scores_g)
+            & np.isfinite(fpc_std_g)
+            & (prop_g > 0)
+        )
+
+        if not np.any(keep):
+            print("No finite FPC-evaluated gene scores available to visualize.")
+        else:
+            band_mult = float(viz_kwargs.get("band_mult", 2.0))
+            point_size = float(viz_kwargs.get("s", 35))
+            alpha = float(viz_kwargs.get("alpha", 0.8))
+            grid_n = int(viz_kwargs.get("grid_n", 300))
+
+            p_min = max(1e-6, float(np.nanmin(prop_g[keep])))
+            p_max = min(0.999999, float(np.nanmax(prop_g[keep])))
+
+            p_grid = np.linspace(p_min, p_max, grid_n)
+            v_grid = np.asarray(fpc_curve(p_grid), dtype=np.float64)
+            s_grid = np.sqrt(np.maximum(v_grid, min_var))
+
+            plt.figure(figsize=viz_kwargs.get("figsize", (8, 5)))
+            plt.scatter(prop_g[keep], observed_scores_g[keep], s=point_size, alpha=alpha, label="gene scores")
+            plt.scatter(p_grid, np.full_like(p_grid, float(perm_mu)), s=8, alpha=0.5, label="permutation mean")
+            plt.scatter(p_grid, float(perm_mu) + band_mult * s_grid, s=8, alpha=0.35, label=f"+{band_mult:g} std")
+            plt.scatter(p_grid, float(perm_mu) - band_mult * s_grid, s=8, alpha=0.35, label=f"-{band_mult:g} std")
+            plt.xlabel("gene participation proportion p = m / N")
+            plt.ylabel(score_label)
+            plt.title("FPC-conditioned gene evaluation")
+            plt.grid(True, alpha=0.25)
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+
+    if return_details:
+        return pvals, zscores, details
+
+    return pvals, zscores
 
 def evaluate_opg_mcpt_fast(
     population,

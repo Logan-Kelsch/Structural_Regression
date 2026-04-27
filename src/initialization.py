@@ -36,6 +36,7 @@ class Grammar:
         count_explore   :   bool    =   True,
         temp            :   float   =   0.0,
         mode            :   str     =   'train',
+        explore_const   :   float   =   np.sqrt(2),
         spec_gram_args  :   dict    =   None
     ):
         self._type = type
@@ -111,7 +112,7 @@ class Grammar:
                 self._EXPLOIT_COUNT = np.zeros((24,23), np.float32)
                 self._EXPLORE_T = 0
                 self._EXPLOIT_T = 0
-                self._c = 1
+                self._c = explore_const
 
                 #SAMPLING
                 # we will take UCBMAT and resolve 
@@ -134,30 +135,17 @@ class Grammar:
         n: int,
         vect: any = None,
         base: float = np.e,
-        samp0: bool = False
+        samp0: bool = False,
+        valid_mask=None,
+        allow_uniform_fallback: bool = False,
     ) -> np.ndarray:
         """
-        Sample n values in {1, ..., len(tq1d)} according to softmax(tq1d).
+        Sample n values according to softmax over a 1D score vector.
 
-        Parameters
-        ----------
-        rng
-            NumPy random generator.
-        n
-            Number of samples to draw.
-        tq1d
-            1D array of logits/weights. For your case this should have length 23.
-        base
-            Softmax base. Default is np.e.
-            Probabilities are proportional to base ** tq1d.
-            If base == 1, this becomes uniform.
-
-        Returns
-        -------
-        np.ndarray
-            Array of shape (n,) with dtype uint16 containing sampled values
-            in the range [1, len(tq1d)].
+        valid_mask can be used to hard-disable invalid states.
+        Any value where valid_mask is False receives exactly zero probability.
         """
+
         match(self._type):
             case 'UCB1-tMAT':
                 tq1d = vect
@@ -166,7 +154,11 @@ class Grammar:
             case 'UCB1':
                 tq1d = self._UCB1
             case _:
-                raise ValueError(f"in softmax sampling of grammar: cant interpret self._type = ({self._type})")
+                raise ValueError(
+                    f"in softmax sampling of grammar: cant interpret self._type = ({self._type})"
+                )
+
+        tq1d = np.asarray(tq1d, dtype=np.float64)
 
         if tq1d.ndim != 1:
             raise ValueError(f"tq1d must be 1D, got shape {tq1d.shape}")
@@ -180,27 +172,46 @@ class Grammar:
         else:
             values = np.arange(1, len(tq1d) + 1, dtype=np.uint16)
 
-        if base == 1:
-            probs = np.full(len(tq1d), 1.0 / len(tq1d), dtype=np.float64)
+        if valid_mask is None:
+            valid_mask = np.ones(len(tq1d), dtype=bool)
         else:
-            # stable softmax with arbitrary base:
-            # probs ∝ base ** tq1d = exp(log(base) * tq1d)
+            valid_mask = np.asarray(valid_mask, dtype=bool)
 
-            #floor = 1e-6  # anything <= this is treated as impossible
+            if valid_mask.shape != tq1d.shape:
+                raise ValueError(
+                    f"valid_mask must match tq1d shape {tq1d.shape}, got {valid_mask.shape}"
+                )
 
-            scaled = np.log(base) * tq1d
-            scaled -= np.max(scaled)
-            weights = np.exp(scaled)
+        valid_mask &= np.isfinite(tq1d)
 
-            #weights = np.where(tq1d <= floor, 0.0, weights)
+        if not np.any(valid_mask):
+            if allow_uniform_fallback:
+                probs = np.full(len(tq1d), 1.0 / len(tq1d), dtype=np.float64)
+                return rng.choice(values, size=n, p=probs).astype(np.uint16)
 
-            wsum = weights.sum()
-            if wsum == 0:
-                probs = np.ones_like(weights) / weights.size
+            raise ValueError("softmax_sample_uint16 received no valid sample states")
+
+        if base == 1:
+            weights = valid_mask.astype(np.float64)
+        else:
+            scaled = np.full_like(tq1d, -np.inf, dtype=np.float64)
+            scaled[valid_mask] = np.log(base) * tq1d[valid_mask]
+
+            scaled[valid_mask] -= np.max(scaled[valid_mask])
+
+            weights = np.zeros_like(tq1d, dtype=np.float64)
+            weights[valid_mask] = np.exp(scaled[valid_mask])
+
+        wsum = weights.sum()
+
+        if wsum <= 0 or not np.isfinite(wsum):
+            if allow_uniform_fallback:
+                weights = valid_mask.astype(np.float64)
+                wsum = weights.sum()
             else:
-                probs = weights / wsum
+                raise ValueError("softmax weights collapsed to zero or non-finite values")
 
-        #print("in softmax sample (probs): ", probs)
+        probs = weights / wsum
 
         return rng.choice(values, size=n, p=probs).astype(np.uint16)
     
@@ -327,9 +338,9 @@ class Grammar:
                 #old exploration component is very very clunky and NOTE INTERPRETS explored but failed space as unexplored
                 #sooo this is my solution
                 if(self._count_explore is True):
-                    self._UCB_EXPLORE = np.clip(np.sqrt(self._c * np.log(self._EXPLORE_T + 1) / (self._EXPLORE_COUNT + 1)), None, 1)
+                    self._UCB_EXPLORE = np.sqrt(self._c * np.log(self._EXPLORE_T + 1) / (self._EXPLORE_COUNT + 1))
                 else:
-                    self._UCB_EXPLORE = np.clip(np.sqrt(self._c * np.log(self._EXPLOIT_T + 1) / (self._EXPLOIT_COUNT + 1)), None, 1)
+                    self._UCB_EXPLORE = np.sqrt(self._c * np.log(self._EXPLOIT_T + 1) / (self._EXPLOIT_COUNT + 1))
                 self._UCBMAT = self._UCB_EXPLOIT + self._UCB_EXPLORE
                 #consider that this may need redone 
                 _tnorm = self._EXPLOIT_COUNT / np.clip(self._EXPLOIT_COUNT.sum(axis=1, keepdims=True), 1, None)
@@ -1735,19 +1746,36 @@ def generate_instructions(
                 #looks like the most principled approach is adding proportion from log space
                 parent_prob = s + np.log(p + 1e-12)
 
+                valid_parent_mask = p > 0
+
                 #print('s vector   : ', s)
                 #print('p vector   : ', p)
                 #print('parent prob: ', parent_prob)
 
                 #now we need to sample states from this space, actually on a roll right now
                 #caught a case: YES IT DOES SAMPLE [0, tf] HERE!!!!
-                parent_states = grm_prior.softmax_sample_uint16(rng, chunk_size, parent_prob, samp0=True)
+                parent_states = grm_prior.softmax_sample_uint16(rng, chunk_size, parent_prob, samp0=True, valid_mask=valid_parent_mask)
 
                 psens_Lidx = np.empty(parent_states.shape[0], dtype=int)
 
                 for i, v in enumerate(parent_states):
                     matches = np.flatnonzero(pres_multiset == v)
-                    psens_Lidx[i] = np.random.choice(matches)
+
+                    if matches.size == 0:
+                        print("missing parent state:", v)
+                        print("unique parent_states:", np.unique(parent_states))
+                        print("unique pres_multiset:", np.unique(pres_multiset))
+                        print("pres_multiset size:", pres_multiset.size)
+
+                        # fallback
+                        psens_Lidx[i] = np.random.choice(pres_multiset.size)
+                    else:
+                        #print('No problems here.')
+                        psens_Lidx[i] = np.random.choice(matches)
+
+                #for i, v in enumerate(parent_states):
+                #    matches = np.flatnonzero(pres_multiset == v)
+                #    psens_Lidx[i] = np.random.choice(matches)
 
                 #for this approach I guess we dont need to pull anything too probabilistic
                 #so we will be routing each parent state we grabbed to a child state 1:1
