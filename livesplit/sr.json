@@ -46,7 +46,7 @@
       "Name": "Init G Iterable"
     },
     {
-      "Time": null,
+      "Time": "4.23:17:06.7264338",
       "Name": "Grammar Self Test"
     },
     {
@@ -122,7 +122,7 @@
       "Name": "Compile Results"
     }
   ],
-  "CurrentSplitIndex": 11,
+  "CurrentSplitIndex": 12,
   "CurrentSplitTime": null,
-  "CurrentTime": "4.23:17:02.0291630"
+  "CurrentTime": "5.00:24:27.0980050"
 }

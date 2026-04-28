@@ -3094,9 +3094,9 @@ def evaluate_genes_from_opg_fpc_fast(
 
             plt.figure(figsize=viz_kwargs.get("figsize", (8, 5)))
             plt.scatter(prop_g[keep], observed_scores_g[keep], s=point_size, alpha=alpha, label="gene scores")
-            plt.scatter(p_grid, np.full_like(p_grid, float(perm_mu)), s=8, alpha=0.5, label="permutation mean")
-            plt.scatter(p_grid, float(perm_mu) + band_mult * s_grid, s=8, alpha=0.35, label=f"+{band_mult:g} std")
-            plt.scatter(p_grid, float(perm_mu) - band_mult * s_grid, s=8, alpha=0.35, label=f"-{band_mult:g} std")
+            plt.scatter(p_grid, np.full_like(p_grid, float(perm_mu)), s=5, alpha=0.75, color='black', label="permutation mean")
+            plt.scatter(p_grid, float(perm_mu) + band_mult * s_grid, s=5, alpha=0.5, color='gray', label=f"+{band_mult:g} std")
+            plt.scatter(p_grid, float(perm_mu) - band_mult * s_grid, s=5, alpha=0.5, color='gray', label=f"-{band_mult:g} std")
             plt.xlabel("gene participation proportion p = m / N")
             plt.ylabel(score_label)
             plt.title("FPC-conditioned gene evaluation")
