@@ -69,6 +69,30 @@ class Grammar:
         self._UCB_CONF = None
         self._c = None
 
+        #MCTS ALPHA STRUCTURES
+        #these store the probabilistic behavior for alpha separately from x.
+        #reason: good x parents and good alpha parents are not necessarily the same thing.
+
+        self._MCTS_ALPHA_DECISION_CUM = None
+        self._MCTS_ALPHA_DECISION_COUNT = None
+        self._MCTS_ALPHA_DECISION_MU = None
+        self._MCTS_ALPHA_DECISION_EXPLORE_COUNT = None
+
+        self._MCTS_ALPHA_NODE_CUM = None
+        self._MCTS_ALPHA_NODE_COUNT = None
+        self._MCTS_ALPHA_NODE_MU = None
+        self._MCTS_ALPHA_NODE_EXPLORE_COUNT = None
+
+        self._MCTS_ALPHA_EDGE_CUM = None
+        self._MCTS_ALPHA_EDGE_COUNT = None
+        self._MCTS_ALPHA_EDGE_MU = None
+        self._MCTS_ALPHA_EDGE_EXPLORE_COUNT = None
+
+        self._MCTS_ALPHA_EXPLOIT_T = None
+        self._MCTS_ALPHA_EXPLORE_T = None
+
+        self._MCTS_ALPHA_PRIOR_WEIGHT = None
+
         #softmax temperature used by stochastic grammar sampling.
         #0 means nearly greedy, 1 means normal softmax.
         self._softmax_temp = float(np.clip(softmax_temp, 0.0, 1.0))
@@ -207,6 +231,46 @@ class Grammar:
 
                 self._MCTS_EXPLOIT_T = 0
                 self._MCTS_EXPLORE_T = 0
+
+                #------------------------------------------------------------
+                # MCTS alpha memory
+                #
+                # There are two alpha decisions:
+                #
+                #   1. alpha decision:
+                #       should alpha be a constant or a sensor?
+                #
+                #   2. alpha parent:
+                #       if alpha is a sensor, which existing node should alpha use?
+                #
+                # These are separate from x-parent selection because alpha has a
+                # different structural role than x.
+                #------------------------------------------------------------
+
+                self._MCTS_ALPHA_DECISION_CUM = {}
+                self._MCTS_ALPHA_DECISION_COUNT = {}
+                self._MCTS_ALPHA_DECISION_MU = {}
+                self._MCTS_ALPHA_DECISION_EXPLORE_COUNT = {}
+
+                self._MCTS_ALPHA_NODE_CUM = {}
+                self._MCTS_ALPHA_NODE_COUNT = {}
+                self._MCTS_ALPHA_NODE_MU = {}
+                self._MCTS_ALPHA_NODE_EXPLORE_COUNT = {}
+
+                self._MCTS_ALPHA_EDGE_CUM = {}
+                self._MCTS_ALPHA_EDGE_COUNT = {}
+                self._MCTS_ALPHA_EDGE_MU = {}
+                self._MCTS_ALPHA_EDGE_EXPLORE_COUNT = {}
+
+                self._MCTS_ALPHA_EXPLOIT_T = 0
+                self._MCTS_ALPHA_EXPLORE_T = 0
+
+                #This controls how strongly the original alpha_sensor_freq
+                #biases the const-vs-sensor decision before evidence exists.
+                #
+                #0.0 means ignore prior and let UCB handle everything.
+                #1.0 means include alpha_sensor_freq as a soft prior.
+                self._MCTS_ALPHA_PRIOR_WEIGHT = spec_gram_args.get("alpha_prior_weight", 1.0)
 
                 #progressive widening parameters
                 #number of opened children is roughly:
@@ -359,6 +423,308 @@ class Grammar:
 
         return rng.choice(values, size=n, p=probs).astype(np.uint16)
     
+    def _mcts_alpha_ctx_key(
+        self,
+        parent_key,
+        child_tf
+    ):
+        """
+        Context key for alpha decisions.
+
+        Alpha should be selected relative to:
+            selected x parent state
+            selected child transformation function
+
+        This means alpha selection learns things like:
+            when I am applying f12 after this x-parent,
+            what alpha behavior tends to work?
+        """
+
+        return ("ACTX", parent_key, int(child_tf))
+
+
+    def _mcts_alpha_decision_ucb(
+        self,
+        ctx_key,
+        action
+    ):
+        """
+        UCB score for alpha const-vs-sensor decision.
+
+        action:
+            0 = alpha constant
+            1 = alpha sensor
+
+        Formula:
+            score = Q(ctx -> action)
+                    + sqrt(c * log(total + 2) / (N(ctx -> action) + 1))
+
+        This answers:
+            should alpha be a constant or a learned sensor in this context?
+        """
+
+        action = int(action)
+        decision_key = (ctx_key, action)
+
+        q = self._MCTS_ALPHA_DECISION_MU.get(decision_key, self._MCTS_BASE_PRIOR)
+        n = self._MCTS_ALPHA_DECISION_EXPLORE_COUNT.get(decision_key, 0)
+
+        if n <= 0 and decision_key not in self._MCTS_ALPHA_DECISION_MU:
+            return self._MCTS_BASE_PRIOR + self._MCTS_UNKNOWN_PRIOR
+
+        total = int(self._MCTS_ALPHA_EXPLORE_T or 0) + int(self._MCTS_ALPHA_EXPLOIT_T or 0)
+
+        explore = np.sqrt(
+            self._c
+            * np.log(total + 2)
+            / (n + 1)
+        )
+
+        return q + explore
+
+
+    def _mcts_select_alpha_is_sensor(
+        self,
+        rng,
+        ctx_key
+    ):
+        """
+        Select whether alpha is a constant or a sensor.
+
+        Returns
+        -------
+        action
+            0 means alpha constant
+            1 means alpha sensor
+        """
+
+        actions = np.asarray([0, 1], dtype=np.int64)
+
+        scores = np.asarray([
+            self._mcts_alpha_decision_ucb(ctx_key, 0),
+            self._mcts_alpha_decision_ucb(ctx_key, 1),
+        ], dtype=np.float64)
+
+        #soft prior from alpha_sensor_freq.
+        #this does not force the choice; it only biases early sampling.
+        p_sensor = float(np.clip(self._alpha_sensor_freq, 1e-6, 1.0 - 1e-6))
+        prior = np.asarray([1.0 - p_sensor, p_sensor], dtype=np.float64)
+
+        scores = scores + self._MCTS_ALPHA_PRIOR_WEIGHT * np.log(prior)
+
+        action = int(self._mcts_softmax_sample(
+            rng=rng,
+            values=actions,
+            scores=scores,
+            valid_mask=np.isfinite(scores),
+            base=self._MCTS_SOFTMAX_BASE,
+            allow_uniform_fallback=True
+        ))
+
+        return action
+
+
+    def _mcts_alpha_node_uct(
+        self,
+        key
+    ):
+        """
+        UCT score for alpha-parent selection.
+
+        This is the alpha-specific version of node UCT.
+
+        It answers:
+            how good is this existing node as an alpha sensor?
+        """
+
+        #fallback to general node value if alpha-specific value is unknown.
+        #this improves cold start behavior.
+        q = self._MCTS_ALPHA_NODE_MU.get(
+            key,
+            self._MCTS_NODE_MU.get(key, self._MCTS_BASE_PRIOR)
+        )
+
+        n = self._MCTS_ALPHA_NODE_EXPLORE_COUNT.get(key, 0)
+
+        if n <= 0 and key not in self._MCTS_ALPHA_NODE_MU:
+            return self._MCTS_BASE_PRIOR + self._MCTS_UNKNOWN_PRIOR
+
+        total = int(self._MCTS_ALPHA_EXPLORE_T or 0) + int(self._MCTS_ALPHA_EXPLOIT_T or 0)
+
+        explore = np.sqrt(
+            self._c
+            * np.log(total + 2)
+            / (n + 1)
+        )
+
+        return q + explore
+
+
+    def _mcts_select_alpha_parent(
+        self,
+        rng,
+        instructions,
+        legal_idx,
+        max_allowed_parent_depth=None
+    ):
+        """
+        Select alpha parent using alpha-specific UCT + softmax.
+
+        max_allowed_parent_depth exists because when alpha is a sensor,
+        the new gene depends on both x and alpha.
+
+        Conservative depth logic:
+            new_depth = 1 + max(depth(x_parent), depth(alpha_parent))
+
+        Therefore alpha parent must not be too deep.
+        """
+
+        legal_idx = np.asarray(legal_idx, dtype=np.int64)
+
+        if legal_idx.size == 0:
+            return None, None
+
+        valid_mask = np.ones(legal_idx.shape[0], dtype=bool)
+
+        if max_allowed_parent_depth is not None:
+            for i in range(legal_idx.shape[0]):
+                d = self._mcts_row_depth(instructions, int(legal_idx[i]))
+                valid_mask[i] = d <= int(max_allowed_parent_depth)
+
+        if not np.any(valid_mask):
+            return None, None
+
+        scores = np.empty(legal_idx.shape[0], dtype=np.float64)
+
+        for i in range(legal_idx.shape[0]):
+            key = self._mcts_state_key(instructions, int(legal_idx[i]))
+            scores[i] = self._mcts_alpha_node_uct(key)
+
+        alpha_parent_idx = int(self._mcts_softmax_sample(
+            rng=rng,
+            values=legal_idx,
+            scores=scores,
+            valid_mask=valid_mask & np.isfinite(scores),
+            base=self._MCTS_SOFTMAX_BASE,
+            allow_uniform_fallback=True
+        ))
+
+        alpha_parent_key = self._mcts_state_key(instructions, alpha_parent_idx)
+
+        return alpha_parent_idx, alpha_parent_key
+
+
+    def _mcts_count_alpha_generation(
+        self,
+        ctx_key,
+        action,
+        alpha_parent_key=None
+    ):
+        """
+        Count generation-time alpha exploration.
+
+        action:
+            0 = alpha constant
+            1 = alpha sensor
+
+        If alpha is a sensor, also count the selected alpha parent and alpha edge.
+        """
+
+        action = int(action)
+        decision_key = (ctx_key, action)
+
+        self._MCTS_ALPHA_DECISION_EXPLORE_COUNT[decision_key] = (
+            self._MCTS_ALPHA_DECISION_EXPLORE_COUNT.get(decision_key, 0) + 1
+        )
+
+        self._MCTS_ALPHA_EXPLORE_T += 1
+
+        if action == 1 and alpha_parent_key is not None:
+
+            self._MCTS_ALPHA_NODE_EXPLORE_COUNT[alpha_parent_key] = (
+                self._MCTS_ALPHA_NODE_EXPLORE_COUNT.get(alpha_parent_key, 0) + 1
+            )
+
+            alpha_edge_key = (ctx_key, alpha_parent_key)
+
+            self._MCTS_ALPHA_EDGE_EXPLORE_COUNT[alpha_edge_key] = (
+                self._MCTS_ALPHA_EDGE_EXPLORE_COUNT.get(alpha_edge_key, 0) + 1
+            )
+
+
+    def _mcts_alpha_info_from_row(
+        self,
+        X,
+        row
+    ):
+        """
+        Recover alpha decision information from an instruction row.
+
+        Returns None if the function does not use alpha.
+
+        Otherwise returns:
+            ctx_key
+            action
+            alpha_parent_key
+            alpha_edge_key
+
+        action:
+            0 = alpha constant
+            1 = alpha sensor
+        """
+
+        row = int(row)
+
+        used_flags = int(X._instructions[row, 2])
+        sensor_flags = int(X._instructions[row, 4])
+
+        alpha_bit = int(np.uint32(1) << np.uint32(6))
+
+        alpha_used = (used_flags & alpha_bit) != 0
+
+        if not alpha_used:
+            return None
+
+        child_tf = int(X._instructions[row, 1])
+
+        parent_idx = self._mcts_parent_abs_idx(X._instructions, row)
+
+        if parent_idx < 0 or parent_idx >= X._instructions.shape[0]:
+            parent_key = ("ROOT",)
+        else:
+            parent_key = self._mcts_state_key(X._instructions, parent_idx)
+
+        ctx_key = self._mcts_alpha_ctx_key(
+            parent_key=parent_key,
+            child_tf=child_tf
+        )
+
+        alpha_is_sensor = (sensor_flags & alpha_bit) != 0
+
+        if not alpha_is_sensor:
+            return {
+                "ctx_key"          : ctx_key,
+                "action"           : 0,
+                "alpha_parent_key" : None,
+                "alpha_edge_key"   : None,
+            }
+
+        alpha_parent_idx = int(X._instructions[row, 0] + X._instructions[row, 6])
+
+        if alpha_parent_idx < 0 or alpha_parent_idx >= X._instructions.shape[0]:
+            alpha_parent_key = ("ROOT",)
+        else:
+            alpha_parent_key = self._mcts_state_key(X._instructions, alpha_parent_idx)
+
+        alpha_edge_key = (ctx_key, alpha_parent_key)
+
+        return {
+            "ctx_key"          : ctx_key,
+            "action"           : 1,
+            "alpha_parent_key" : alpha_parent_key,
+            "alpha_edge_key"   : alpha_edge_key,
+        }
+
     def _mcts_key_depth(
         self,
         key
@@ -1188,7 +1554,57 @@ class Grammar:
             edge_key = (parent_key, child_tf)
             edge_updates.append((edge_key, reward))
 
-        return node_updates, edge_updates
+        alpha_updates = []
+
+        for dist, node_idx in enumerate(chain):
+
+            weight = float(backup_gamma ** dist)
+
+            if weight < min_backup_weight:
+                continue
+
+            reward = q_leaf * weight
+
+            node_key = self._mcts_state_key(X._instructions, int(node_idx))
+            node_updates.append((node_key, reward))
+
+            child_tf = int(X._instructions[node_idx, 1])
+
+            if child_tf == 0:
+                continue
+
+            parent_idx = self._mcts_parent_abs_idx(X._instructions, int(node_idx))
+
+            if parent_idx < 0 or parent_idx >= X._instructions.shape[0]:
+                parent_key = ("ROOT",)
+            else:
+                parent_key = self._mcts_state_key(X._instructions, int(parent_idx))
+
+            edge_key = (parent_key, child_tf)
+            edge_updates.append((edge_key, reward))
+
+            #------------------------------------------------------------
+            # alpha backup
+            #
+            # If this node used alpha, also update:
+            #   const-vs-sensor decision memory
+            #   alpha-parent node memory
+            #   alpha context -> alpha_parent edge memory
+            #------------------------------------------------------------
+
+            alpha_info = self._mcts_alpha_info_from_row(
+                X=X,
+                row=int(node_idx)
+            )
+
+            if alpha_info is not None:
+                alpha_updates.append(("decision", (alpha_info["ctx_key"], alpha_info["action"]), reward))
+
+                if alpha_info["action"] == 1 and alpha_info["alpha_parent_key"] is not None:
+                    alpha_updates.append(("alpha_node", alpha_info["alpha_parent_key"], reward))
+                    alpha_updates.append(("alpha_edge", alpha_info["alpha_edge_key"], reward))
+
+        return node_updates, edge_updates, alpha_updates
 
     def _mcts_parent_chain(
         self,
@@ -1573,12 +1989,16 @@ class Grammar:
                 # build grouped path-backup rewards
                 #------------------------------------------------------------
 
+                alpha_decision_reward_map = {}
+                alpha_node_reward_map = {}
+                alpha_edge_reward_map = {}
+
                 for i in range(family_idx.shape[0]):
 
                     leaf_idx = int(family_idx[i])
                     leaf_score = float(family_scores[i])
 
-                    node_updates, edge_updates = self._mcts_backup_path_rewards(
+                    node_updates, edge_updates, alpha_updates = self._mcts_backup_path_rewards(
                         X=X,
                         leaf_idx=leaf_idx,
                         leaf_score=leaf_score,
@@ -1593,6 +2013,20 @@ class Grammar:
 
                     for key, reward in edge_updates:
                         _append_reward(edge_reward_map, key, reward)
+
+                    for kind, key, reward in alpha_updates:
+
+                        if kind == "decision":
+                            _append_reward(alpha_decision_reward_map, key, reward)
+
+                        elif kind == "alpha_node":
+                            _append_reward(alpha_node_reward_map, key, reward)
+
+                        elif kind == "alpha_edge":
+                            _append_reward(alpha_edge_reward_map, key, reward)
+
+                        else:
+                            raise ValueError(f"unknown alpha update kind: {kind}")
 
                 #------------------------------------------------------------
                 # reduce grouped rewards per update call
@@ -1659,6 +2093,56 @@ class Grammar:
                     self._MCTS_CHILDREN[parent_key].add(int(child_tf))
 
                 #------------------------------------------------------------
+                # apply alpha decision updates
+                #------------------------------------------------------------
+
+                for decision_key, vals in alpha_decision_reward_map.items():
+
+                    reward = _reduce(vals)
+
+                    self._mcts_update_mean(
+                        cum_dict=self._MCTS_ALPHA_DECISION_CUM,
+                        count_dict=self._MCTS_ALPHA_DECISION_COUNT,
+                        mu_dict=self._MCTS_ALPHA_DECISION_MU,
+                        key=decision_key,
+                        val=reward
+                    )
+
+                    self._MCTS_ALPHA_EXPLOIT_T += 1
+
+                #------------------------------------------------------------
+                # apply alpha parent-node updates
+                #------------------------------------------------------------
+
+                for alpha_node_key, vals in alpha_node_reward_map.items():
+
+                    reward = _reduce(vals)
+
+                    self._mcts_update_mean(
+                        cum_dict=self._MCTS_ALPHA_NODE_CUM,
+                        count_dict=self._MCTS_ALPHA_NODE_COUNT,
+                        mu_dict=self._MCTS_ALPHA_NODE_MU,
+                        key=alpha_node_key,
+                        val=reward
+                    )
+
+                #------------------------------------------------------------
+                # apply alpha edge updates
+                #------------------------------------------------------------
+
+                for alpha_edge_key, vals in alpha_edge_reward_map.items():
+
+                    reward = _reduce(vals)
+
+                    self._mcts_update_mean(
+                        cum_dict=self._MCTS_ALPHA_EDGE_CUM,
+                        count_dict=self._MCTS_ALPHA_EDGE_COUNT,
+                        mu_dict=self._MCTS_ALPHA_EDGE_MU,
+                        key=alpha_edge_key,
+                        val=reward
+                    )
+
+                #------------------------------------------------------------
                 # if exploration is not counted during generation,
                 # mirror exploit counts into explore counts
                 #------------------------------------------------------------
@@ -1672,6 +2156,17 @@ class Grammar:
                         self._MCTS_EDGE_EXPLORE_COUNT[key] = val
 
                     self._MCTS_EXPLORE_T = self._MCTS_EXPLOIT_T
+
+                    for key, val in self._MCTS_ALPHA_DECISION_COUNT.items():
+                        self._MCTS_ALPHA_DECISION_EXPLORE_COUNT[key] = val
+
+                    for key, val in self._MCTS_ALPHA_NODE_COUNT.items():
+                        self._MCTS_ALPHA_NODE_EXPLORE_COUNT[key] = val
+
+                    for key, val in self._MCTS_ALPHA_EDGE_COUNT.items():
+                        self._MCTS_ALPHA_EDGE_EXPLORE_COUNT[key] = val
+
+                    self._MCTS_ALPHA_EXPLORE_T = self._MCTS_ALPHA_EXPLOIT_T
 
             case "MCTS_OLD_OLD_OLD":
 
@@ -3200,6 +3695,25 @@ def generate_instructions(
                 inst_inst[:, 1] = child_tf
 
                 #------------------------------------------------------------
+                # STEP 2.5:
+                # alpha decision context
+                #
+                # ctx_key is the MCTS context for alpha selection.
+                # It says:
+                #   given this selected x-parent and selected child tf,
+                #   should alpha be constant or sensor?
+                #------------------------------------------------------------
+
+                alpha_ctx_key = grm_prior._mcts_alpha_ctx_key(
+                    parent_key=parent_key,
+                    child_tf=child_tf
+                )
+
+                alpha_action = 0
+                alpha_parent_abs_idx = None
+                alpha_parent_key = None
+
+                #------------------------------------------------------------
                 # STEP 3:
                 # count generation-time exploration if requested.
                 #
@@ -3215,42 +3729,69 @@ def generate_instructions(
 
                 #------------------------------------------------------------
                 # STEP 4:
-                # standard flag logic.
+                # standard flag logic plus MCTS alpha logic.
                 #
-                # For development priority #1:
-                #   x parent and tf id are probabilistic.
-                #   alpha is NOT probabilistic yet.
-                #   d, dd, k are randomly filled as constants.
+                # x and tf are already selected by MCTS.
                 #
-                # Therefore:
-                #   alpha_sensor_freq is forced to 0.0 here.
-                #
-                # Later, when you implement MCTS alpha selection, remove this
-                # local override and add a second MCTS selector for alpha.
+                # alpha now has its own decision:
+                #   action 0 = alpha constant
+                #   action 1 = alpha sensor
                 #------------------------------------------------------------
-
-                alpha_sensor_freq = 0.0
 
                 func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
 
-                # used flags
+                #used flags
                 used_flags = FUNC_to_USED_FLAGS(func_ids)
                 inst_inst[:, 2] = used_flags
 
-                # sensor flags:
-                # x will be a sensor.
-                # alpha is forced constant for this first MCTS version.
+                #start with alpha forced constant.
+                #we will manually turn alpha into a sensor if MCTS selects that.
                 sensor_flags = USED_to_SENSOR_FLAGS(
                     used_flags,
-                    alpha_sensor_freq=alpha_sensor_freq,
+                    alpha_sensor_freq=0.0,
                     rng=rng
                 )
+
+                alpha_bit = np.uint32(1) << np.uint32(6)
+                alpha_used = (used_flags[0].astype(np.uint32) & alpha_bit) != 0
+
+                if alpha_used:
+
+                    alpha_action = grm_prior._mcts_select_alpha_is_sensor(
+                        rng=rng,
+                        ctx_key=alpha_ctx_key
+                    )
+
+                    if alpha_action == 1:
+
+                        #conservative depth rule:
+                        #new gene depth = 1 + max(depth(x_parent), depth(alpha_parent))
+                        #therefore alpha parent must have depth <= max_depth - 1.
+                        max_alpha_parent_depth = int(grm_prior._MCTS_MAX_DEPTH) - 1
+
+                        alpha_parent_abs_idx, alpha_parent_key = grm_prior._mcts_select_alpha_parent(
+                            rng=rng,
+                            instructions=pop_prior._instructions,
+                            legal_idx=pop_prior._L_idx,
+                            max_allowed_parent_depth=max_alpha_parent_depth
+                        )
+
+                        #if no legal alpha parent exists, fall back to constant alpha.
+                        #this keeps generation safe near max-depth boundaries.
+                        if alpha_parent_abs_idx is None:
+                            alpha_action = 0
+                            alpha_parent_key = None
+                        else:
+                            #turn alpha into a sensor
+                            sensor_flags[0] = np.uint32(sensor_flags[0]) | alpha_bit
+
                 inst_inst[:, 4] = sensor_flags
 
-                # const flags:
-                # everything used that is not a sensor becomes a constant.
+                #const flags:
+                #everything used that is not a sensor becomes constant.
                 const_flags = USED_and_SENSOR_to_CONST_FLAGS(used_flags, sensor_flags)
                 inst_inst[:, 3] = const_flags
+
 
                 #------------------------------------------------------------
                 # STEP 5:
@@ -3297,6 +3838,32 @@ def generate_instructions(
                 inst_inst[:, 5] = int(parent_abs_idx) - inst_inst[:, 0]
 
                 #------------------------------------------------------------
+                # STEP 7.5:
+                # overwrite alpha sensor if alpha was selected as a sensor.
+                #
+                # Like x, alpha stores an offset:
+                #   alpha_offset = alpha_parent_abs_idx - current_abs_idx
+                #------------------------------------------------------------
+
+                if alpha_action == 1 and alpha_parent_abs_idx is not None:
+                    inst_inst[:, 6] = int(alpha_parent_abs_idx) - inst_inst[:, 0]
+
+                # generation-time exploration counts
+                if(grm_prior._mode == 'train' and grm_prior._count_explore is True):
+
+                    grm_prior._mcts_count_generation(
+                        parent_key=parent_key,
+                        child_tf=child_tf
+                    )
+
+                    if alpha_used:
+                        grm_prior._mcts_count_alpha_generation(
+                            ctx_key=alpha_ctx_key,
+                            action=alpha_action,
+                            alpha_parent_key=alpha_parent_key
+                        )
+                        
+                #------------------------------------------------------------
                 # STEP 8:
                 # keep a trace of what MCTS generated.
                 #
@@ -3304,22 +3871,43 @@ def generate_instructions(
                 # debugging max depth and visualizing tree construction.
                 #------------------------------------------------------------
 
-                parent_depth = grm_prior._mcts_row_depth(
-                    pop_prior._instructions,
-                    parent_abs_idx
-                )
+                # trace generated MCTS row
+                if not (grm_prior._mode == "infer" and getattr(grm_prior, "_static_infer", False)):
 
-                child_depth = parent_depth + 1
+                    parent_depth = grm_prior._mcts_row_depth(
+                        pop_prior._instructions,
+                        parent_abs_idx
+                    )
 
-                if(grm_prior._mode == 'train'):
+                    if alpha_action == 1 and alpha_parent_abs_idx is not None:
+                        alpha_depth = grm_prior._mcts_row_depth(
+                            pop_prior._instructions,
+                            alpha_parent_abs_idx
+                        )
+                    else:
+                        alpha_depth = None
+
+                    child_depth = parent_depth + 1
+
+                    if alpha_depth is not None:
+                        child_depth = max(parent_depth, alpha_depth) + 1
+
                     grm_prior._MCTS_TRACE.append({
-                        "new_idx"       : int(inst_inst[0, 0]),
-                        "parent_idx"    : int(parent_abs_idx),
-                        "parent_key"    : parent_key,
-                        "parent_depth"  : int(parent_depth),
-                        "child_depth"   : int(child_depth),
-                        "child_tf"      : int(child_tf),
-                        "x_offset"      : int(inst_inst[0, 5])
+                        "new_idx"          : int(inst_inst[0, 0]),
+                        "parent_idx"       : int(parent_abs_idx),
+                        "parent_key"       : parent_key,
+                        "parent_depth"     : int(parent_depth),
+                        "child_depth"      : int(child_depth),
+                        "child_tf"         : int(child_tf),
+                        "x_offset"         : int(inst_inst[0, 5]),
+
+                        "alpha_used"       : bool(alpha_used),
+                        "alpha_action"     : int(alpha_action),
+                        "alpha_is_sensor"  : bool(alpha_action == 1),
+                        "alpha_parent_idx" : None if alpha_parent_abs_idx is None else int(alpha_parent_abs_idx),
+                        "alpha_parent_key" : alpha_parent_key,
+                        "alpha_depth"      : alpha_depth,
+                        "alpha_offset"     : None if alpha_action == 0 else int(inst_inst[0, 6]),
                     })
 
             case 'UCB1-tMAT':
