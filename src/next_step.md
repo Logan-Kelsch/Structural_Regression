@@ -61,3 +61,4 @@ We are building something one step at a time, for each step:
     - Figure out wtf alpha assignment would look like
 - LATER DEV:
     - Figure out how to consider continuous space exploration for d,dd,k with gaussian regression
+

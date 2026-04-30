@@ -37,6 +37,7 @@ class Grammar:
         temp            :   float   =   0.0,
         mode            :   str     =   'train',
         explore_const   :   float   =   np.sqrt(2),
+        softmax_temp    :   float   =   1.0,
         spec_gram_args  :   dict    =   None
     ):
         self._type = type
@@ -67,6 +68,10 @@ class Grammar:
         self._UCB_EXPLORE = None
         self._UCB_CONF = None
         self._c = None
+
+        #softmax temperature used by stochastic grammar sampling.
+        #0 means nearly greedy, 1 means normal softmax.
+        self._softmax_temp = float(np.clip(softmax_temp, 0.0, 1.0))
         
 
         match(type):
@@ -124,6 +129,139 @@ class Grammar:
                 # out of the multiset of existing states
                 # then we will sample parent idx with softmax(sp)
 
+            case 'MCTS':
+
+                #for this grammatical structure we will maintain the entire 
+                #history of all nodes that are made in training section
+                #we have three levels of development that will describe what dimensions
+                #of explorable space are condensed.
+
+                #   We will have NOTE main memory stores of identical tree structure
+                #   - cumulative score at this node across history
+                #   - cumulative count of instances at this state in history
+                #   - total counts at this state will be 
+    
+                #1. We are working only on x sensor and tf id selection
+                #   This is synonymous to just edge and states only.
+                #   
+                #   In a grammatical structure like this we have some
+
+                # ------- NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE -------
+                # CANDIDATE STRUCTURE NEEDS SERIOUS VALIDATION OF EFFECTIVENESS
+                # ------- NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE -------
+
+                #for this grammatical structure we will maintain sparse tree memory
+                #using dictionaries instead of a large dense tensor.
+                #
+                #reason:
+                #MCTS state is not just a function id.
+                #MCTS state is more like a path/context through the generated program.
+                #therefore, the number of possible states is too large to allocate as
+                #a normal numpy matrix.
+                #
+                #DATA STRUCTURE OVERVIEW:
+                #
+                #node key:
+                #   a hashable tuple describing a state in the generated structure.
+                #   default mode is path based:
+                #       terminal -> tf -> tf -> tf
+                #
+                #edge key:
+                #   (parent_key, child_tf)
+                #
+                #node memory:
+                #   _MCTS_NODE_CUM[key]       cumulative fitness observed at this state
+                #   _MCTS_NODE_COUNT[key]     count of exploit observations at this state
+                #   _MCTS_NODE_MU[key]        mean exploit fitness at this state
+                #
+                #edge memory:
+                #   _MCTS_EDGE_CUM[(key, tf)]      cumulative fitness for action key -> tf
+                #   _MCTS_EDGE_COUNT[(key, tf)]    count of exploit observations for key -> tf
+                #   _MCTS_EDGE_MU[(key, tf)]       mean exploit fitness for key -> tf
+                #
+                #explore memory:
+                #   these are counted during generation if self._count_explore is True.
+                #   this is analogous to how UCB1-tMAT uses _EXPLORE_COUNT separately
+                #   from _EXPLOIT_COUNT.
+                #
+                #children:
+                #   _MCTS_CHILDREN[key] is a set of opened child tf ids.
+                #   this is where progressive widening lives.
+
+                if spec_gram_args is None:
+                    spec_gram_args = {}
+
+                self._MCTS_NODE_CUM = {}
+                self._MCTS_NODE_COUNT = {}
+                self._MCTS_NODE_MU = {}
+
+                self._MCTS_EDGE_CUM = {}
+                self._MCTS_EDGE_COUNT = {}
+                self._MCTS_EDGE_MU = {}
+
+                self._MCTS_NODE_EXPLORE_COUNT = {}
+                self._MCTS_EDGE_EXPLORE_COUNT = {}
+
+                self._MCTS_CHILDREN = {}
+                self._MCTS_TRACE = []
+
+                self._MCTS_EXPLOIT_T = 0
+                self._MCTS_EXPLORE_T = 0
+
+                #progressive widening parameters
+                #number of opened children is roughly:
+                #   c * N(parent)^alpha
+                self._MCTS_PW_C = spec_gram_args.get("pw_c", 2.0)
+                self._MCTS_PW_ALPHA = spec_gram_args.get("pw_alpha", 0.5)
+                self._MCTS_EXPAND_PROB = spec_gram_args.get("expand_prob", 0.35)
+
+                #UCT/UCB parameters
+                self._c = explore_const
+                self._MCTS_BASE_PRIOR = spec_gram_args.get("base_prior", 0.0)
+                self._MCTS_UNKNOWN_PRIOR = spec_gram_args.get("unknown_prior", 1.0)
+
+                #state key parameters
+                #path is the recommended default because it keeps actual tree context
+                #instead of collapsing everything back into simple tf -> tf transitions
+                self._MCTS_KEY_MODE = spec_gram_args.get("key_mode", "path")
+                self._MCTS_MAX_PATH_DEPTH = spec_gram_args.get("max_path_depth", 12)
+
+                #softmax base for stochastic UCT/UCB selection
+                self._MCTS_SOFTMAX_BASE = spec_gram_args.get("softmax_base", np.e)
+
+                #optionally override global softmax temperature for MCTS
+                self._softmax_temp = float(np.clip(
+                    spec_gram_args.get("softmax_temp", self._softmax_temp),
+                    0.0,
+                    1.0
+                ))
+
+                
+
+                #maximum generated expression depth.
+                #
+                #IMPORTANT:
+                #_MCTS_MAX_PATH_DEPTH only limits how far the key builder walks
+                #when creating a dictionary key.
+                #
+                #_MCTS_MAX_DEPTH actually prevents the grammar from selecting
+                #parents that would create a deeper-than-allowed child.
+                #
+                #depth convention:
+                #   terminal state has depth 0
+                #   terminal -> tf has depth 1
+                #   terminal -> tf -> tf has depth 2
+                #   etc.
+                self._MCTS_MAX_DEPTH = spec_gram_args.get("max_depth", 8)
+
+                #this can be the same or slightly larger than max_depth.
+                #if it is smaller than max_depth, different deep paths may collapse
+                #into the same truncated key, so default it to max_depth + 1.
+                self._MCTS_MAX_PATH_DEPTH = spec_gram_args.get(
+                    "max_path_depth",
+                    self._MCTS_MAX_DEPTH + 1
+                )
+
 
             case _:
                 raise ValueError(f'Cannot interpret Grammar type "{type}"')
@@ -159,6 +297,12 @@ class Grammar:
                 )
 
         tq1d = np.asarray(tq1d, dtype=np.float64)
+
+        #temperature adjustment
+        #temp near 0 makes selection greedier.
+        #temp near 1 leaves scores mostly unchanged.
+        temp = np.clip(self._softmax_temp, 1e-6, 1.0)
+        tq1d = tq1d / temp
 
         if tq1d.ndim != 1:
             raise ValueError(f"tq1d must be 1D, got shape {tq1d.shape}")
@@ -215,11 +359,983 @@ class Grammar:
 
         return rng.choice(values, size=n, p=probs).astype(np.uint16)
     
+    def _mcts_key_depth(
+        self,
+        key
+    ):
+        """
+        Return nonterminal transform depth from an MCTS key.
+
+        Examples
+        --------
+        ("P", ("T", 2))
+            depth = 0
+
+        ("P", ("T", 2), 12)
+            depth = 1
+
+        ("P", ("T", 2), 12, 10, 6)
+            depth = 3
+
+        ("P", ("T", 2), 12, 10, 6, 19, 5, 4, 8)
+            depth = 7
+
+        Notes
+        -----
+        The terminal is not counted as a transformation.
+        Only integer transformation function IDs after the terminal count.
+        """
+
+        if key is None:
+            return 0
+
+        if not isinstance(key, tuple):
+            return 0
+
+        if len(key) == 0:
+            return 0
+
+        if key[0] == "P":
+            d = 0
+
+            for v in key[1:]:
+                if isinstance(v, (int, np.integer)):
+                    d += 1
+
+            return d
+
+        if key[0] == "TF":
+            return 1
+
+        if key[0] == "L":
+            #local keys represent parent_tf -> child_tf, so interpret as shallow
+            return 1
+
+        if key[0] == "T":
+            return 0
+
+        return 0
+
+
+    def _mcts_row_depth(
+        self,
+        instructions,
+        row
+    ):
+        """
+        Compute depth for an actual instruction row.
+
+        This is preferred over reading only the key string because it walks the
+        true x-parent chain in the instruction matrix.
+
+        depth convention:
+            terminal = 0
+            terminal -> tf = 1
+            terminal -> tf -> tf = 2
+        """
+
+        row = int(row)
+
+        if row < 0 or row >= instructions.shape[0]:
+            return 0
+
+        depth = 0
+        seen = set()
+        cur = row
+
+        for _ in range(int(self._MCTS_MAX_DEPTH) + 5):
+
+            if cur < 0 or cur >= instructions.shape[0]:
+                break
+
+            if cur in seen:
+                #cycle protection.
+                #should not happen with valid negative x offsets.
+                break
+
+            seen.add(cur)
+
+            tf = int(instructions[cur, 1])
+
+            if tf == 0:
+                break
+
+            depth += 1
+
+            prow = self._mcts_parent_abs_idx(instructions, cur)
+
+            if prow == cur:
+                break
+
+            cur = prow
+
+        return depth
+
+
+    def _mcts_valid_depth_parent_mask(
+        self,
+        instructions,
+        legal_idx
+    ):
+        """
+        Return mask over legal_idx where selecting that parent would not exceed
+        max generated expression depth.
+
+        If parent has depth d, then the new child would have depth d + 1.
+
+        Therefore parent is legal iff:
+            d + 1 <= _MCTS_MAX_DEPTH
+
+        Equivalently:
+            d < _MCTS_MAX_DEPTH
+        """
+
+        legal_idx = np.asarray(legal_idx, dtype=np.int64)
+
+        mask = np.zeros(legal_idx.shape[0], dtype=bool)
+
+        for i in range(legal_idx.shape[0]):
+            row = int(legal_idx[i])
+
+            d = self._mcts_row_depth(instructions, row)
+
+            mask[i] = d < int(self._MCTS_MAX_DEPTH)
+
+        return mask
+
+    def _mcts_softmax_sample(
+        self,
+        rng,
+        values,
+        scores,
+        valid_mask=None,
+        base=None,
+        allow_uniform_fallback=True
+    ):
+        """
+        MCTS version of softmax sampling.
+
+        Difference from softmax_sample_uint16:
+        - this samples from arbitrary values, not only [1, n] or [0, n).
+        - this is needed because MCTS parent selection samples actual legal gene indices.
+        - child selection still samples tf ids, but parent selection samples rows/columns.
+
+        Parameters
+        ----------
+        rng
+            numpy generator.
+
+        values
+            1D array of actual values to sample from.
+            examples:
+                legal parent indices from pop_prior._L_idx
+                child tf ids in [1, 23]
+
+        scores
+            1D array of UCT/UCB scores matching values.
+
+        valid_mask
+            optional boolean mask for hard disabling impossible values.
+
+        base
+            softmax base. If None, use self._MCTS_SOFTMAX_BASE.
+
+        allow_uniform_fallback
+            if True, fallback to uniform over valid states when scores collapse.
+        """
+
+        values = np.asarray(values)
+        scores = np.asarray(scores, dtype=np.float64)
+
+        #temperature adjustment
+        #temp near 0 makes UCT/UCB sampling nearly greedy.
+        #temp near 1 gives normal stochastic softmax behavior.
+        temp = np.clip(self._softmax_temp, 1e-6, 1.0)
+        scores = scores / temp
+
+        if base is None:
+            base = self._MCTS_SOFTMAX_BASE
+
+        if values.ndim != 1:
+            raise ValueError(f"MCTS values must be 1D, got shape {values.shape}")
+
+        if scores.ndim != 1:
+            raise ValueError(f"MCTS scores must be 1D, got shape {scores.shape}")
+
+        if values.shape[0] != scores.shape[0]:
+            raise ValueError(
+                f"MCTS values and scores must have same length, got {values.shape[0]} and {scores.shape[0]}"
+            )
+
+        if values.shape[0] == 0:
+            raise ValueError("MCTS softmax received no values")
+
+        if valid_mask is None:
+            valid_mask = np.ones(scores.shape[0], dtype=bool)
+        else:
+            valid_mask = np.asarray(valid_mask, dtype=bool)
+
+        if valid_mask.shape != scores.shape:
+            raise ValueError(
+                f"MCTS valid_mask must match score shape {scores.shape}, got {valid_mask.shape}"
+            )
+
+        valid_mask &= np.isfinite(scores)
+
+        if not np.any(valid_mask):
+            if allow_uniform_fallback:
+                valid_mask = np.ones(scores.shape[0], dtype=bool)
+            else:
+                raise ValueError("MCTS softmax received no valid states")
+
+        if base == 1:
+            weights = valid_mask.astype(np.float64)
+        else:
+            scaled = np.full_like(scores, -np.inf, dtype=np.float64)
+            scaled[valid_mask] = np.log(base) * scores[valid_mask]
+
+            #standard numerical stability trick
+            scaled[valid_mask] -= np.max(scaled[valid_mask])
+
+            weights = np.zeros_like(scores, dtype=np.float64)
+            weights[valid_mask] = np.exp(scaled[valid_mask])
+
+        wsum = weights.sum()
+
+        if wsum <= 0 or not np.isfinite(wsum):
+            if allow_uniform_fallback:
+                weights = valid_mask.astype(np.float64)
+                wsum = weights.sum()
+            else:
+                raise ValueError("MCTS softmax weights collapsed")
+
+        probs = weights / wsum
+
+        return rng.choice(values, p=probs)
+
+
+    def _mcts_parent_abs_idx(
+        self,
+        instructions,
+        row
+    ):
+        """
+        Recover absolute parent index from instruction row.
+
+        In your project structure:
+            col 0 = absolute/current population index
+            col 5 = x sensor offset
+
+        Therefore:
+            parent_abs_idx = instructions[row, 0] + instructions[row, 5]
+
+        This matches the logic already used in UCB1-tMAT update.
+        """
+
+        return int(instructions[row, 0] + instructions[row, 5])
+
+
+    def _mcts_state_key(
+        self,
+        instructions,
+        row
+    ):
+        """
+        Convert a generated instruction row into a sparse MCTS state key.
+
+        This is the most important structural choice.
+
+        key_mode == "tf":
+            state is only the current transformation function.
+            this is fastest, but collapses back toward UCB1 behavior.
+
+        key_mode == "local":
+            state is parent_tf -> current_tf.
+            this is similar to UCB1-tMAT, but stored sparsely.
+
+        key_mode == "path":
+            state is terminal/root path -> ... -> current_tf.
+            this is the recommended MCTS structure because it preserves context.
+
+        Notes
+        -----
+        This does not mutate anything.
+        It only reads the current instruction matrix and produces a dictionary key.
+        """
+
+        row = int(row)
+
+        if row < 0 or row >= instructions.shape[0]:
+            return ("ROOT",)
+
+        tf = int(instructions[row, 1])
+
+        if self._MCTS_KEY_MODE == "tf":
+            return ("TF", tf)
+
+        if self._MCTS_KEY_MODE == "local":
+            if tf == 0:
+                return ("T", int(instructions[row, 0]))
+
+            prow = self._mcts_parent_abs_idx(instructions, row)
+
+            if prow < 0 or prow >= instructions.shape[0]:
+                return ("L", "ROOT", tf)
+
+            ptf = int(instructions[prow, 1])
+            return ("L", ptf, tf)
+
+        if self._MCTS_KEY_MODE == "path":
+            path = []
+            seen = set()
+            cur = row
+
+            for _ in range(int(self._MCTS_MAX_PATH_DEPTH)):
+
+                if cur < 0 or cur >= instructions.shape[0]:
+                    path.append(("ROOT",))
+                    break
+
+                if cur in seen:
+                    #cycle protection.
+                    #this should not happen if offsets are legal, but protects the key builder.
+                    path.append(("CYCLE", int(cur)))
+                    break
+
+                seen.add(cur)
+
+                cur_tf = int(instructions[cur, 1])
+
+                if cur_tf == 0:
+                    #terminals all have tf 0, but different terminal columns mean different information.
+                    #therefore include the actual terminal index to avoid collapsing close/volume/time/etc.
+                    path.append(("T", int(instructions[cur, 0])))
+                    break
+
+                path.append(cur_tf)
+
+                prow = self._mcts_parent_abs_idx(instructions, cur)
+
+                if prow == cur:
+                    path.append(("SELF", int(cur)))
+                    break
+
+                cur = prow
+
+            path.reverse()
+            return tuple(["P"] + path)
+
+        raise ValueError(f"unknown MCTS key mode: {self._MCTS_KEY_MODE}")
+
+
+    def _mcts_get_node_count(
+        self,
+        key,
+        use_explore=True
+    ):
+        """
+        Return count for a node.
+
+        If use_explore is True and self._count_explore is True, use generation-time counts.
+        Otherwise, use exploit/update counts.
+        """
+
+        if use_explore and self._count_explore is True:
+            return self._MCTS_NODE_EXPLORE_COUNT.get(key, 0)
+
+        return self._MCTS_NODE_COUNT.get(key, 0)
+
+
+    def _mcts_get_edge_count(
+        self,
+        edge_key,
+        use_explore=True
+    ):
+        """
+        Return count for an edge.
+
+        This mirrors the split between _EXPLORE_COUNT and _EXPLOIT_COUNT
+        in the UCB1-tMAT grammar.
+        """
+
+        if use_explore and self._count_explore is True:
+            return self._MCTS_EDGE_EXPLORE_COUNT.get(edge_key, 0)
+
+        return self._MCTS_EDGE_COUNT.get(edge_key, 0)
+
+
+    def _mcts_node_uct(
+        self,
+        key
+    ):
+        """
+        UCT score for WHERE selection.
+
+        This scores an already-existing state in the current generated population.
+        Higher score means this node is a better x-parent candidate.
+
+        score = exploit + explore
+        exploit = mean fitness at this node
+        explore = sqrt(c * log(total visits + 1) / (node visits + 1))
+        """
+
+        q = self._MCTS_NODE_MU.get(key, self._MCTS_BASE_PRIOR)
+
+        n = self._mcts_get_node_count(key, use_explore=True)
+
+        if n <= 0 and key not in self._MCTS_NODE_MU:
+            return self._MCTS_BASE_PRIOR + self._MCTS_UNKNOWN_PRIOR
+
+        explore = np.sqrt(self._c * np.log(self._MCTS_EXPLORE_T + self._MCTS_EXPLOIT_T + 2) / (n + 1))
+
+        return q + explore
+
+
+    def _mcts_edge_ucb(
+        self,
+        parent_key,
+        child_tf
+    ):
+        """
+        UCB score for HOW selection.
+
+        This scores a child transformation function from one selected parent state.
+
+        edge_key = (parent_key, child_tf)
+
+        score = exploit + explore
+        exploit = mean fitness observed for parent_key -> child_tf
+        explore = sqrt(c * log(parent visits + 1) / (edge visits + 1))
+        """
+
+        child_tf = int(child_tf)
+        edge_key = (parent_key, child_tf)
+
+        q = self._MCTS_EDGE_MU.get(edge_key, self._MCTS_BASE_PRIOR)
+
+        parent_n = self._mcts_get_node_count(parent_key, use_explore=True)
+        edge_n = self._mcts_get_edge_count(edge_key, use_explore=True)
+
+        if edge_n <= 0 and edge_key not in self._MCTS_EDGE_MU:
+            return self._MCTS_BASE_PRIOR + self._MCTS_UNKNOWN_PRIOR
+
+        explore = np.sqrt(self._c * np.log(parent_n + 2) / (edge_n + 1))
+
+        return q + explore
+
+
+    def _mcts_pw_limit(
+        self,
+        parent_key
+    ):
+        """
+        Progressive widening child limit.
+
+        This controls how many child tf ids are allowed to be opened from a parent.
+
+        limit = ceil(c * (N(parent) + 1)^alpha)
+
+        This makes the grammar:
+        - narrow when parent state is rarely visited
+        - wider when parent state becomes more trusted / more common
+        """
+
+        n = self._mcts_get_node_count(parent_key, use_explore=True)
+
+        lim = int(np.ceil(self._MCTS_PW_C * ((n + 1) ** self._MCTS_PW_ALPHA)))
+
+        return int(np.clip(lim, 1, 23))
+
+
+    def _mcts_select_parent(
+        self,
+        rng,
+        instructions,
+        legal_idx
+    ):
+        """
+        WHERE selection.
+
+        Given the current population structure, evaluate every legal existing node
+        as a possible x parent.
+
+        This version enforces max MCTS depth.
+
+        A parent is only legal if:
+            depth(parent) + 1 <= self._MCTS_MAX_DEPTH
+
+        Returns
+        -------
+        parent_idx
+            absolute index of selected parent node.
+
+        parent_key
+            sparse MCTS key for selected parent node.
+        """
+
+        legal_idx = np.asarray(legal_idx, dtype=np.int64)
+
+        if legal_idx.size == 0:
+            raise ValueError("MCTS parent selection received empty legal_idx")
+
+        #------------------------------------------------------------
+        # max-depth filter
+        #
+        # this is the actual enforcement.
+        # without this, _MCTS_MAX_PATH_DEPTH only controls the key length,
+        # not the generated structure depth.
+        #------------------------------------------------------------
+
+        depth_mask = self._mcts_valid_depth_parent_mask(
+            instructions=instructions,
+            legal_idx=legal_idx
+        )
+
+        #if every parent is too deep, fall back to terminal nodes only.
+        #this prevents generation from crashing while still trying to reset
+        #the new branch back to source material.
+        if not np.any(depth_mask):
+
+            tf_vals = instructions[legal_idx, 1].astype(int)
+
+            terminal_mask = tf_vals == 0
+
+            if np.any(terminal_mask):
+                depth_mask = terminal_mask
+            else:
+                #last-resort fallback:
+                #choose the shallowest available nodes.
+                depths = np.asarray([
+                    self._mcts_row_depth(instructions, int(idx))
+                    for idx in legal_idx
+                ], dtype=np.int64)
+
+                min_depth = np.min(depths)
+
+                depth_mask = depths == min_depth
+
+        legal_idx_depth = legal_idx[depth_mask]
+
+        scores = np.empty(legal_idx_depth.shape[0], dtype=np.float64)
+        keys = []
+
+        for i in range(legal_idx_depth.shape[0]):
+            key = self._mcts_state_key(instructions, int(legal_idx_depth[i]))
+            keys.append(key)
+            scores[i] = self._mcts_node_uct(key)
+
+        parent_idx = int(self._mcts_softmax_sample(
+            rng=rng,
+            values=legal_idx_depth,
+            scores=scores,
+            valid_mask=np.isfinite(scores),
+            base=self._MCTS_SOFTMAX_BASE,
+            allow_uniform_fallback=True
+        ))
+
+        parent_key = self._mcts_state_key(instructions, parent_idx)
+
+        return parent_idx, parent_key
+
+    def _mcts_select_child_tf(
+        self,
+        rng,
+        parent_key
+    ):
+        """
+        HOW selection.
+
+        Given one selected parent state, choose the child transformation function.
+
+        In train mode:
+            use progressive widening.
+            if allowed, open a new child tf.
+            otherwise use UCB + softmax over opened children.
+
+        In infer mode:
+            avoid opening new children when possible.
+            use exploit/UCB memory over known children.
+        """
+
+        legal_tf = np.arange(1, 24, dtype=np.int64)
+
+        if parent_key not in self._MCTS_CHILDREN:
+            self._MCTS_CHILDREN[parent_key] = set()
+
+        opened = self._MCTS_CHILDREN[parent_key]
+
+        pw_lim = self._mcts_pw_limit(parent_key)
+
+        can_expand = len(opened) < pw_lim
+
+        if self._mode == "train":
+            do_expand = can_expand and ((len(opened) == 0) or (rng.random() < self._MCTS_EXPAND_PROB))
+        else:
+            do_expand = False
+
+        if do_expand:
+            if len(opened) == 0:
+                unused_tf = legal_tf
+            else:
+                used_tf = np.asarray(list(opened), dtype=np.int64)
+                unused_tf = legal_tf[~np.isin(legal_tf, used_tf)]
+
+            #if something weird happens and all children are already used,
+            #fall back to UCB sampling over opened children.
+            if unused_tf.size > 0:
+                child_tf = int(rng.choice(unused_tf))
+                opened.add(child_tf)
+                return child_tf
+
+        if len(opened) == 0:
+            #strict inference fallback:
+            #do not open/mutate a new child.
+            #sample from globally known good child transformations if possible.
+            if self._MCTS_EDGE_MU is not None and len(self._MCTS_EDGE_MU) > 0:
+                known_child_tf = np.asarray(
+                    sorted(set([int(k[1]) for k in self._MCTS_EDGE_MU.keys()])),
+                    dtype=np.int64
+                )
+
+                if known_child_tf.size > 0:
+                    return int(rng.choice(known_child_tf))
+
+            #absolute fallback if grammar has no edge memory yet.
+            #this still does not mutate _MCTS_CHILDREN.
+            return int(rng.choice(legal_tf))
+
+        child_values = np.asarray(sorted(opened), dtype=np.int64)
+
+        scores = np.empty(child_values.shape[0], dtype=np.float64)
+
+        for i in range(child_values.shape[0]):
+            scores[i] = self._mcts_edge_ucb(parent_key, int(child_values[i]))
+
+        child_tf = int(self._mcts_softmax_sample(
+            rng=rng,
+            values=child_values,
+            scores=scores,
+            valid_mask=np.isfinite(scores),
+            base=self._MCTS_SOFTMAX_BASE,
+            allow_uniform_fallback=True
+        ))
+
+        return child_tf
+
+
+    def _mcts_count_generation(
+        self,
+        parent_key,
+        child_tf
+    ):
+        """
+        Count generation-time exploration.
+
+        This is only used when:
+            self._mode == "train"
+            self._count_explore is True
+
+        This mirrors the UCB1-tMAT behavior where exploration counts can be updated
+        during instruction generation instead of only during grammar.update().
+        """
+
+        child_tf = int(child_tf)
+        edge_key = (parent_key, child_tf)
+
+        self._MCTS_NODE_EXPLORE_COUNT[parent_key] = self._MCTS_NODE_EXPLORE_COUNT.get(parent_key, 0) + 1
+        self._MCTS_EDGE_EXPLORE_COUNT[edge_key] = self._MCTS_EDGE_EXPLORE_COUNT.get(edge_key, 0) + 1
+
+        self._MCTS_EXPLORE_T += 1
+
+        if parent_key not in self._MCTS_CHILDREN:
+            self._MCTS_CHILDREN[parent_key] = set()
+
+        self._MCTS_CHILDREN[parent_key].add(child_tf)
+
+
+    def _mcts_update_mean(
+        self,
+        cum_dict,
+        count_dict,
+        mu_dict,
+        key,
+        val
+    ):
+        """
+        Small helper for updating sparse cumulative/count/mean dictionaries.
+        """
+
+        cum_dict[key] = cum_dict.get(key, 0.0) + float(val)
+        count_dict[key] = count_dict.get(key, 0) + 1
+        mu_dict[key] = cum_dict[key] / (count_dict[key] + 1)
+
+    def _mcts_default_quality_fn(
+        self,
+        raw_score,
+        idx=None,
+        X=None
+    ):
+        """
+        Default quality function.
+
+        Assumes raw_score is a p-value.
+        Converts p-value into clipped fitness where:
+            p = 0.05 maps near 1
+            p = 1.00 maps near 0
+        """
+
+        raw_score = float(raw_score)
+
+        if not np.isfinite(raw_score):
+            return 0.0
+
+        raw_score = np.clip(raw_score, 1e-12, 1.0)
+
+        return float(np.clip(
+            -np.log(raw_score) / (-np.log(0.05)),
+            0.0,
+            1.0
+        ))
+
+    def _mcts_backup_path_rewards(
+        self,
+        X,
+        leaf_idx,
+        leaf_score,
+        quality_fn=None,
+        backup_gamma=0.85,
+        min_backup_weight=0.05,
+        include_terminal=False
+    ):
+        """
+        Build node and edge rewards from one scored leaf/gene.
+
+        This performs discounted path backup.
+
+        Returns
+        -------
+        node_updates
+            list of (node_key, reward)
+
+        edge_updates
+            list of (edge_key, reward)
+
+        Notes
+        -----
+        chain order is:
+            leaf, parent, grandparent, ...
+
+        distance_from_leaf:
+            leaf = 0
+            parent = 1
+            grandparent = 2
+        """
+
+        if quality_fn is None:
+            q_leaf = self.pvalue_to_fitness(
+                raw_score=leaf_score,
+                idx=leaf_idx,
+                X=X
+            )
+        else:
+            q_leaf = float(quality_fn(
+                raw_score=leaf_score,
+                idx=leaf_idx,
+                X=X
+            ))
+
+        if not np.isfinite(q_leaf):
+            q_leaf = 0.0
+
+        q_leaf = float(np.clip(q_leaf, 0.0, 1.0))
+
+        chain = self._mcts_parent_chain(
+            X=X,
+            idx=leaf_idx,
+            include_self=True,
+            include_terminal=include_terminal
+        )
+
+        node_updates = []
+        edge_updates = []
+
+        for dist, node_idx in enumerate(chain):
+
+            weight = float(backup_gamma ** dist)
+
+            if weight < min_backup_weight:
+                continue
+
+            reward = q_leaf * weight
+
+            node_key = self._mcts_state_key(X._instructions, int(node_idx))
+            node_updates.append((node_key, reward))
+
+            #edge update:
+            #for the current node, update the incoming parent -> child_tf edge
+            child_tf = int(X._instructions[node_idx, 1])
+
+            if child_tf == 0:
+                continue
+
+            parent_idx = self._mcts_parent_abs_idx(X._instructions, int(node_idx))
+
+            if parent_idx < 0 or parent_idx >= X._instructions.shape[0]:
+                parent_key = ("ROOT",)
+            else:
+                parent_key = self._mcts_state_key(X._instructions, int(parent_idx))
+
+            edge_key = (parent_key, child_tf)
+            edge_updates.append((edge_key, reward))
+
+        return node_updates, edge_updates
+
+    def _mcts_parent_chain(
+        self,
+        X,
+        idx,
+        include_self=True,
+        include_terminal=False,
+        max_steps=None
+    ):
+        """
+        Return parent chain for one generated node.
+
+        Output order:
+            [leaf, parent, grandparent, ..., terminal/root]
+
+        Parameters
+        ----------
+        X
+            population object with X._instructions.
+
+        idx
+            absolute instruction index of starting node.
+
+        include_self
+            if True, include idx as the first element.
+
+        include_terminal
+            if True, include terminal tf=0 nodes.
+            if False, stop before adding terminal nodes.
+
+        max_steps
+            safety cap. If None, use _MCTS_MAX_DEPTH + 5.
+        """
+
+        if max_steps is None:
+            max_steps = int(getattr(self, "_MCTS_MAX_DEPTH", 12)) + 5
+
+        idx = int(idx)
+
+        chain = []
+        seen = set()
+        cur = idx
+
+        for _ in range(max_steps):
+
+            if cur < 0 or cur >= X._instructions.shape[0]:
+                break
+
+            if cur in seen:
+                break
+
+            seen.add(cur)
+
+            tf = int(X._instructions[cur, 1])
+
+            if tf == 0:
+                if include_terminal:
+                    chain.append(cur)
+                break
+
+            if include_self or cur != idx:
+                chain.append(cur)
+
+            parent_idx = self._mcts_parent_abs_idx(X._instructions, cur)
+
+            if parent_idx == cur:
+                break
+
+            cur = parent_idx
+
+        return np.asarray(chain, dtype=np.int64)
+
+    def pvalue_to_fitness(
+        self,
+        p=None,
+        raw_score=None,
+        idx=None,
+        X=None,
+        p_ref: float = 0.05,
+        clip_min: float = 0.0,
+        clip_max: float = 1.0,
+        eps: float = 1e-12,
+        **kwargs
+    ):
+        """
+        Convert p-value(s) into bounded grammar fitness.
+
+        This supports both direct calls:
+
+            self.pvalue_to_fitness(pvals)
+
+        and MCTS quality-function calls:
+
+            quality_fn(raw_score=leaf_score, idx=leaf_idx, X=X)
+
+        Parameters
+        ----------
+        p
+            Scalar or array of p-values.
+
+        raw_score
+            Alias for p. Used when this function is passed as a quality_fn.
+
+        idx
+            Optional gene index. Included for compatibility with MCTS quality_fn.
+
+        X
+            Optional population object. Included for compatibility with MCTS quality_fn.
+
+        p_ref
+            Reference p-value that maps to fitness = 1. Default 0.05.
+
+        Returns
+        -------
+        fitness
+            Scalar if input is scalar.
+            np.ndarray if input is array-like.
+        """
+
+        #allow MCTS backup calls to pass raw_score instead of p
+        if p is None:
+            p = raw_score
+
+        if p is None:
+            raise ValueError("pvalue_to_fitness requires p or raw_score")
+
+        p_arr = np.asarray(p, dtype=np.float64)
+
+        p_arr = np.clip(p_arr, eps, 1.0)
+        p_ref = float(np.clip(p_ref, eps, 1.0 - eps))
+
+        fitness = -np.log(p_arr) / (-np.log(p_ref))
+        fitness = np.clip(fitness, clip_min, clip_max)
+
+        if np.ndim(p) == 0:
+            return float(fitness)
+
+        return fitness.astype(np.float32)
+
     def update(
         self,
         X,
         family_idx,
-        family_scores
+        family_scores,
+        quality_fn=None,
+        backup_gamma=0.85,
+        backup_reduce="max",
     ):
         match(self._type):
             case "UCB1-tMAT":
@@ -230,7 +1346,7 @@ class Grammar:
                 # transform p-values to fitness
                 # family_fitness = -np.sqrt(2 * family_scores) + 1
                 # family_fitness = ((0.5 - family_scores) / 0.629961) ** 3 + 0.5
-                family_fitness = np.clip(-np.log(family_scores) / (-np.log(0.05)), None, 1)
+                family_fitness = self.pvalue_to_fitness(family_scores)
 
                 # discard family nodes that land in state 0
                 keep = (family_tfidx != 0)
@@ -358,7 +1474,7 @@ class Grammar:
                 # family_fitness = -np.sqrt(2 * family_scores) + 1
                 # trying a new one, cubic [0, 1]
                 # family_fitness = ((0.5 - family_scores) / 0.629961) ** 3 + 0.5
-                family_fitness = np.clip(-np.log(family_scores) / (-np.log(0.05)), None, 1)
+                family_fitness = self.pvalue_to_fitness(family_scores)
                 
                 local_tq1d = np.zeros(24, dtype=np.float32)
                 local_tfrq = np.zeros(24, dtype=np.float32)
@@ -427,6 +1543,328 @@ class Grammar:
                 self._t_cum += local_tq1d[1:]
                 self._t_mu = self._t_cum/(self._t_count + 1)
                 self._UCB1 = self._t_mu + np.clip(np.sqrt(np.log(self._t + 1) / (self._t_count + 1)), None, 1)
+
+
+            case "MCTS":
+
+                family_idx = np.asarray(family_idx, dtype=np.int64)
+                family_scores = np.asarray(family_scores, dtype=np.float64)
+
+                keep = np.isfinite(family_scores)
+                family_idx = family_idx[keep]
+                family_scores = family_scores[keep]
+
+                #settings
+                #you can expose these as Grammar params later
+                backup_gamma = 0.85
+                min_backup_weight = 0.05
+                include_terminal = False
+
+                #local grouped reward containers
+                node_reward_map = {}
+                edge_reward_map = {}
+
+                def _append_reward(dct, key, reward):
+                    if key not in dct:
+                        dct[key] = []
+                    dct[key].append(float(reward))
+
+                #------------------------------------------------------------
+                # build grouped path-backup rewards
+                #------------------------------------------------------------
+
+                for i in range(family_idx.shape[0]):
+
+                    leaf_idx = int(family_idx[i])
+                    leaf_score = float(family_scores[i])
+
+                    node_updates, edge_updates = self._mcts_backup_path_rewards(
+                        X=X,
+                        leaf_idx=leaf_idx,
+                        leaf_score=leaf_score,
+                        quality_fn=quality_fn,
+                        backup_gamma=backup_gamma,
+                        min_backup_weight=0.05,
+                        include_terminal=False
+                    )
+
+                    for key, reward in node_updates:
+                        _append_reward(node_reward_map, key, reward)
+
+                    for key, reward in edge_updates:
+                        _append_reward(edge_reward_map, key, reward)
+
+                #------------------------------------------------------------
+                # reduce grouped rewards per update call
+                #
+                # I recommend max for MCTS at first:
+                # if a state appears multiple times in one family/path update,
+                # let its best observed descendant define this iteration's reward.
+                #------------------------------------------------------------
+
+                backup_reduce = "max"
+
+                def _reduce(vals):
+                    vals = np.asarray(vals, dtype=np.float64)
+
+                    match backup_reduce:
+                        case "mean":
+                            return float(np.mean(vals))
+                        case "max":
+                            return float(np.max(vals))
+                        case "median":
+                            return float(np.median(vals))
+                        case _:
+                            raise ValueError(f"unknown backup_reduce: {backup_reduce}")
+
+                #------------------------------------------------------------
+                # apply node updates
+                #------------------------------------------------------------
+
+                for node_key, vals in node_reward_map.items():
+
+                    reward = _reduce(vals)
+
+                    self._mcts_update_mean(
+                        cum_dict=self._MCTS_NODE_CUM,
+                        count_dict=self._MCTS_NODE_COUNT,
+                        mu_dict=self._MCTS_NODE_MU,
+                        key=node_key,
+                        val=reward
+                    )
+
+                    self._MCTS_EXPLOIT_T += 1
+
+                #------------------------------------------------------------
+                # apply edge updates
+                #------------------------------------------------------------
+
+                for edge_key, vals in edge_reward_map.items():
+
+                    reward = _reduce(vals)
+
+                    self._mcts_update_mean(
+                        cum_dict=self._MCTS_EDGE_CUM,
+                        count_dict=self._MCTS_EDGE_COUNT,
+                        mu_dict=self._MCTS_EDGE_MU,
+                        key=edge_key,
+                        val=reward
+                    )
+
+                    parent_key, child_tf = edge_key
+
+                    if parent_key not in self._MCTS_CHILDREN:
+                        self._MCTS_CHILDREN[parent_key] = set()
+
+                    self._MCTS_CHILDREN[parent_key].add(int(child_tf))
+
+                #------------------------------------------------------------
+                # if exploration is not counted during generation,
+                # mirror exploit counts into explore counts
+                #------------------------------------------------------------
+
+                if(self._count_explore is False):
+
+                    for key, val in self._MCTS_NODE_COUNT.items():
+                        self._MCTS_NODE_EXPLORE_COUNT[key] = val
+
+                    for key, val in self._MCTS_EDGE_COUNT.items():
+                        self._MCTS_EDGE_EXPLORE_COUNT[key] = val
+
+                    self._MCTS_EXPLORE_T = self._MCTS_EXPLOIT_T
+
+            case "MCTS_OLD_OLD_OLD":
+
+                #MCTS update is sparse.
+                #instead of updating a dense 24x23 matrix, we update:
+                #
+                #   node_key -> fitness memory
+                #   (parent_key, child_tf) -> fitness memory
+                #
+                #this is the same conceptual update as UCB1-tMAT, but now the
+                #parent is not just parent_tf.
+                #the parent is the full MCTS state key.
+
+                family_idx = np.asarray(family_idx, dtype=np.int64)
+                family_scores = np.asarray(family_scores, dtype=np.float64)
+
+                # landing state for each family node
+                family_tfidx = X._instructions[family_idx, 1].astype(int)
+
+                # transform p-values to fitness
+                # this is kept exactly conceptually aligned with your existing grammar update
+                family_fitness = self.pvalue_to_fitness(family_scores)
+
+                # discard family nodes that land in state 0
+                # terminal states are source material, not generated action outcomes
+                keep = (family_tfidx != 0) & np.isfinite(family_fitness)
+                family_idx = family_idx[keep]
+                family_tfidx = family_tfidx[keep]
+                family_scores = family_scores[keep]
+                family_fitness = family_fitness[keep]
+
+                #local sparse update list:
+                #we build idx_update and fit_update first so that all node_fitness modes
+                #feed into one shared sparse update section below.
+                idx_update = []
+                fit_update = []
+
+                match(self._node_fitness):
+
+                    case "count_all":
+
+                        #count every supplied family member.
+                        #if the same state appears multiple times, it contributes multiple times.
+                        for i in range(family_idx.shape[0]):
+                            idx_update.append(int(family_idx[i]))
+                            fit_update.append(float(family_fitness[i]))
+
+                    case "count_best":
+
+                        #keep only best observation per sparse child state key.
+                        #this is the MCTS equivalent of grouping by tf id in UCB1.
+                        seen = {}
+
+                        for i in range(family_idx.shape[0]):
+                            idx = int(family_idx[i])
+                            key = self._mcts_state_key(X._instructions, idx)
+                            val = float(family_fitness[i])
+
+                            if key not in seen or val > seen[key][1]:
+                                seen[key] = (idx, val)
+
+                        for key, val in seen.items():
+                            idx_update.append(int(val[0]))
+                            fit_update.append(float(val[1]))
+
+                    case "count_worst":
+
+                        #keep only worst observation per sparse child state key.
+                        seen = {}
+
+                        for i in range(family_idx.shape[0]):
+                            idx = int(family_idx[i])
+                            key = self._mcts_state_key(X._instructions, idx)
+                            val = float(family_fitness[i])
+
+                            if key not in seen or val < seen[key][1]:
+                                seen[key] = (idx, val)
+
+                        for key, val in seen.items():
+                            idx_update.append(int(val[0]))
+                            fit_update.append(float(val[1]))
+
+                    case "count_pop_null" | "count_pop_dead":
+
+                        #same behavior as your existing UCB1/UCB1-tMAT logic.
+                        #
+                        #family nodes get their true transformed p-value fitness.
+                        #all other generated population nodes get fallback fitness.
+                        #
+                        #count_pop_null:
+                        #   fallback p = 0.5
+                        #
+                        #count_pop_dead:
+                        #   fallback p = 1.0
+
+                        fill_score = 0.5 if self._node_fitness == "count_pop_null" else 1.0
+                        fill_fitness = float(np.clip(-np.log(fill_score) / (-np.log(0.05)), None, 1))
+
+                        fam_fit_map = {
+                            int(family_idx[i]): float(family_fitness[i])
+                            for i in range(family_idx.shape[0])
+                        }
+
+                        pop_idx = np.asarray(X._G_idx, dtype=np.int64)
+
+                        for idx in pop_idx:
+                            idx = int(idx)
+
+                            tf = int(X._instructions[idx, 1])
+
+                            if tf == 0:
+                                continue
+
+                            fit = fam_fit_map.get(idx, fill_fitness)
+
+                            idx_update.append(idx)
+                            fit_update.append(float(fit))
+
+                    case _:
+                        raise ValueError(f"unknown node fitness mode: {self._node_fitness}")
+
+                #------------------------------------------------------------
+                # sparse memory update
+                #------------------------------------------------------------
+
+                for i in range(len(idx_update)):
+
+                    idx = int(idx_update[i])
+                    fit = float(fit_update[i])
+
+                    child_tf = int(X._instructions[idx, 1])
+
+                    if child_tf == 0:
+                        continue
+
+                    #recover sparse child state
+                    child_key = self._mcts_state_key(X._instructions, idx)
+
+                    #recover parent state from x offset
+                    parent_idx = self._mcts_parent_abs_idx(X._instructions, idx)
+
+                    if parent_idx < 0 or parent_idx >= X._instructions.shape[0]:
+                        parent_key = ("ROOT",)
+                    else:
+                        parent_key = self._mcts_state_key(X._instructions, parent_idx)
+
+                    edge_key = (parent_key, child_tf)
+
+                    #update node exploit memory
+                    self._mcts_update_mean(
+                        cum_dict=self._MCTS_NODE_CUM,
+                        count_dict=self._MCTS_NODE_COUNT,
+                        mu_dict=self._MCTS_NODE_MU,
+                        key=child_key,
+                        val=fit
+                    )
+
+                    #update edge exploit memory
+                    self._mcts_update_mean(
+                        cum_dict=self._MCTS_EDGE_CUM,
+                        count_dict=self._MCTS_EDGE_COUNT,
+                        mu_dict=self._MCTS_EDGE_MU,
+                        key=edge_key,
+                        val=fit
+                    )
+
+                    #make sure the child is listed as opened from this parent
+                    #this is necessary for progressive widening and inference.
+                    if parent_key not in self._MCTS_CHILDREN:
+                        self._MCTS_CHILDREN[parent_key] = set()
+
+                    self._MCTS_CHILDREN[parent_key].add(child_tf)
+
+                    self._MCTS_EXPLOIT_T += 1
+
+                #if exploration is not counted during generation, then the explore
+                #counts should be based on the exploit counts.
+                #
+                #this mirrors the structure of UCB1-tMAT:
+                #   if count_explore is true:
+                #       use generation exploration counts
+                #   else:
+                #       use update/exploit counts
+                if(self._count_explore is False):
+
+                    for key, val in self._MCTS_NODE_COUNT.items():
+                        self._MCTS_NODE_EXPLORE_COUNT[key] = val
+
+                    for key, val in self._MCTS_EDGE_COUNT.items():
+                        self._MCTS_EDGE_EXPLORE_COUNT[key] = val
+
+                    self._MCTS_EXPLORE_T = self._MCTS_EXPLOIT_T
+
 
             case 'tq1d':
 
@@ -1229,6 +2667,8 @@ def generate_instructions(
             pass
         case 'UCB1-tMAT':
             pass
+        case 'MCTS':
+            pass
         case _:
             raise ValueError('Cannot interpret grammar prior in generate_instructions. Illegal type.')
 
@@ -1701,6 +3141,186 @@ def generate_instructions(
             chunk_size = gen_size
 
         match(grm_prior._type):
+
+            case 'MCTS':
+
+                # understand that in this case we may consider chunk_size to be 1.
+                # consider building it this way if that is easier.
+                # if it is more than 1, then for each generation addeed it will be sampling
+                # randomly across evaluations for new nodes to generate, this is stochastic.
+
+                pass
+
+                            #MCTS is meant to build one node at a time.
+                #even though the outer generate_instructions loop supports chunked generation,
+                #the cleanest first implementation is chunk_size = 1 here.
+                #
+                #reason:
+                #if chunk_size > 1, then all nodes in the chunk are generated before appending.
+                #that means node g + 1 cannot choose node g as a parent inside the same chunk.
+                #that breaks the "build one step at a time" interpretation.
+                #
+                #so for MCTS we force the chunk to one new instruction row.
+                chunk_size = 1
+
+                # keep shape (chunk_size, 11); last col unused by design
+                inst_inst = np.zeros((chunk_size, 11), dtype=np.float32)
+
+                # populate new pop index after everything currently legal
+                start_idx = int(pop_prior._L_idx.max())
+                inst_inst[:, 0] = np.arange(start_idx + 1, start_idx + 1 + chunk_size, dtype=np.uint16)
+
+                #------------------------------------------------------------
+                # STEP 1:
+                # WHERE selection
+                #
+                # select the x parent from all currently legal prior nodes.
+                # this is UCT over existing MCTS node states.
+                #------------------------------------------------------------
+
+                parent_abs_idx, parent_key = grm_prior._mcts_select_parent(
+                    rng=rng,
+                    instructions=pop_prior._instructions,
+                    legal_idx=pop_prior._L_idx
+                )
+
+                #------------------------------------------------------------
+                # STEP 2:
+                # HOW selection
+                #
+                # select the child transformation function from this parent.
+                # this uses progressive widening first, then UCB + softmax.
+                #------------------------------------------------------------
+
+                child_tf = grm_prior._mcts_select_child_tf(
+                    rng=rng,
+                    parent_key=parent_key
+                )
+
+                inst_inst[:, 1] = child_tf
+
+                #------------------------------------------------------------
+                # STEP 3:
+                # count generation-time exploration if requested.
+                #
+                # this is analogous to your UCB1-tMAT count_explore behavior.
+                # this counts the attempted edge even before we know if it survives.
+                #------------------------------------------------------------
+
+                if(grm_prior._mode == 'train' and grm_prior._count_explore is True):
+                    grm_prior._mcts_count_generation(
+                        parent_key=parent_key,
+                        child_tf=child_tf
+                    )
+
+                #------------------------------------------------------------
+                # STEP 4:
+                # standard flag logic.
+                #
+                # For development priority #1:
+                #   x parent and tf id are probabilistic.
+                #   alpha is NOT probabilistic yet.
+                #   d, dd, k are randomly filled as constants.
+                #
+                # Therefore:
+                #   alpha_sensor_freq is forced to 0.0 here.
+                #
+                # Later, when you implement MCTS alpha selection, remove this
+                # local override and add a second MCTS selector for alpha.
+                #------------------------------------------------------------
+
+                alpha_sensor_freq = 0.0
+
+                func_ids = inst_inst[:, 1].astype(np.int32, copy=False)
+
+                # used flags
+                used_flags = FUNC_to_USED_FLAGS(func_ids)
+                inst_inst[:, 2] = used_flags
+
+                # sensor flags:
+                # x will be a sensor.
+                # alpha is forced constant for this first MCTS version.
+                sensor_flags = USED_to_SENSOR_FLAGS(
+                    used_flags,
+                    alpha_sensor_freq=alpha_sensor_freq,
+                    rng=rng
+                )
+                inst_inst[:, 4] = sensor_flags
+
+                # const flags:
+                # everything used that is not a sensor becomes a constant.
+                const_flags = USED_and_SENSOR_to_CONST_FLAGS(used_flags, sensor_flags)
+                inst_inst[:, 3] = const_flags
+
+                #------------------------------------------------------------
+                # STEP 5:
+                # fill constants exactly like your other grammar cases.
+                #
+                # a  -> UA0
+                # d  -> STEIS
+                # dd -> STEIS
+                # k  -> ITS
+                #------------------------------------------------------------
+
+                v_cols = {6: 'UA0', 7: 'STEIS', 8: 'STEIS', 9: 'ITS'}
+
+                const_flags = inst_inst[:, 3].astype(np.uint32, copy=False)
+                for c, kind in v_cols.items():
+                    const_mask = (const_flags & (np.uint32(1) << np.uint32(c))) != 0
+                    if kind == 'UA0':
+                        inst_inst = fill_const_UA0(inst_inst, const_mask, c, rng)
+                    elif kind == 'STEIS':
+                        inst_inst = fill_const_STEIS(grm_prior._mdl, const_mask, inst_inst, c, 2.0, 2.0, rng)
+                    elif kind == 'ITS':
+                        inst_inst = fill_const_ITS(inst_inst, const_mask, c, 1.0, rng)
+
+                #------------------------------------------------------------
+                # STEP 6:
+                # fill all sensor references randomly first.
+                #
+                # This matches your existing style.
+                # Then we overwrite x with the actual MCTS-selected parent.
+                #------------------------------------------------------------
+
+                inst_inst = fill_sensor_UNIFORM(inst_inst, inst_inst[:, 4], legal_idx=pop_prior._L_idx)
+
+                #------------------------------------------------------------
+                # STEP 7:
+                # overwrite x sensor with the MCTS-selected parent.
+                #
+                # Your project stores x as an offset:
+                #   x = parent_abs_idx - current_abs_idx
+                #
+                # For a valid parent, this should usually be negative.
+                #------------------------------------------------------------
+
+                inst_inst[:, 5] = int(parent_abs_idx) - inst_inst[:, 0]
+
+                #------------------------------------------------------------
+                # STEP 8:
+                # keep a trace of what MCTS generated.
+                #
+                # This is optional for execution, but very useful for
+                # debugging max depth and visualizing tree construction.
+                #------------------------------------------------------------
+
+                parent_depth = grm_prior._mcts_row_depth(
+                    pop_prior._instructions,
+                    parent_abs_idx
+                )
+
+                child_depth = parent_depth + 1
+
+                if(grm_prior._mode == 'train'):
+                    grm_prior._MCTS_TRACE.append({
+                        "new_idx"       : int(inst_inst[0, 0]),
+                        "parent_idx"    : int(parent_abs_idx),
+                        "parent_key"    : parent_key,
+                        "parent_depth"  : int(parent_depth),
+                        "child_depth"   : int(child_depth),
+                        "child_tf"      : int(child_tf),
+                        "x_offset"      : int(inst_inst[0, 5])
+                    })
 
             case 'UCB1-tMAT':
 
