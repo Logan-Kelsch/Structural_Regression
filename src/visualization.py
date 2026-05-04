@@ -1293,3 +1293,1155 @@ def demo_chunk_scope(
             },
         },
     }
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+#---------------------------------------------------------------------
+# generic safe dictionary helpers
+#---------------------------------------------------------------------
+
+def _mcts_getdict(G, name):
+    d = getattr(G, name, None)
+    return {} if d is None else d
+
+
+def _mcts_dict_sum(d):
+    if d is None or len(d) == 0:
+        return 0.0
+    return float(np.sum(list(d.values())))
+
+
+#---------------------------------------------------------------------
+# key/depth helpers
+#---------------------------------------------------------------------
+
+def _mcts_safe_key_depth(G, key):
+    """
+    return MCTS path depth from a sparse key.
+
+    preferred:
+        use G._mcts_key_depth if it exists.
+
+    fallback:
+        parse path keys manually.
+    """
+
+    if hasattr(G, "_mcts_key_depth"):
+        try:
+            return int(G._mcts_key_depth(key))
+        except Exception:
+            pass
+
+    if key is None:
+        return 0
+
+    if not isinstance(key, tuple) or len(key) == 0:
+        return 0
+
+    if key[0] == "P":
+        d = 0
+        for v in key[1:]:
+            if isinstance(v, (int, np.integer)):
+                d += 1
+        return d
+
+    if key[0] == "ACTX":
+        # alpha context: ("ACTX", parent_key, child_tf)
+        # display it at the depth of the would-be child.
+        if len(key) >= 3:
+            return _mcts_safe_key_depth(G, key[1]) + 1
+        return 1
+
+    if key[0] == "TF":
+        return 1
+
+    if key[0] == "L":
+        return 1
+
+    if key[0] == "T":
+        return 0
+
+    return 0
+
+
+def _mcts_depth_vector_stack(vecs):
+    """
+    stack variable-length depth probability vectors into a 2D array.
+    rows = iterations
+    cols = depth
+    """
+
+    if len(vecs) == 0:
+        return np.zeros((0, 0), dtype=np.float64)
+
+    m = max(v.shape[0] for v in vecs)
+    out = np.zeros((len(vecs), m), dtype=np.float64)
+
+    for i, v in enumerate(vecs):
+        out[i, :v.shape[0]] = v
+
+    return out
+
+
+#---------------------------------------------------------------------
+# normal x-parent / child-tf MCTS terms
+#---------------------------------------------------------------------
+
+def _mcts_node_n_for_explore(G, key):
+    if getattr(G, "_count_explore", False) is True:
+        return _mcts_getdict(G, "_MCTS_NODE_EXPLORE_COUNT").get(key, 0)
+    return _mcts_getdict(G, "_MCTS_NODE_COUNT").get(key, 0)
+
+
+def _mcts_edge_n_for_explore(G, edge_key):
+    if getattr(G, "_count_explore", False) is True:
+        return _mcts_getdict(G, "_MCTS_EDGE_EXPLORE_COUNT").get(edge_key, 0)
+    return _mcts_getdict(G, "_MCTS_EDGE_COUNT").get(edge_key, 0)
+
+
+def _mcts_node_explore_coef(G, key):
+    """
+    node exploration coefficient used by UCT.
+
+    UCT(node) = Q(node) + sqrt(c * log(total + 2) / (N(node) + 1))
+    """
+
+    n = _mcts_node_n_for_explore(G, key)
+
+    total = 0
+    total += int(getattr(G, "_MCTS_EXPLORE_T", 0) or 0)
+    total += int(getattr(G, "_MCTS_EXPLOIT_T", 0) or 0)
+
+    return float(np.sqrt(G._c * np.log(total + 2) / (n + 1)))
+
+
+def _mcts_edge_explore_coef(G, parent_key, child_tf):
+    """
+    edge exploration coefficient used by UCB.
+
+    UCB(parent -> child_tf)
+        = Q(parent -> child_tf)
+          + sqrt(c * log(N(parent) + 2) / (N(edge) + 1))
+    """
+
+    edge_key = (parent_key, int(child_tf))
+
+    parent_n = _mcts_node_n_for_explore(G, parent_key)
+    edge_n = _mcts_edge_n_for_explore(G, edge_key)
+
+    return float(np.sqrt(G._c * np.log(parent_n + 2) / (edge_n + 1)))
+
+def _mcts_alpha_node_n_for_explore(G, key):
+    """
+    count used for alpha-parent exploration.
+
+    this is the alpha-parent equivalent of _mcts_node_n_for_explore.
+    """
+
+    if getattr(G, "_count_explore", False) is True:
+        return G._MCTS_ALPHA_NODE_EXPLORE_COUNT.get(key, 0)
+
+    return G._MCTS_ALPHA_NODE_COUNT.get(key, 0)
+
+
+def _mcts_alpha_node_explore_coef(G, key):
+    """
+    alpha-node exploration coefficient.
+
+    this measures uncertainty for nodes being used as alpha parents.
+
+    alpha_node_score = Q_alpha_node + U_alpha_node
+    U_alpha_node = sqrt(c * log(alpha_total + 2) / (N_alpha_node + 1))
+    """
+
+    n = _mcts_alpha_node_n_for_explore(G, key)
+
+    total = 0
+    total += int(getattr(G, "_MCTS_ALPHA_EXPLORE_T", 0) or 0)
+    total += int(getattr(G, "_MCTS_ALPHA_EXPLOIT_T", 0) or 0)
+
+    return float(np.sqrt(G._c * np.log(total + 2) / (n + 1)))
+
+
+def mcts_alpha_node_depth_summary(G):
+    """
+    summarize alpha-parent node exploit/explore values by depth.
+
+    this is different from normal node depth summary.
+
+    normal node summary:
+        how useful is a state as an x-parent/generated state?
+
+    alpha node summary:
+        how useful is a state as an alpha sensor/alpha parent?
+    """
+
+    rows = {}
+
+    def _ensure(d):
+        if d not in rows:
+            rows[d] = {
+                "depth": d,
+                "alpha_node_count": 0,
+                "alpha_node_q_sum": 0.0,
+                "alpha_node_u_sum": 0.0,
+                "alpha_node_score_sum": 0.0,
+            }
+
+    alpha_node_keys = set()
+    alpha_node_keys |= set(getattr(G, "_MCTS_ALPHA_NODE_MU", {}).keys())
+    alpha_node_keys |= set(getattr(G, "_MCTS_ALPHA_NODE_COUNT", {}).keys())
+    alpha_node_keys |= set(getattr(G, "_MCTS_ALPHA_NODE_EXPLORE_COUNT", {}).keys())
+
+    for key in alpha_node_keys:
+        d = _mcts_safe_key_depth(G, key)
+        _ensure(d)
+
+        q = float(G._MCTS_ALPHA_NODE_MU.get(key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+        u = _mcts_alpha_node_explore_coef(G, key)
+
+        rows[d]["alpha_node_count"] += 1
+        rows[d]["alpha_node_q_sum"] += q
+        rows[d]["alpha_node_u_sum"] += u
+        rows[d]["alpha_node_score_sum"] += q + u
+
+    out = []
+
+    for d in sorted(rows):
+        r = rows[d]
+        n = max(r["alpha_node_count"], 1)
+
+        out.append({
+            "depth": d,
+            "alpha_node_count": r["alpha_node_count"],
+            "alpha_node_q_mean": r["alpha_node_q_sum"] / n,
+            "alpha_node_u_mean": r["alpha_node_u_sum"] / n,
+            "alpha_node_score_mean": r["alpha_node_score_sum"] / n,
+        })
+
+    return out
+
+#---------------------------------------------------------------------
+# alpha MCTS terms
+#---------------------------------------------------------------------
+
+def _mcts_alpha_decision_n_for_explore(G, decision_key):
+    if getattr(G, "_count_explore", False) is True:
+        return _mcts_getdict(G, "_MCTS_ALPHA_DECISION_EXPLORE_COUNT").get(decision_key, 0)
+    return _mcts_getdict(G, "_MCTS_ALPHA_DECISION_COUNT").get(decision_key, 0)
+
+
+def _mcts_alpha_node_n_for_explore(G, key):
+    if getattr(G, "_count_explore", False) is True:
+        return _mcts_getdict(G, "_MCTS_ALPHA_NODE_EXPLORE_COUNT").get(key, 0)
+    return _mcts_getdict(G, "_MCTS_ALPHA_NODE_COUNT").get(key, 0)
+
+
+def _mcts_alpha_edge_n_for_explore(G, edge_key):
+    if getattr(G, "_count_explore", False) is True:
+        return _mcts_getdict(G, "_MCTS_ALPHA_EDGE_EXPLORE_COUNT").get(edge_key, 0)
+    return _mcts_getdict(G, "_MCTS_ALPHA_EDGE_COUNT").get(edge_key, 0)
+
+
+def _mcts_alpha_decision_explore_coef(G, ctx_key, action):
+    decision_key = (ctx_key, int(action))
+    n = _mcts_alpha_decision_n_for_explore(G, decision_key)
+
+    total = 0
+    total += int(getattr(G, "_MCTS_ALPHA_EXPLORE_T", 0) or 0)
+    total += int(getattr(G, "_MCTS_ALPHA_EXPLOIT_T", 0) or 0)
+
+    return float(np.sqrt(G._c * np.log(total + 2) / (n + 1)))
+
+
+def _mcts_alpha_node_explore_coef(G, key):
+    n = _mcts_alpha_node_n_for_explore(G, key)
+
+    total = 0
+    total += int(getattr(G, "_MCTS_ALPHA_EXPLORE_T", 0) or 0)
+    total += int(getattr(G, "_MCTS_ALPHA_EXPLOIT_T", 0) or 0)
+
+    return float(np.sqrt(G._c * np.log(total + 2) / (n + 1)))
+
+
+def _mcts_alpha_edge_explore_coef(G, ctx_key, alpha_parent_key):
+    edge_key = (ctx_key, alpha_parent_key)
+
+    # alpha edge exploration is conditioned on the alpha decision context.
+    # use decision-context evidence as the parent count proxy.
+    ctx_n0 = _mcts_alpha_decision_n_for_explore(G, (ctx_key, 0))
+    ctx_n1 = _mcts_alpha_decision_n_for_explore(G, (ctx_key, 1))
+    ctx_n = ctx_n0 + ctx_n1
+
+    edge_n = _mcts_alpha_edge_n_for_explore(G, edge_key)
+
+    return float(np.sqrt(G._c * np.log(ctx_n + 2) / (edge_n + 1)))
+
+
+#---------------------------------------------------------------------
+# softmax probability helper
+#---------------------------------------------------------------------
+
+def _mcts_softmax_probs(scores, base=np.e, temp=1.0, valid_mask=None):
+    """
+    return softmax probabilities without sampling.
+    """
+
+    scores = np.asarray(scores, dtype=np.float64)
+
+    if valid_mask is None:
+        valid_mask = np.ones(scores.shape[0], dtype=bool)
+    else:
+        valid_mask = np.asarray(valid_mask, dtype=bool)
+
+    valid_mask &= np.isfinite(scores)
+
+    if scores.shape[0] == 0:
+        return np.zeros(0, dtype=np.float64)
+
+    if not np.any(valid_mask):
+        return np.full(scores.shape[0], 1.0 / scores.shape[0], dtype=np.float64)
+
+    temp = float(np.clip(temp, 1e-6, 1.0))
+    s = scores.copy() / temp
+
+    if base == 1:
+        w = valid_mask.astype(np.float64)
+    else:
+        scaled = np.full_like(s, -np.inf, dtype=np.float64)
+        scaled[valid_mask] = np.log(base) * s[valid_mask]
+        scaled[valid_mask] -= np.max(scaled[valid_mask])
+
+        w = np.zeros_like(s, dtype=np.float64)
+        w[valid_mask] = np.exp(scaled[valid_mask])
+
+    if w.sum() <= 0 or not np.isfinite(w.sum()):
+        w = valid_mask.astype(np.float64)
+
+    return w / w.sum()
+
+def mcts_alpha_sensor_probability_summary(G):
+    """
+    compute mean p(alpha sensor) over all known alpha decision contexts.
+
+    this is not the raw alpha_sensor_freq parameter.
+
+    alpha_sensor_freq is only a prior.
+    the returned probability is based on:
+        alpha decision UCB scores
+        learned alpha decision means
+        exploration terms
+        prior log-bias
+        softmax temperature
+    """
+
+    decision_keys = set()
+    decision_keys |= set(getattr(G, "_MCTS_ALPHA_DECISION_MU", {}).keys())
+    decision_keys |= set(getattr(G, "_MCTS_ALPHA_DECISION_COUNT", {}).keys())
+    decision_keys |= set(getattr(G, "_MCTS_ALPHA_DECISION_EXPLORE_COUNT", {}).keys())
+
+    #extract ctx keys from decision keys:
+    #decision key is: (ctx_key, action)
+    ctx_keys = sorted(set([k[0] for k in decision_keys]), key=lambda x: str(x))
+
+    if len(ctx_keys) == 0:
+        return np.nan, {}
+
+    temp = getattr(G, "_softmax_temp", 1.0)
+    base = getattr(G, "_MCTS_SOFTMAX_BASE", np.e)
+
+    p_sensor_by_ctx = {}
+
+    for ctx_key in ctx_keys:
+
+        actions = np.asarray([0, 1], dtype=np.int64)
+
+        scores = np.asarray([
+            G._mcts_alpha_decision_ucb(ctx_key, 0),
+            G._mcts_alpha_decision_ucb(ctx_key, 1),
+        ], dtype=np.float64)
+
+        #same soft prior used by _mcts_select_alpha_is_sensor
+        p_sensor_prior = float(np.clip(G._alpha_sensor_freq, 1e-6, 1.0 - 1e-6))
+        prior = np.asarray([1.0 - p_sensor_prior, p_sensor_prior], dtype=np.float64)
+
+        scores = scores + G._MCTS_ALPHA_PRIOR_WEIGHT * np.log(prior)
+
+        probs = _mcts_softmax_probs(
+            scores=scores,
+            base=base,
+            temp=temp,
+            valid_mask=np.isfinite(scores)
+        )
+
+        p_sensor_by_ctx[ctx_key] = float(probs[1])
+
+    vals = np.asarray(list(p_sensor_by_ctx.values()), dtype=np.float64)
+
+    return float(np.mean(vals)), p_sensor_by_ctx
+
+
+def mcts_alpha_parent_depth_probability(G, X, legal_idx=None):
+    """
+    estimate p(alpha parent depth | alpha is sensor).
+
+    this mirrors p(new node depth), but for alpha parent selection.
+
+    IMPORTANT:
+    this is conditional on alpha already being selected as a sensor.
+    it answers:
+        if alpha is a sensor right now,
+        what depth of node is likely to be selected as alpha parent?
+    """
+
+    if legal_idx is None:
+        legal_idx = np.asarray(X._L_idx, dtype=np.int64)
+    else:
+        legal_idx = np.asarray(legal_idx, dtype=np.int64)
+
+    if legal_idx.size == 0:
+        return np.zeros(1, dtype=np.float64)
+
+    scores = np.empty(legal_idx.shape[0], dtype=np.float64)
+    depths = np.empty(legal_idx.shape[0], dtype=np.int64)
+    valid_mask = np.ones(legal_idx.shape[0], dtype=bool)
+
+    max_alpha_parent_depth = int(getattr(G, "_MCTS_MAX_DEPTH", 1)) - 1
+
+    for i in range(legal_idx.shape[0]):
+        idx = int(legal_idx[i])
+
+        if hasattr(G, "_mcts_row_depth"):
+            d = int(G._mcts_row_depth(X._instructions, idx))
+        else:
+            key_tmp = G._mcts_state_key(X._instructions, idx)
+            d = _mcts_safe_key_depth(G, key_tmp)
+
+        depths[i] = d
+        valid_mask[i] = d <= max_alpha_parent_depth
+
+        key = G._mcts_state_key(X._instructions, idx)
+
+        if hasattr(G, "_mcts_alpha_node_uct"):
+            scores[i] = G._mcts_alpha_node_uct(key)
+        else:
+            q = float(G._MCTS_ALPHA_NODE_MU.get(key, G._MCTS_NODE_MU.get(key, getattr(G, "_MCTS_BASE_PRIOR", 0.0))))
+            u = _mcts_alpha_node_explore_coef(G, key)
+            scores[i] = q + u
+
+    if not np.any(valid_mask):
+        valid_mask[:] = True
+
+    temp = getattr(G, "_softmax_temp", 1.0)
+    base = getattr(G, "_MCTS_SOFTMAX_BASE", np.e)
+
+    probs = _mcts_softmax_probs(
+        scores=scores,
+        base=base,
+        temp=temp,
+        valid_mask=valid_mask & np.isfinite(scores)
+    )
+
+    max_d = int(max(depths.max(), getattr(G, "_MCTS_MAX_DEPTH", depths.max()))) + 1
+
+    alpha_parent_depth_prob = np.zeros(max_d + 1, dtype=np.float64)
+
+    for d, p in zip(depths, probs):
+        alpha_parent_depth_prob[int(d)] += p
+
+    return alpha_parent_depth_prob
+
+#---------------------------------------------------------------------
+# depth summaries for normal MCTS
+#---------------------------------------------------------------------
+
+def mcts_depth_summary(G):
+    """
+    summarize x-parent/node and child-tf/edge exploit/explore values by depth.
+    """
+
+    rows = {}
+
+    def _ensure(d):
+        if d not in rows:
+            rows[d] = {
+                "depth": d,
+
+                "node_count": 0,
+                "node_q_sum": 0.0,
+                "node_u_sum": 0.0,
+                "node_score_sum": 0.0,
+
+                "node_expandable_count": 0,
+                "node_expandable_q_sum": 0.0,
+                "node_expandable_u_sum": 0.0,
+                "node_expandable_score_sum": 0.0,
+
+                "edge_count": 0,
+                "edge_q_sum": 0.0,
+                "edge_u_sum": 0.0,
+                "edge_score_sum": 0.0,
+            }
+
+    node_keys = set()
+    node_keys |= set(_mcts_getdict(G, "_MCTS_NODE_MU").keys())
+    node_keys |= set(_mcts_getdict(G, "_MCTS_NODE_COUNT").keys())
+    node_keys |= set(_mcts_getdict(G, "_MCTS_NODE_EXPLORE_COUNT").keys())
+
+    for key in node_keys:
+        d = _mcts_safe_key_depth(G, key)
+        _ensure(d)
+
+        q = float(_mcts_getdict(G, "_MCTS_NODE_MU").get(key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+        u = _mcts_node_explore_coef(G, key)
+
+        rows[d]["node_count"] += 1
+        rows[d]["node_q_sum"] += q
+        rows[d]["node_u_sum"] += u
+        rows[d]["node_score_sum"] += q + u
+
+        max_depth = getattr(G, "_MCTS_MAX_DEPTH", None)
+        if max_depth is None or d < int(max_depth):
+            rows[d]["node_expandable_count"] += 1
+            rows[d]["node_expandable_q_sum"] += q
+            rows[d]["node_expandable_u_sum"] += u
+            rows[d]["node_expandable_score_sum"] += q + u
+
+    edge_keys = set()
+    edge_keys |= set(_mcts_getdict(G, "_MCTS_EDGE_MU").keys())
+    edge_keys |= set(_mcts_getdict(G, "_MCTS_EDGE_COUNT").keys())
+    edge_keys |= set(_mcts_getdict(G, "_MCTS_EDGE_EXPLORE_COUNT").keys())
+
+    for edge_key in edge_keys:
+        parent_key, child_tf = edge_key
+        d = _mcts_safe_key_depth(G, parent_key) + 1
+        _ensure(d)
+
+        q = float(_mcts_getdict(G, "_MCTS_EDGE_MU").get(edge_key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+        u = _mcts_edge_explore_coef(G, parent_key, child_tf)
+
+        rows[d]["edge_count"] += 1
+        rows[d]["edge_q_sum"] += q
+        rows[d]["edge_u_sum"] += u
+        rows[d]["edge_score_sum"] += q + u
+
+    out = []
+
+    for d in sorted(rows):
+        r = rows[d]
+        nc = max(r["node_count"], 1)
+        ec = max(r["edge_count"], 1)
+        nec = r["node_expandable_count"]
+
+        if nec > 0:
+            node_expandable_q_mean = r["node_expandable_q_sum"] / nec
+            node_expandable_u_mean = r["node_expandable_u_sum"] / nec
+            node_expandable_score_mean = r["node_expandable_score_sum"] / nec
+        else:
+            node_expandable_q_mean = np.nan
+            node_expandable_u_mean = np.nan
+            node_expandable_score_mean = np.nan
+
+        out.append({
+            "depth": d,
+
+            "node_count": r["node_count"],
+            "node_q_mean": r["node_q_sum"] / nc,
+            "node_u_mean": r["node_u_sum"] / nc,
+            "node_score_mean": r["node_score_sum"] / nc,
+
+            "node_expandable_count": nec,
+            "node_expandable_q_mean": node_expandable_q_mean,
+            "node_expandable_u_mean": node_expandable_u_mean,
+            "node_expandable_score_mean": node_expandable_score_mean,
+
+            "edge_count": r["edge_count"],
+            "edge_q_mean": r["edge_q_sum"] / ec,
+            "edge_u_mean": r["edge_u_sum"] / ec,
+            "edge_score_mean": r["edge_score_sum"] / ec,
+        })
+
+    return out
+
+
+def mcts_depth_search_probability(G, X, legal_idx=None):
+    """
+    estimate current natural probability of creating a new node at each depth.
+    """
+
+    if legal_idx is None:
+        legal_idx = np.asarray(X._L_idx, dtype=np.int64)
+    else:
+        legal_idx = np.asarray(legal_idx, dtype=np.int64)
+
+    if legal_idx.size == 0:
+        return np.zeros(1), np.zeros(1)
+
+    valid_mask = np.ones(legal_idx.shape[0], dtype=bool)
+
+    if hasattr(G, "_mcts_valid_depth_parent_mask"):
+        valid_mask &= G._mcts_valid_depth_parent_mask(
+            instructions=X._instructions,
+            legal_idx=legal_idx
+        )
+
+    if not np.any(valid_mask):
+        valid_mask[:] = True
+
+    scores = np.empty(legal_idx.shape[0], dtype=np.float64)
+    depths = np.empty(legal_idx.shape[0], dtype=np.int64)
+
+    for i in range(legal_idx.shape[0]):
+        idx = int(legal_idx[i])
+        key = G._mcts_state_key(X._instructions, idx)
+
+        if hasattr(G, "_mcts_node_uct"):
+            scores[i] = G._mcts_node_uct(key)
+        else:
+            q = float(_mcts_getdict(G, "_MCTS_NODE_MU").get(key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+            u = _mcts_node_explore_coef(G, key)
+            scores[i] = q + u
+
+        if hasattr(G, "_mcts_row_depth"):
+            depths[i] = int(G._mcts_row_depth(X._instructions, idx))
+        else:
+            depths[i] = _mcts_safe_key_depth(G, key)
+
+    temp = getattr(G, "_softmax_temp", 1.0)
+    base = getattr(G, "_MCTS_SOFTMAX_BASE", np.e)
+
+    probs = _mcts_softmax_probs(
+        scores=scores,
+        base=base,
+        temp=temp,
+        valid_mask=valid_mask
+    )
+
+    max_d = int(max(depths.max() + 1, getattr(G, "_MCTS_MAX_DEPTH", depths.max() + 1))) + 1
+
+    parent_depth_prob = np.zeros(max_d + 1, dtype=np.float64)
+    child_depth_prob = np.zeros(max_d + 1, dtype=np.float64)
+
+    for d, p in zip(depths, probs):
+        parent_depth_prob[int(d)] += p
+
+        if int(d) + 1 < child_depth_prob.shape[0]:
+            child_depth_prob[int(d) + 1] += p
+
+    return parent_depth_prob, child_depth_prob
+
+
+#---------------------------------------------------------------------
+# alpha summaries/probabilities
+#---------------------------------------------------------------------
+
+def _stack_depth_vectors(vecs):
+    """
+    stack variable-length depth probability vectors into a 2D array.
+
+    rows = iterations
+    cols = depth
+
+    this is needed because early iterations may only have depths 0..2,
+    while later iterations may have depths 0..5.
+    """
+
+    if vecs is None or len(vecs) == 0:
+        return np.zeros((0, 0), dtype=np.float64)
+
+    max_len = 0
+    for v in vecs:
+        if v is None:
+            continue
+        max_len = max(max_len, np.asarray(v).shape[0])
+
+    if max_len == 0:
+        return np.zeros((0, 0), dtype=np.float64)
+
+    out = np.zeros((len(vecs), max_len), dtype=np.float64)
+
+    for i, v in enumerate(vecs):
+        if v is None:
+            continue
+
+        v = np.asarray(v, dtype=np.float64).ravel()
+        out[i, :v.shape[0]] = v
+
+    return out
+
+def _mcts_alpha_decision_scores(G, ctx_key):
+    """
+    score alpha action 0/1 for a context.
+
+    action 0 = alpha constant
+    action 1 = alpha sensor
+    """
+
+    scores = np.zeros(2, dtype=np.float64)
+
+    for action in (0, 1):
+        decision_key = (ctx_key, action)
+
+        if hasattr(G, "_mcts_alpha_decision_ucb"):
+            try:
+                scores[action] = G._mcts_alpha_decision_ucb(ctx_key, action)
+            except Exception:
+                q = float(_mcts_getdict(G, "_MCTS_ALPHA_DECISION_MU").get(decision_key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+                u = _mcts_alpha_decision_explore_coef(G, ctx_key, action)
+                scores[action] = q + u
+        else:
+            q = float(_mcts_getdict(G, "_MCTS_ALPHA_DECISION_MU").get(decision_key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+            u = _mcts_alpha_decision_explore_coef(G, ctx_key, action)
+            scores[action] = q + u
+
+    #include the same prior bias used in alpha decision selection.
+    p_sensor = float(np.clip(getattr(G, "_alpha_sensor_freq", 0.5), 1e-6, 1.0 - 1e-6))
+    prior = np.asarray([1.0 - p_sensor, p_sensor], dtype=np.float64)
+    prior_weight = float(getattr(G, "_MCTS_ALPHA_PRIOR_WEIGHT", 0.0) or 0.0)
+    scores = scores + prior_weight * np.log(prior)
+
+    return scores
+
+
+def mcts_alpha_decision_probability_summary(G):
+    """
+    summarize learned probability of alpha being a sensor.
+    """
+
+    decision_keys = set()
+    decision_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_DECISION_MU").keys())
+    decision_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_DECISION_COUNT").keys())
+    decision_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_DECISION_EXPLORE_COUNT").keys())
+
+    ctx_keys = sorted(set([k[0] for k in decision_keys]), key=lambda x: str(x))
+
+    if len(ctx_keys) == 0:
+        return {
+            "n_ctx": 0,
+            "mean_p_sensor": np.nan,
+            "mean_const_mu": np.nan,
+            "mean_sensor_mu": np.nan,
+            "const_count": 0,
+            "sensor_count": 0,
+        }
+
+    p_sensor_vals = []
+    const_mu = []
+    sensor_mu = []
+    const_count = 0
+    sensor_count = 0
+
+    temp = getattr(G, "_softmax_temp", 1.0)
+    base = getattr(G, "_MCTS_SOFTMAX_BASE", np.e)
+
+    for ctx_key in ctx_keys:
+        scores = _mcts_alpha_decision_scores(G, ctx_key)
+        probs = _mcts_softmax_probs(scores, base=base, temp=temp)
+        p_sensor_vals.append(probs[1])
+
+        const_key = (ctx_key, 0)
+        sensor_key = (ctx_key, 1)
+
+        const_mu.append(_mcts_getdict(G, "_MCTS_ALPHA_DECISION_MU").get(const_key, 0.0))
+        sensor_mu.append(_mcts_getdict(G, "_MCTS_ALPHA_DECISION_MU").get(sensor_key, 0.0))
+
+        const_count += _mcts_getdict(G, "_MCTS_ALPHA_DECISION_COUNT").get(const_key, 0)
+        sensor_count += _mcts_getdict(G, "_MCTS_ALPHA_DECISION_COUNT").get(sensor_key, 0)
+
+    return {
+        "n_ctx": len(ctx_keys),
+        "mean_p_sensor": float(np.mean(p_sensor_vals)),
+        "mean_const_mu": float(np.mean(const_mu)),
+        "mean_sensor_mu": float(np.mean(sensor_mu)),
+        "const_count": int(const_count),
+        "sensor_count": int(sensor_count),
+    }
+
+
+def mcts_alpha_parent_depth_probability_s(G):
+    """
+    approximate probability mass over alpha-parent depths.
+
+    This uses the alpha-node UCT scores across known alpha-parent states.
+    """
+
+    keys = set()
+    keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_NODE_MU").keys())
+    keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_NODE_COUNT").keys())
+    keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_NODE_EXPLORE_COUNT").keys())
+
+    if len(keys) == 0:
+        return np.zeros(1, dtype=np.float64)
+
+    keys = sorted(keys, key=lambda x: str(x))
+    scores = np.empty(len(keys), dtype=np.float64)
+    depths = np.empty(len(keys), dtype=np.int64)
+
+    for i, key in enumerate(keys):
+        if hasattr(G, "_mcts_alpha_node_uct"):
+            try:
+                scores[i] = G._mcts_alpha_node_uct(key)
+            except Exception:
+                q = float(_mcts_getdict(G, "_MCTS_ALPHA_NODE_MU").get(key, _mcts_getdict(G, "_MCTS_NODE_MU").get(key, getattr(G, "_MCTS_BASE_PRIOR", 0.0))))
+                u = _mcts_alpha_node_explore_coef(G, key)
+                scores[i] = q + u
+        else:
+            q = float(_mcts_getdict(G, "_MCTS_ALPHA_NODE_MU").get(key, _mcts_getdict(G, "_MCTS_NODE_MU").get(key, getattr(G, "_MCTS_BASE_PRIOR", 0.0))))
+            u = _mcts_alpha_node_explore_coef(G, key)
+            scores[i] = q + u
+
+        depths[i] = _mcts_safe_key_depth(G, key)
+
+    probs = _mcts_softmax_probs(
+        scores=scores,
+        base=getattr(G, "_MCTS_SOFTMAX_BASE", np.e),
+        temp=getattr(G, "_softmax_temp", 1.0),
+    )
+
+    max_d = int(max(depths.max(), getattr(G, "_MCTS_MAX_DEPTH", depths.max()))) + 1
+    out = np.zeros(max_d + 1, dtype=np.float64)
+
+    for d, p in zip(depths, probs):
+        if int(d) < out.shape[0]:
+            out[int(d)] += p
+
+    return out
+
+
+def mcts_alpha_depth_summary(G):
+    """
+    summarize alpha-parent exploit/explore values by alpha-parent depth.
+    """
+
+    rows = {}
+
+    def _ensure(d):
+        if d not in rows:
+            rows[d] = {
+                "depth": d,
+                "alpha_node_count": 0,
+                "alpha_node_q_sum": 0.0,
+                "alpha_node_u_sum": 0.0,
+                "alpha_edge_count": 0,
+                "alpha_edge_q_sum": 0.0,
+                "alpha_edge_u_sum": 0.0,
+            }
+
+    alpha_node_keys = set()
+    alpha_node_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_NODE_MU").keys())
+    alpha_node_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_NODE_COUNT").keys())
+    alpha_node_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_NODE_EXPLORE_COUNT").keys())
+
+    for key in alpha_node_keys:
+        d = _mcts_safe_key_depth(G, key)
+        _ensure(d)
+
+        q = float(_mcts_getdict(G, "_MCTS_ALPHA_NODE_MU").get(key, _mcts_getdict(G, "_MCTS_NODE_MU").get(key, getattr(G, "_MCTS_BASE_PRIOR", 0.0))))
+        u = _mcts_alpha_node_explore_coef(G, key)
+
+        rows[d]["alpha_node_count"] += 1
+        rows[d]["alpha_node_q_sum"] += q
+        rows[d]["alpha_node_u_sum"] += u
+
+    alpha_edge_keys = set()
+    alpha_edge_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_EDGE_MU").keys())
+    alpha_edge_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_EDGE_COUNT").keys())
+    alpha_edge_keys |= set(_mcts_getdict(G, "_MCTS_ALPHA_EDGE_EXPLORE_COUNT").keys())
+
+    for edge_key in alpha_edge_keys:
+        ctx_key, alpha_parent_key = edge_key
+        d = _mcts_safe_key_depth(G, alpha_parent_key)
+        _ensure(d)
+
+        q = float(_mcts_getdict(G, "_MCTS_ALPHA_EDGE_MU").get(edge_key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+        u = _mcts_alpha_edge_explore_coef(G, ctx_key, alpha_parent_key)
+
+        rows[d]["alpha_edge_count"] += 1
+        rows[d]["alpha_edge_q_sum"] += q
+        rows[d]["alpha_edge_u_sum"] += u
+
+    out = []
+
+    for d in sorted(rows):
+        r = rows[d]
+        anc = max(r["alpha_node_count"], 1)
+        aec = max(r["alpha_edge_count"], 1)
+
+        out.append({
+            "depth": d,
+            "alpha_node_count": r["alpha_node_count"],
+            "alpha_node_q_mean": r["alpha_node_q_sum"] / anc,
+            "alpha_node_u_mean": r["alpha_node_u_sum"] / anc,
+            "alpha_edge_count": r["alpha_edge_count"],
+            "alpha_edge_q_mean": r["alpha_edge_q_sum"] / aec,
+            "alpha_edge_u_mean": r["alpha_edge_u_sum"] / aec,
+        })
+
+    return out
+
+
+#---------------------------------------------------------------------
+# print helpers
+#---------------------------------------------------------------------
+
+def print_mcts_depth_summary(G, X=None, max_depth=None):
+    rows = mcts_depth_summary(G)
+
+    child_p = None
+    if X is not None:
+        _, child_p = mcts_depth_search_probability(G, X)
+
+    if max_depth is None:
+        max_depth = getattr(G, "_MCTS_MAX_DEPTH", None)
+
+    print("\nMCTS X/TF DEPTH SUMMARY")
+    print("d | node_n | exp_n | node_q | node_u_raw | node_u_active | edge_n | edge_q | edge_u | p_new")
+    print("--|--------|-------|--------|------------|---------------|--------|--------|--------|------")
+
+    for r in rows:
+        d = int(r["depth"])
+
+        if max_depth is not None and d > max_depth:
+            continue
+
+        pnew = 0.0
+        if child_p is not None and d < child_p.shape[0]:
+            pnew = child_p[d]
+
+        node_u_active = r.get("node_expandable_u_mean", np.nan)
+
+        print(
+            f"{d:1d} | "
+            f"{r['node_count']:6d} | "
+            f"{r.get('node_expandable_count', 0):5d} | "
+            f"{r['node_q_mean']:6.3f} | "
+            f"{r['node_u_mean']:10.3f} | "
+            f"{node_u_active:13.3f} | "
+            f"{r['edge_count']:6d} | "
+            f"{r['edge_q_mean']:6.3f} | "
+            f"{r['edge_u_mean']:6.3f} | "
+            f"{pnew:5.3f}"
+        )
+
+
+def print_mcts_alpha_summary(G):
+    s = mcts_alpha_decision_probability_summary(G)
+    rows = mcts_alpha_depth_summary(G)
+
+    print("\nMCTS ALPHA SUMMARY")
+    print("decision contexts:", s["n_ctx"])
+    print("mean p(alpha sensor):", "nan" if not np.isfinite(s["mean_p_sensor"]) else f"{s['mean_p_sensor']:.3f}")
+    print("mean const mu:", "nan" if not np.isfinite(s["mean_const_mu"]) else f"{s['mean_const_mu']:.3f}")
+    print("mean sensor mu:", "nan" if not np.isfinite(s["mean_sensor_mu"]) else f"{s['mean_sensor_mu']:.3f}")
+    print("const count:", s["const_count"], "| sensor count:", s["sensor_count"])
+
+    if len(rows) == 0:
+        print("no alpha-parent depth rows yet")
+        return
+
+    print("\nALPHA PARENT DEPTH SUMMARY")
+    print("d | a_node_n | a_node_q | a_node_u | a_edge_n | a_edge_q | a_edge_u")
+    print("--|----------|----------|----------|----------|----------|---------")
+
+    for r in rows:
+        print(
+            f"{int(r['depth']):1d} | "
+            f"{r['alpha_node_count']:8d} | "
+            f"{r['alpha_node_q_mean']:8.3f} | "
+            f"{r['alpha_node_u_mean']:8.3f} | "
+            f"{r['alpha_edge_count']:8d} | "
+            f"{r['alpha_edge_q_mean']:8.3f} | "
+            f"{r['alpha_edge_u_mean']:7.3f}"
+        )
+
+
+#---------------------------------------------------------------------
+# plot helpers
+#---------------------------------------------------------------------
+
+def plot_depth_probability_progress(prob_hist, title_left, title_right, figsize=(14, 4)):
+    """
+    generic depth probability + delta plot.
+
+    left:
+        probability mass by depth over iterations.
+
+    right:
+        absolute probability delta by depth over iterations.
+    """
+
+    P = _stack_depth_vectors(prob_hist)
+
+    if P.shape[0] == 0:
+        print("no probability history yet")
+        return
+
+    fig, axs = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
+
+    im0 = axs[0].imshow(P.T, aspect="auto", origin="lower")
+    axs[0].set_title(title_left)
+    axs[0].set_xlabel("iteration")
+    axs[0].set_ylabel("depth")
+    plt.colorbar(im0, ax=axs[0])
+
+    if P.shape[0] > 1:
+        D = np.abs(np.diff(P, axis=0))
+
+        im1 = axs[1].imshow(D.T, aspect="auto", origin="lower")
+        axs[1].set_title(title_right)
+        axs[1].set_xlabel("iteration delta")
+        axs[1].set_ylabel("depth")
+        plt.colorbar(im1, ax=axs[1])
+    else:
+        axs[1].text(0.5, 0.5, "need >1 iteration", ha="center", va="center")
+        axs[1].set_axis_off()
+
+    plt.show()
+
+
+def plot_mcts_depth_progress(child_depth_probs_hist, figsize=(14, 4)):
+    """
+    original x-parent/new-node depth probability plot.
+    """
+
+    plot_depth_probability_progress(
+        prob_hist=child_depth_probs_hist,
+        title_left="p(new node depth)",
+        title_right="|delta p(new node depth)|",
+        figsize=figsize
+    )
+
+
+def plot_mcts_alpha_parent_depth_progress(alpha_parent_depth_probs_hist, figsize=(14, 4)):
+    """
+    alpha-parent depth probability plot.
+
+    this is conditional on alpha being selected as a sensor.
+    """
+
+    plot_depth_probability_progress(
+        prob_hist=alpha_parent_depth_probs_hist,
+        title_left="p(alpha parent depth | alpha sensor)",
+        title_right="|delta p(alpha parent depth)|",
+        figsize=figsize
+    )
+
+
+def plot_mcts_depth_terms(depth_rows, alpha_depth_rows=None, figsize=(16, 4)):
+    """
+    current-iteration plot of MCTS terms by depth.
+
+    panel 1:
+        normal node UCT terms for x-parent selection.
+
+    panel 2:
+        normal edge UCB terms for child transform selection.
+
+    panel 3:
+        alpha-node UCT terms for alpha-parent selection.
+    """
+
+    if len(depth_rows) == 0:
+        print("no depth rows yet")
+        return
+
+    d = np.asarray([r["depth"] for r in depth_rows], dtype=int)
+
+    node_q = np.asarray([r["node_q_mean"] for r in depth_rows], dtype=float)
+    node_u = np.asarray([r["node_expandable_u_mean"] for r in depth_rows], dtype=float)
+
+    edge_q = np.asarray([r["edge_q_mean"] for r in depth_rows], dtype=float)
+    edge_u = np.asarray([r["edge_u_mean"] for r in depth_rows], dtype=float)
+
+    fig, axs = plt.subplots(1, 3, figsize=figsize, constrained_layout=True)
+
+    axs[0].plot(d, node_q, marker="o", label="x-node exploit")
+    axs[0].plot(d, node_u, marker="o", label="x-node explore")
+    axs[0].set_title("x-parent node UCT terms by depth")
+    axs[0].set_xlabel("depth")
+    axs[0].legend()
+
+    axs[1].plot(d, edge_q, marker="o", label="x-edge exploit")
+    axs[1].plot(d, edge_u, marker="o", label="x-edge explore")
+    axs[1].set_title("child function edge UCB terms by depth")
+    axs[1].set_xlabel("depth")
+    axs[1].legend()
+
+    if alpha_depth_rows is not None and len(alpha_depth_rows) > 0:
+        ad = np.asarray([r["depth"] for r in alpha_depth_rows], dtype=int)
+
+        a_q = np.asarray([r["alpha_node_q_mean"] for r in alpha_depth_rows], dtype=float)
+        a_u = np.asarray([r["alpha_node_u_mean"] for r in alpha_depth_rows], dtype=float)
+
+        axs[2].plot(ad, a_q, marker="o", label="alpha-node exploit")
+        axs[2].plot(ad, a_u, marker="o", label="alpha-node explore")
+        axs[2].set_title("alpha-parent node UCT terms by depth")
+        axs[2].set_xlabel("depth")
+        axs[2].legend()
+    else:
+        axs[2].text(0.5, 0.5, "no alpha-node rows yet", ha="center", va="center")
+        axs[2].set_title("alpha-parent node UCT terms by depth")
+        axs[2].set_axis_off()
+
+    plt.show()
+
+
+def plot_mcts_alpha_progress(alpha_sensor_prob_hist, alpha_parent_depth_probs_hist, figsize=(14, 4)):
+    fig, axs = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
+
+    if len(alpha_sensor_prob_hist) > 0:
+        axs[0].plot(np.asarray(alpha_sensor_prob_hist, dtype=np.float64), marker="o")
+        axs[0].set_title("mean p(alpha sensor)")
+        axs[0].set_xlabel("iteration")
+        axs[0].set_ylim(-0.05, 1.05)
+    else:
+        axs[0].text(0.5, 0.5, "no alpha sensor history", ha="center", va="center")
+        axs[0].set_axis_off()
+
+    P = _mcts_depth_vector_stack(alpha_parent_depth_probs_hist)
+
+    if P.shape[0] > 0:
+        im = axs[1].imshow(P.T, aspect="auto", origin="lower")
+        axs[1].set_title("p(alpha parent depth)")
+        axs[1].set_xlabel("iteration")
+        axs[1].set_ylabel("depth")
+        plt.colorbar(im, ax=axs[1])
+    else:
+        axs[1].text(0.5, 0.5, "no alpha parent depth history", ha="center", va="center")
+        axs[1].set_axis_off()
+
+    plt.show()
+
+def plot_mcts_alpha_sensor_probability(alpha_sensor_prob_hist, figsize=(10, 4)):
+    """
+    plot mean p(alpha sensor) over iterations.
+
+    this should be separate from depth plots because it is not a depth distribution.
+    it is the average probability of choosing sensor over constant for alpha.
+    """
+
+    if len(alpha_sensor_prob_hist) == 0:
+        print("no alpha sensor probability history yet")
+        return
+
+    y = np.asarray(alpha_sensor_prob_hist, dtype=np.float64)
+    x = np.arange(y.shape[0])
+
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+
+    ax.plot(x, y, marker="o")
+    ax.set_title("mean p(alpha sensor)")
+    ax.set_xlabel("iteration")
+    ax.set_ylabel("probability")
+
+    ax.set_ylim(
+        max(0.0, np.nanmin(y) - 0.05),
+        min(1.0, np.nanmax(y) + 0.05)
+    )
+
+    ax.grid(alpha=0.25)
+
+    plt.show()
