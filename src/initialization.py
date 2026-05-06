@@ -326,6 +326,14 @@ class Grammar:
                     self._MCTS_MAX_DEPTH + 1
                 )
 
+                #freeze expansion mode
+                #False:
+                #   normal progressive widening
+                #True:
+                #   do not open new x->tf children or new alpha parent edges.
+                #   only sample from already-opened grammar structure.
+                self._MCTS_FREEZE_EXPANSION = spec_gram_args.get("freeze_expansion", False)
+
 
             case _:
                 raise ValueError(f'Cannot interpret Grammar type "{type}"')
@@ -500,6 +508,27 @@ class Grammar:
 
         actions = np.asarray([0, 1], dtype=np.int64)
 
+        freeze_expansion = getattr(self, "_MCTS_FREEZE_EXPANSION", False)
+
+        valid_mask = np.ones(actions.shape[0], dtype=bool)
+
+        if freeze_expansion:
+
+            for i in range(actions.shape[0]):
+
+                decision_key = (ctx_key, int(actions[i]))
+
+                valid_mask[i] = (
+                    decision_key in self._MCTS_ALPHA_DECISION_MU
+                    or decision_key in self._MCTS_ALPHA_DECISION_COUNT
+                    or decision_key in self._MCTS_ALPHA_DECISION_EXPLORE_COUNT
+                )
+
+            #if this alpha context has never been seen before, use constant alpha.
+            #constant alpha avoids creating a new alpha-parent edge.
+            if not np.any(valid_mask):
+                return 0
+
         scores = np.asarray([
             self._mcts_alpha_decision_ucb(ctx_key, 0),
             self._mcts_alpha_decision_ucb(ctx_key, 1),
@@ -516,7 +545,7 @@ class Grammar:
             rng=rng,
             values=actions,
             scores=scores,
-            valid_mask=np.isfinite(scores),
+            valid_mask=valid_mask & np.isfinite(scores),
             base=self._MCTS_SOFTMAX_BASE,
             allow_uniform_fallback=True
         ))
@@ -565,6 +594,7 @@ class Grammar:
         rng,
         instructions,
         legal_idx,
+        ctx_key=None,
         max_allowed_parent_depth=None
     ):
         """
@@ -586,10 +616,37 @@ class Grammar:
 
         valid_mask = np.ones(legal_idx.shape[0], dtype=bool)
 
-        if max_allowed_parent_depth is not None:
-            for i in range(legal_idx.shape[0]):
-                d = self._mcts_row_depth(instructions, int(legal_idx[i]))
-                valid_mask[i] = d <= int(max_allowed_parent_depth)
+        freeze_expansion = getattr(self, "_MCTS_FREEZE_EXPANSION", False)
+
+        known_alpha_parent_keys = None
+
+        if freeze_expansion:
+
+            if ctx_key is None:
+                return None, None
+
+            known_alpha_parent_keys = set()
+
+            for edge_key in self._MCTS_ALPHA_EDGE_MU.keys():
+                edge_ctx_key, alpha_parent_key = edge_key
+                if edge_ctx_key == ctx_key:
+                    known_alpha_parent_keys.add(alpha_parent_key)
+
+            for edge_key in self._MCTS_ALPHA_EDGE_COUNT.keys():
+                edge_ctx_key, alpha_parent_key = edge_key
+                if edge_ctx_key == ctx_key:
+                    known_alpha_parent_keys.add(alpha_parent_key)
+
+            for edge_key in self._MCTS_ALPHA_EDGE_EXPLORE_COUNT.keys():
+                edge_ctx_key, alpha_parent_key = edge_key
+                if edge_ctx_key == ctx_key:
+                    known_alpha_parent_keys.add(alpha_parent_key)
+
+            if len(known_alpha_parent_keys) == 0:
+                return None, None
+ 
+                
+                
 
         if not np.any(valid_mask):
             return None, None
@@ -597,8 +654,20 @@ class Grammar:
         scores = np.empty(legal_idx.shape[0], dtype=np.float64)
 
         for i in range(legal_idx.shape[0]):
+            d = self._mcts_row_depth(instructions, int(legal_idx[i]))
+
+            if max_allowed_parent_depth is not None:
+                valid_mask[i] &= d <= int(max_allowed_parent_depth)
+
             key = self._mcts_state_key(instructions, int(legal_idx[i]))
+
+            if freeze_expansion:
+                valid_mask[i] &= key in known_alpha_parent_keys
+
             scores[i] = self._mcts_alpha_node_uct(key)
+
+
+
 
         alpha_parent_idx = int(self._mcts_softmax_sample(
             rng=rng,
@@ -623,15 +692,25 @@ class Grammar:
         """
         Count generation-time alpha exploration.
 
-        action:
-            0 = alpha constant
-            1 = alpha sensor
-
-        If alpha is a sensor, also count the selected alpha parent and alpha edge.
+        In frozen expansion mode:
+            only count already-known alpha decisions/edges.
+            do not create new alpha memory keys.
         """
 
         action = int(action)
         decision_key = (ctx_key, action)
+
+        freeze_expansion = getattr(self, "_MCTS_FREEZE_EXPANSION", False)
+
+        if freeze_expansion:
+            known_decision = (
+                decision_key in self._MCTS_ALPHA_DECISION_MU
+                or decision_key in self._MCTS_ALPHA_DECISION_COUNT
+                or decision_key in self._MCTS_ALPHA_DECISION_EXPLORE_COUNT
+            )
+
+            if not known_decision:
+                return
 
         self._MCTS_ALPHA_DECISION_EXPLORE_COUNT[decision_key] = (
             self._MCTS_ALPHA_DECISION_EXPLORE_COUNT.get(decision_key, 0) + 1
@@ -641,11 +720,21 @@ class Grammar:
 
         if action == 1 and alpha_parent_key is not None:
 
+            alpha_edge_key = (ctx_key, alpha_parent_key)
+
+            if freeze_expansion:
+                known_edge = (
+                    alpha_edge_key in self._MCTS_ALPHA_EDGE_MU
+                    or alpha_edge_key in self._MCTS_ALPHA_EDGE_COUNT
+                    or alpha_edge_key in self._MCTS_ALPHA_EDGE_EXPLORE_COUNT
+                )
+
+                if not known_edge:
+                    return
+
             self._MCTS_ALPHA_NODE_EXPLORE_COUNT[alpha_parent_key] = (
                 self._MCTS_ALPHA_NODE_EXPLORE_COUNT.get(alpha_parent_key, 0) + 1
             )
-
-            alpha_edge_key = (ctx_key, alpha_parent_key)
 
             self._MCTS_ALPHA_EDGE_EXPLORE_COUNT[alpha_edge_key] = (
                 self._MCTS_ALPHA_EDGE_EXPLORE_COUNT.get(alpha_edge_key, 0) + 1
@@ -1257,6 +1346,29 @@ class Grammar:
             legal_idx=legal_idx
         )
 
+        #------------------------------------------------------------
+        # freeze expansion filter
+        #
+        #if expansion is frozen, only select parents that already have
+        #opened child tf actions.
+        #------------------------------------------------------------
+
+        if getattr(self, "_MCTS_FREEZE_EXPANSION", False):
+
+            opened_mask = np.zeros(legal_idx.shape[0], dtype=bool)
+
+            for i in range(legal_idx.shape[0]):
+                key = self._mcts_state_key(instructions, int(legal_idx[i]))
+                opened_mask[i] = self._mcts_has_open_child_tf(key)
+
+            depth_mask &= opened_mask
+
+            if not np.any(depth_mask):
+                raise RuntimeError(
+                    "MCTS freeze_expansion=True, but no legal parent has opened children. "
+                    "Run at least one exploration phase before freezing expansion."
+                )
+
         #if every parent is too deep, fall back to terminal nodes only.
         #this prevents generation from crashing while still trying to reset
         #the new branch back to source material.
@@ -1332,43 +1444,70 @@ class Grammar:
 
         pw_lim = self._mcts_pw_limit(parent_key)
 
+        #------------------------------------------------------------
+        # progressive widening / frozen-expansion control
+        #------------------------------------------------------------
+
         can_expand = len(opened) < pw_lim
 
-        if self._mode == "train":
-            do_expand = can_expand and ((len(opened) == 0) or (rng.random() < self._MCTS_EXPAND_PROB))
+        freeze_expansion = getattr(self, "_MCTS_FREEZE_EXPANSION", False)
+
+        if self._mode == "train" and freeze_expansion is False:
+            do_expand = can_expand and (
+                (len(opened) == 0)
+                or (rng.random() < self._MCTS_EXPAND_PROB)
+            )
         else:
             do_expand = False
 
+        #------------------------------------------------------------
+        # expansion path
+        #
+        # normal train mode:
+        #   if widening allows it, open a new child tf.
+        #
+        # frozen mode:
+        #   this block is skipped entirely.
+        #------------------------------------------------------------
+
         if do_expand:
+
             if len(opened) == 0:
                 unused_tf = legal_tf
             else:
                 used_tf = np.asarray(list(opened), dtype=np.int64)
                 unused_tf = legal_tf[~np.isin(legal_tf, used_tf)]
 
-            #if something weird happens and all children are already used,
-            #fall back to UCB sampling over opened children.
             if unused_tf.size > 0:
                 child_tf = int(rng.choice(unused_tf))
                 opened.add(child_tf)
                 return child_tf
 
+        #------------------------------------------------------------
+        # no opened children fallback
+        #
+        # normal mode:
+        #   open one child so the parent can be used.
+        #
+        # frozen mode:
+        #   return None because opening a child would violate freeze.
+        #   parent selection should normally avoid this case.
+        #------------------------------------------------------------
+
         if len(opened) == 0:
-            #strict inference fallback:
-            #do not open/mutate a new child.
-            #sample from globally known good child transformations if possible.
-            if self._MCTS_EDGE_MU is not None and len(self._MCTS_EDGE_MU) > 0:
-                known_child_tf = np.asarray(
-                    sorted(set([int(k[1]) for k in self._MCTS_EDGE_MU.keys()])),
-                    dtype=np.int64
-                )
 
-                if known_child_tf.size > 0:
-                    return int(rng.choice(known_child_tf))
+            if freeze_expansion:
+                return None
 
-            #absolute fallback if grammar has no edge memory yet.
-            #this still does not mutate _MCTS_CHILDREN.
-            return int(rng.choice(legal_tf))
+            child_tf = int(rng.choice(legal_tf))
+            opened.add(child_tf)
+            return child_tf
+
+        #------------------------------------------------------------
+        # UCB + softmax over already-opened children
+        #
+        # this is the only path used in frozen mode.
+        #------------------------------------------------------------
 
         child_values = np.asarray(sorted(opened), dtype=np.int64)
 
@@ -1743,6 +1882,53 @@ class Grammar:
             return float(fitness)
 
         return fitness.astype(np.float32)
+    
+    def _mcts_has_open_child_tf(
+        self,
+        parent_key
+    ):
+        """
+        Return True if this parent has at least one already-opened child tf.
+
+        In frozen expansion mode, parent selection should prefer only these parents,
+        because parents with no opened children cannot produce a child without
+        expanding the tree.
+        """
+
+        opened = self._MCTS_CHILDREN.get(parent_key, set())
+
+        return opened is not None and len(opened) > 0
+
+    def freeze_mcts_expansion(
+        self,
+        freeze: bool = True
+    ):
+        """
+        Toggle MCTS expansion freezing.
+
+        freeze=False
+            normal progressive widening.
+            new child tf actions may be opened.
+
+        freeze=True
+            no new child tf actions are opened.
+            no new alpha parent edges are opened.
+            only already-opened structure is sampled.
+
+        Notes
+        -----
+        This is different from infer mode.
+
+        In train mode with freeze=True:
+            generation still happens
+            counts can still update
+            grammar.update can still update scores
+
+        In infer mode with freeze=True:
+            generation happens without changing learned memory
+        """
+
+        self._MCTS_FREEZE_EXPANSION = bool(freeze)
 
     def update(
         self,
@@ -2376,6 +2562,37 @@ class Grammar:
         mode    :   str
     ):
         self._mode = mode
+
+    def set_mcts_pw_params(
+        self,
+        pw_c=None,
+        pw_alpha=None,
+        expand_prob=None,
+        alpha_pw_c=None,
+        alpha_pw_alpha=None,
+        alpha_expand_prob=None,
+    ):
+        """
+        directly update live MCTS progressive widening parameters.
+        """
+
+        if pw_c is not None:
+            self._MCTS_PW_C = float(pw_c)
+
+        if pw_alpha is not None:
+            self._MCTS_PW_ALPHA = float(pw_alpha)
+
+        if expand_prob is not None:
+            self._MCTS_EXPAND_PROB = float(expand_prob)
+
+        if alpha_pw_c is not None:
+            self._MCTS_ALPHA_PW_C = float(alpha_pw_c)
+
+        if alpha_pw_alpha is not None:
+            self._MCTS_ALPHA_PW_ALPHA = float(alpha_pw_alpha)
+
+        if alpha_expand_prob is not None:
+            self._MCTS_ALPHA_EXPAND_PROB = float(alpha_expand_prob)
     
 
 import numpy as np
@@ -3692,6 +3909,12 @@ def generate_instructions(
                     parent_key=parent_key
                 )
 
+                if child_tf is None:
+                    raise RuntimeError(
+                        "MCTS selected a parent with no opened child_tf while freeze_expansion=True. "
+                        "This should usually be prevented by _mcts_select_parent()."
+                    )
+
                 inst_inst[:, 1] = child_tf
 
                 #------------------------------------------------------------
@@ -3773,6 +3996,7 @@ def generate_instructions(
                             rng=rng,
                             instructions=pop_prior._instructions,
                             legal_idx=pop_prior._L_idx,
+                            ctx_key=alpha_ctx_key,
                             max_allowed_parent_depth=max_alpha_parent_depth
                         )
 
