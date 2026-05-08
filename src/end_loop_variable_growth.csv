@@ -1,0 +1,35 @@
+time,k,path,size_mb,delta_mb,type,desc,rss_gb,vms_gb,sys_mem_percent
+2026-05-08 13:06:02,0,l:last_X,39.1429,39.1429,Population,Population,0.3552,1.8762,75.8
+2026-05-08 13:06:02,0,l:X,39.1429,39.1429,Population,Population,0.3552,1.8762,75.8
+2026-05-08 13:06:02,0,l:last_X._X_inst,38.2046,38.2046,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3552,1.8762,75.8
+2026-05-08 13:06:02,0,l:X._X_inst,38.2046,38.2046,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3552,1.8762,75.8
+2026-05-08 13:06:02,0,l:G,8.8689,8.8689,Grammar,Grammar,0.3552,1.8762,75.8
+2026-05-08 13:06:02,0,l:G._MCTS_TRACE,8.3794,8.3794,list,list len=18605,0.3552,1.8762,75.8
+2026-05-08 13:08:31,5,l:last_X,39.1429,0.0,Population,Population,0.63,2.153,84.0
+2026-05-08 13:08:31,5,l:X,39.1429,0.0,Population,Population,0.63,2.153,84.0
+2026-05-08 13:08:31,5,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.63,2.153,84.0
+2026-05-08 13:08:31,5,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.63,2.153,84.0
+2026-05-08 13:08:31,5,l:G,33.3476,24.4788,Grammar,Grammar,0.63,2.153,84.0
+2026-05-08 13:08:31,5,l:G._MCTS_TRACE,31.8492,23.4698,list,list len=70611,0.63,2.153,84.0
+2026-05-08 13:08:31,5,l:histories,2.2705,2.2705,dict,dict len=31,0.63,2.153,84.0
+2026-05-08 13:08:31,5,l:histories['g_mcts_trace'],2.0503,2.0503,list,list len=6,0.63,2.153,84.0
+2026-05-08 13:13:18,10,l:G,53.5769,20.2292,Grammar,Grammar,0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:G._MCTS_TRACE,52.0695,20.2203,list,list len=115485,0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:last_X,39.1429,0.0,Population,Population,0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:X,39.1429,0.0,Population,Population,0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:histories,6.6018,4.3313,dict,dict len=31,0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:histories['g_mcts_trace'],6.1788,4.1286,list,list len=11,0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:initialization_kwargs,1.3071,1.3071,dict,dict len=15,0.9289,2.5038,87.4
+2026-05-08 13:13:18,10,l:initialization_kwargs['grmr_prior'],1.3055,1.3055,Grammar,Grammar,0.9289,2.5038,87.4
+2026-05-08 13:19:00,15,l:G,71.1991,17.6222,Grammar,Grammar,1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:G._MCTS_TRACE,69.6934,17.6239,list,list len=154732,1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:last_X,39.1429,0.0,Population,Population,1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:X,39.1429,0.0,Population,Population,1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:histories,12.3935,5.7917,dict,dict len=31,1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:histories['g_mcts_trace'],11.7686,5.5897,list,list len=16,1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:initialization_kwargs,1.6719,0.3647,dict,dict len=15,1.2766,2.9006,93.4
+2026-05-08 13:19:00,15,l:initialization_kwargs['grmr_prior'],1.6702,0.3647,Grammar,Grammar,1.2766,2.9006,93.4

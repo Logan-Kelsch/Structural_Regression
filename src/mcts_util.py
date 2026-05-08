@@ -983,6 +983,8 @@ def default_logwalker_kwargs():
 # core loop
 # ---------------------------------------------------------------------
 
+import diagnos as diag
+
 def run_mcts_tmp_loop(
     G,
     *,
@@ -1109,8 +1111,21 @@ def run_mcts_tmp_loop(
 
     store.write_status("running", k=None)
 
+    diag.start_diag_monitor(
+        log_path="loop_diagnostics.csv",
+        interval=5,
+        tmp_dirs=[
+            diag.tempfile.gettempdir(),
+            "./tmp",
+            "./streamlit_tmp",
+        ],
+    )
+
+    diag.init_var_growth_diag()
+
     try:
         for k in range(int(max_iter)):
+            #print(f'Starting iteration {k}')
             iter_start = time.time()
             store.log(f"\n================ ITERATION {k} ================")
             store.write_status("running", k=k)
@@ -1129,6 +1144,8 @@ def run_mcts_tmp_loop(
             child_drift = np.nan
             total_drift = np.nan
 
+            #print('solving inner')
+
             with capture_console(store, "solver_inner", k=k):
                 X, G, s_idx, walker, evaluation = ep.solver_inner(
                     initialization_kwargs,
@@ -1145,6 +1162,8 @@ def run_mcts_tmp_loop(
                 logwalker_kwargs["start"],
             )
 
+            #print('solved inner')
+
             with capture_console(store, "instantiate_from_ops_chunked_intraday", k=k):
                 instantiation_stats = _I.instantiate_from_ops_chunked_intraday(
                     X,
@@ -1152,6 +1171,8 @@ def run_mcts_tmp_loop(
                     chunk_num=chunk_num,
                     chunk_B=8,
                 )
+
+            #print('instantiated')
 
             if k == 0:
                 store.log("surveying proportion permutation distributions...")
@@ -1172,6 +1193,7 @@ def run_mcts_tmp_loop(
                 })
 
                 store.log("surveying proportion permutation distributions... Done.")
+                #print('finishin permutation analysis')
 
             with capture_console(store, "evaluate_genes_from_opg_fpc_fast", k=k), capture_plots(
                 store, "gene_fpc_eval_original", k=k, save=save_helper_plots
@@ -1572,6 +1594,32 @@ def run_mcts_tmp_loop(
                 "last_zscore_max": zscore_stats["max"],
                 "last_pval_min": pval_stats["min"],
             })
+
+            diag.diag_mark(
+                label=f"k={k}",
+                ns=globals(),
+                tmp_dirs=[
+                    diag.tempfile.gettempdir(),
+                    "./tmp",
+                    "./streamlit_tmp",
+                ],
+            )
+
+            #diag.leak_probe(f"k={k}", globals(), deep=True)
+            #diag.end_loop_diag(k, 1)
+            diag.end_loop_var_growth_diag(
+                k=k,
+                global_ns=globals(),
+                local_ns=locals(),
+                scan_every=5,
+                top_n=25,
+                min_mb=1.0,
+                depth=2,
+                max_items=100,
+                trim_test=False,
+            )
+
+            #print(f'Ending iteration {k}')
 
             if k + 1 > 5 and np.isfinite(h) and h < break_h_threshold:
                 store.log(f"breaking because h={h:.6f} < {break_h_threshold}")
