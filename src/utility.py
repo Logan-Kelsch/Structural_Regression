@@ -22,3 +22,7 @@ def steps_to_eps(h, k, eps):
         return math.inf
 
     return math.floor(math.log(h / eps) / k) + 1
+
+
+
+

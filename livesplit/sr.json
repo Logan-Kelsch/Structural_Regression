@@ -54,12 +54,12 @@
       "Name": "WF Init Grammar Test"
     },
     {
-      "Time": null,
+      "Time": "5.16:30:42.4078253",
       "Name": "Grammar Fin"
     },
     {
       "Time": null,
-      "Name": "Evaluation Fin"
+      "Name": "auto prep"
     },
     {
       "Time": null,
@@ -122,7 +122,7 @@
       "Name": "Compile Results"
     }
   ],
-  "CurrentSplitIndex": 13,
+  "CurrentSplitIndex": 14,
   "CurrentSplitTime": null,
-  "CurrentTime": "5.14:56:26.9736629"
+  "CurrentTime": "5.16:31:53.3093638"
 }

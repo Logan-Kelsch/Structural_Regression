@@ -5476,6 +5476,648 @@ def _random_composition(total, parts, rng):
     return arr.astype(int)
 
 
+
+import visualization as _V
+import numpy as np
+
+def _mcts_policy_explore_influence(q, u, base=np.e, temp=1.0, valid_mask=None):
+    """
+    ablation comparison for exploration contribution.
+
+    compares:
+        p_full = softmax(Q + U)
+        p_q    = softmax(Q)
+
+    returns:
+        0.5 * sum(abs(p_full - p_q))
+
+    interpretation:
+        0.0 means exploration does not change selection policy.
+        1.0 means exploration completely changes selection policy.
+    """
+
+    q = np.asarray(q, dtype=np.float64)
+    u = np.asarray(u, dtype=np.float64)
+
+    if valid_mask is None:
+        valid_mask = np.ones(q.shape[0], dtype=bool)
+    else:
+        valid_mask = np.asarray(valid_mask, dtype=bool)
+
+    valid_mask &= np.isfinite(q)
+    valid_mask &= np.isfinite(u)
+
+    if q.size == 0 or not np.any(valid_mask):
+        return np.nan
+
+    p_full = _V._mcts_softmax_probs(
+        scores=q + u,
+        base=base,
+        temp=temp,
+        valid_mask=valid_mask
+    )
+
+    p_q = _V._mcts_softmax_probs(
+        scores=q,
+        base=base,
+        temp=temp,
+        valid_mask=valid_mask
+    )
+
+    return float(0.5 * np.sum(np.abs(p_full - p_q)))
+
+
+def mcts_exploration_ablation_summary(G, X, legal_idx=None):
+    """
+    UCT-only exploration ablation.
+
+    This measures how much the node exploration term changes
+    x-parent selection.
+
+    Compares:
+        p_full = softmax(Q_node + U_node)
+        p_q    = softmax(Q_node)
+
+    Returns total variation distance:
+        0.5 * sum(abs(p_full - p_q))
+
+    Interpretation:
+        0.00 = exploration does not change x-parent policy
+        0.25 = exploration moderately changes x-parent policy
+        0.50 = exploration strongly changes x-parent policy
+        0.75+ = exploration is dominating x-parent policy
+    """
+
+    if legal_idx is None:
+        legal_idx = np.asarray(X._L_idx, dtype=np.int64)
+    else:
+        legal_idx = np.asarray(legal_idx, dtype=np.int64)
+
+    if legal_idx.size == 0:
+        return {
+            "uct_explore_influence": np.nan,
+            "n_candidates": 0,
+            "q_mean": np.nan,
+            "u_mean": np.nan,
+            "q_std": np.nan,
+            "u_std": np.nan,
+            "u_cv": np.nan,
+        }
+
+    temp = getattr(G, "_softmax_temp", 1.0)
+    base = getattr(G, "_MCTS_SOFTMAX_BASE", np.e)
+
+    valid_mask = np.ones(legal_idx.shape[0], dtype=bool)
+
+    #match actual MCTS parent-selection validity
+    if hasattr(G, "_mcts_valid_depth_parent_mask"):
+        valid_mask &= G._mcts_valid_depth_parent_mask(
+            instructions=X._instructions,
+            legal_idx=legal_idx
+        )
+
+    q = np.empty(legal_idx.shape[0], dtype=np.float64)
+    u = np.empty(legal_idx.shape[0], dtype=np.float64)
+    depths = np.empty(legal_idx.shape[0], dtype=np.int64)
+
+    for i, idx in enumerate(legal_idx):
+        idx = int(idx)
+
+        key = G._mcts_state_key(X._instructions, idx)
+
+        q[i] = float(G._MCTS_NODE_MU.get(
+            key,
+            getattr(G, "_MCTS_BASE_PRIOR", 0.0)
+        ))
+
+        u[i] = _V._mcts_node_explore_coef(G, key)
+
+        if hasattr(G, "_mcts_row_depth"):
+            depths[i] = int(G._mcts_row_depth(X._instructions, idx))
+        else:
+            depths[i] = _V._mcts_safe_key_depth(G, key)
+
+    valid_mask &= np.isfinite(q)
+    valid_mask &= np.isfinite(u)
+
+    if not np.any(valid_mask):
+        return {
+            "uct_explore_influence": np.nan,
+            "n_candidates": 0,
+            "q_mean": np.nan,
+            "u_mean": np.nan,
+            "q_std": np.nan,
+            "u_std": np.nan,
+            "u_cv": np.nan,
+        }
+
+    p_full = _V._mcts_softmax_probs(
+        scores=q + u,
+        base=base,
+        temp=temp,
+        valid_mask=valid_mask
+    )
+
+    p_q = _V._mcts_softmax_probs(
+        scores=q,
+        base=base,
+        temp=temp,
+        valid_mask=valid_mask
+    )
+
+    influence = float(0.5 * np.sum(np.abs(p_full - p_q)))
+
+    qv = q[valid_mask]
+    uv = u[valid_mask]
+
+    return {
+        "uct_explore_influence": influence,
+        "n_candidates": int(np.sum(valid_mask)),
+        "q_mean": float(np.mean(qv)),
+        "u_mean": float(np.mean(uv)),
+        "q_std": float(np.std(qv)),
+        "u_std": float(np.std(uv)),
+        "u_cv": float(np.std(uv) / (np.mean(uv) + 1e-12)),
+    }
+
+def mcts_set_pw_mode(
+    G,
+    mode,
+    explore_params=None,
+    near_freeze_params=None
+):
+    """
+    switch progressive widening between two modes.
+
+    mode='explore':
+        allow normal widening.
+
+    mode='near_freeze':
+        heavily restrict new widening by setting pw_c and expand_prob near zero.
+    """
+
+    if explore_params is None:
+        explore_params = {
+            "pw_c": 0.75,
+            "pw_alpha": 0.30,
+            "expand_prob": 0.10,
+        }
+
+    if near_freeze_params is None:
+        near_freeze_params = {
+            "pw_c": 0.0,
+            "pw_alpha": 0.0,
+            "expand_prob": 0.0,
+        }
+
+    if mode == "explore":
+        p = explore_params
+    elif mode == "near_freeze":
+        p = near_freeze_params
+    else:
+        raise ValueError("mode must be 'explore' or 'near_freeze'")
+
+    G._MCTS_PW_C = float(p["pw_c"])
+    G._MCTS_PW_ALPHA = float(p["pw_alpha"])
+    G._MCTS_EXPAND_PROB = float(p["expand_prob"])
+
+    G._MCTS_PW_MODE = mode
+
+def mcts_update_pw_mode_from_ablation(
+    G,
+    explore_influence,
+    freeze_threshold=0.55,
+    unfreeze_threshold=0.25,
+    ema_alpha=0.10,
+):
+    """
+    update progressive widening mode from exploration ablation influence.
+
+    uses EMA + hysteresis:
+        above freeze_threshold -> near_freeze
+        below unfreeze_threshold -> explore
+    """
+
+    if not np.isfinite(explore_influence):
+        return getattr(G, "_MCTS_PW_MODE", "explore"), np.nan
+
+    if not hasattr(G, "_MCTS_EXPLORE_INFLUENCE_EMA"):
+        G._MCTS_EXPLORE_INFLUENCE_EMA = float(explore_influence)
+    else:
+        G._MCTS_EXPLORE_INFLUENCE_EMA = (
+            (1.0 - ema_alpha) * G._MCTS_EXPLORE_INFLUENCE_EMA
+            + ema_alpha * float(explore_influence)
+        )
+
+    ema = G._MCTS_EXPLORE_INFLUENCE_EMA
+
+    current_mode = getattr(G, "_MCTS_PW_MODE", "explore")
+
+    if ema > freeze_threshold:
+        new_mode = "near_freeze"
+    elif ema < unfreeze_threshold:
+        new_mode = "explore"
+    else:
+        new_mode = current_mode
+
+    if new_mode != current_mode:
+        mcts_set_pw_mode(G, new_mode)
+
+    return new_mode, ema
+
+
+def plot_mcts_exploration_influence(
+    influence_hist,
+    k=0.01,
+    figsize=(12, 4)
+):
+    """
+    plot UCT-only exploration influence over time.
+    """
+
+    y = np.asarray(influence_hist, dtype=np.float64)
+    x = np.arange(y.shape[0])
+
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+
+    ax.plot(x, y, marker="o", label="UCT explore influence")
+
+    hp = np.zeros(y.shape)
+    hp[0] = y[0]
+
+    for i in range(1, y.shape[0]):
+        hp[i] = hp[i-1] * (1 - np.e ** -k) + y[i] * (np.e ** -k)
+
+    ax.plot(x, hp, linewidth=2, label='Hawkes')
+
+
+    ax.axhline(0.55, linestyle="--", alpha=0.5, label="near-freeze threshold")
+    ax.axhline(0.25, linestyle="--", alpha=0.5, label="explore threshold")
+
+    ax.set_title("UCT exploration influence from softmax ablation")
+    ax.set_xlabel("iteration")
+    ax.set_ylabel("policy influence")
+    ax.set_ylim(0, 1)
+    ax.grid(alpha=0.25)
+    ax.legend()
+
+    plt.show()
+    
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def _mcts_policy_softmax_dict(scores, base=np.e, temp=1.0):
+    """
+    convert a sparse score dictionary into a sparse probability dictionary.
+
+    scores:
+        dict like {action_key: score}
+
+    returns:
+        dict like {action_key: probability}
+    """
+
+    if scores is None or len(scores) == 0:
+        return {}
+
+    keys = list(scores.keys())
+    vals = np.asarray([scores[k] for k in keys], dtype=np.float64)
+
+    valid = np.isfinite(vals)
+
+    if not np.any(valid):
+        p = np.full(len(keys), 1.0 / len(keys), dtype=np.float64)
+        return {keys[i]: float(p[i]) for i in range(len(keys))}
+
+    temp = float(np.clip(temp, 1e-6, 1.0))
+
+    scaled = vals / temp
+
+    # numerical stability
+    scaled[valid] = scaled[valid] - np.max(scaled[valid])
+
+    w = np.zeros_like(vals, dtype=np.float64)
+    w[valid] = np.exp(np.log(base) * scaled[valid])
+
+    if w.sum() <= 0 or not np.isfinite(w.sum()):
+        w = valid.astype(np.float64)
+
+    p = w / w.sum()
+
+    return {keys[i]: float(p[i]) for i in range(len(keys))}
+
+
+def _mcts_policy_tv_distance(p_old, p_new):
+    """
+    total variation distance between two sparse probability dictionaries.
+
+    value range:
+        0 = identical policy
+        1 = completely different policy
+    """
+
+    if p_old is None:
+        p_old = {}
+
+    if p_new is None:
+        p_new = {}
+
+    keys = set(p_old.keys()) | set(p_new.keys())
+
+    if len(keys) == 0:
+        return np.nan
+
+    return float(0.5 * sum(abs(p_new.get(k, 0.0) - p_old.get(k, 0.0)) for k in keys))
+
+
+def mcts_policy_snapshot(G, X, depth_gamma=0.3):
+    """
+    snapshot the current MCTS sampling policy.
+
+    This creates:
+        parent_policy:
+            probability of selecting each x-parent state
+
+        child_policies:
+            for each parent state, probability over child transformation functions
+
+        parent_weights:
+            root-weighted importance of each parent state
+
+    depth_gamma:
+        lower values emphasize root/shallow decisions more.
+        0.70 is a good default.
+    """
+
+    legal_idx = np.asarray(X._L_idx, dtype=np.int64)
+
+    if legal_idx.size == 0:
+        return {
+            "parent_policy": {},
+            "child_policies": {},
+            "parent_weights": {},
+        }
+
+    valid_mask = np.ones(legal_idx.shape[0], dtype=bool)
+
+    # match actual max-depth legality if this helper exists
+    if hasattr(G, "_mcts_valid_depth_parent_mask"):
+        valid_mask &= G._mcts_valid_depth_parent_mask(
+            instructions=X._instructions,
+            legal_idx=legal_idx
+        )
+
+    temp = getattr(G, "_softmax_temp", 1.0)
+    base = getattr(G, "_MCTS_SOFTMAX_BASE", np.e)
+
+    parent_scores = {}
+    parent_depths = {}
+
+    for i, idx in enumerate(legal_idx):
+
+        if not valid_mask[i]:
+            continue
+
+        idx = int(idx)
+
+        parent_key = G._mcts_state_key(X._instructions, idx)
+
+        # use the actual Grammar UCT function if it exists
+        if hasattr(G, "_mcts_node_uct"):
+            score = G._mcts_node_uct(parent_key)
+        else:
+            q = float(G._MCTS_NODE_MU.get(parent_key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+            n = G._MCTS_NODE_EXPLORE_COUNT.get(parent_key, 0)
+            total = int(getattr(G, "_MCTS_EXPLORE_T", 0) or 0) + int(getattr(G, "_MCTS_EXPLOIT_T", 0) or 0)
+            u = float(np.sqrt(G._c * np.log(total + 2) / (n + 1)))
+            score = q + u
+
+        if hasattr(G, "_mcts_row_depth"):
+            d = int(G._mcts_row_depth(X._instructions, idx))
+        else:
+            d = 0
+
+        # if many rows map to the same MCTS state key,
+        # keep the strongest current score for that key
+        if parent_key not in parent_scores or score > parent_scores[parent_key]:
+            parent_scores[parent_key] = float(score)
+            parent_depths[parent_key] = int(d)
+
+    parent_policy = _mcts_policy_softmax_dict(
+        scores=parent_scores,
+        base=base,
+        temp=temp
+    )
+
+    parent_weights = {}
+
+    for parent_key, p in parent_policy.items():
+        d = parent_depths.get(parent_key, 0)
+        parent_weights[parent_key] = float(p * (depth_gamma ** d))
+
+    # normalize root/depth weights
+    sw = sum(parent_weights.values())
+    if sw > 0:
+        parent_weights = {k: v / sw for k, v in parent_weights.items()}
+
+    child_policies = {}
+
+    for parent_key in parent_policy.keys():
+
+        opened = G._MCTS_CHILDREN.get(parent_key, set())
+
+        if opened is None or len(opened) == 0:
+            continue
+
+        child_scores = {}
+
+        for child_tf in sorted(opened):
+            child_tf = int(child_tf)
+
+            # use the actual Grammar edge UCB if available
+            if hasattr(G, "_mcts_edge_ucb"):
+                score = G._mcts_edge_ucb(parent_key, child_tf)
+            else:
+                edge_key = (parent_key, child_tf)
+                q = float(G._MCTS_EDGE_MU.get(edge_key, getattr(G, "_MCTS_BASE_PRIOR", 0.0)))
+                parent_n = G._MCTS_NODE_EXPLORE_COUNT.get(parent_key, 0)
+                edge_n = G._MCTS_EDGE_EXPLORE_COUNT.get(edge_key, 0)
+                u = float(np.sqrt(G._c * np.log(parent_n + 2) / (edge_n + 1)))
+                score = q + u
+
+            child_scores[child_tf] = float(score)
+
+        child_policies[parent_key] = _mcts_policy_softmax_dict(
+            scores=child_scores,
+            base=base,
+            temp=temp
+        )
+
+    return {
+        "parent_policy": parent_policy,
+        "child_policies": child_policies,
+        "parent_weights": parent_weights,
+    }
+
+
+def mcts_root_weighted_policy_drift(prev_snap, curr_snap):
+    """
+    compare two MCTS policy snapshots.
+
+    parent_drift:
+        change in x-parent selection policy
+
+    child_drift:
+        root-weighted change in child transform policies
+
+    total_drift:
+        average of parent and child drift
+    """
+
+    if prev_snap is None:
+        return {
+            "parent_drift": np.nan,
+            "child_drift": np.nan,
+            "total_drift": np.nan,
+        }
+
+    parent_drift = _mcts_policy_tv_distance(
+        prev_snap["parent_policy"],
+        curr_snap["parent_policy"]
+    )
+
+    all_parent_keys = set(prev_snap["child_policies"].keys()) | set(curr_snap["child_policies"].keys())
+
+    child_vals = []
+    child_weights = []
+
+    for parent_key in all_parent_keys:
+
+        p_old = prev_snap["child_policies"].get(parent_key, {})
+        p_new = curr_snap["child_policies"].get(parent_key, {})
+
+        tv = _mcts_policy_tv_distance(p_old, p_new)
+
+        if not np.isfinite(tv):
+            continue
+
+        # current weight preferred, previous weight as fallback
+        w = curr_snap["parent_weights"].get(
+            parent_key,
+            prev_snap["parent_weights"].get(parent_key, 0.0)
+        )
+
+        child_vals.append(tv)
+        child_weights.append(w)
+
+    if len(child_vals) == 0:
+        child_drift = np.nan
+    else:
+        child_vals = np.asarray(child_vals, dtype=np.float64)
+        child_weights = np.asarray(child_weights, dtype=np.float64)
+
+        if child_weights.sum() <= 0:
+            child_drift = float(np.mean(child_vals))
+        else:
+            child_drift = float(np.sum(child_vals * child_weights) / child_weights.sum())
+
+    vals = np.asarray([parent_drift, child_drift], dtype=np.float64)
+    vals = vals[np.isfinite(vals)]
+
+    if vals.size == 0:
+        total_drift = np.nan
+    else:
+        total_drift = float(np.mean(vals))
+
+    return {
+        "parent_drift": parent_drift,
+        "child_drift": child_drift,
+        "total_drift": total_drift,
+    }
+
+
+def plot_mcts_policy_drift_hawkes(
+    hp,
+    raw_hist=None,
+    parent_hist=None,
+    child_hist=None,
+    figsize=(12, 4)
+):
+    """
+    plot smoothed policy drift and optionally raw parent/child drift.
+    """
+
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+
+    if raw_hist is not None and len(raw_hist) > 0:
+        ax.plot(raw_hist, alpha=0.35, label="raw total drift")
+
+    if parent_hist is not None and len(parent_hist) > 0:
+        ax.plot(parent_hist, alpha=0.25, label="parent drift")
+
+    if child_hist is not None and len(child_hist) > 0:
+        ax.plot(child_hist, alpha=0.25, label="child drift")
+
+    ax.plot(hp, linewidth=3, label="smoothed drift h")
+
+    ax.axhline(0.15, linestyle="--", alpha=0.40, label="adapting")
+    ax.axhline(0.05, linestyle="--", alpha=0.40, label="mostly stable")
+    ax.axhline(0.02, linestyle="--", alpha=0.40, label="stable")
+
+    ax.set_title("hawkes/EMA smoothing on root-weighted MCTS policy delta")
+    ax.set_xlabel("iteration")
+    ax.set_ylabel("policy drift")
+    ax.set_ylim(0, 1)
+    ax.set_yscale("log")
+    ax.grid(alpha=0.25)
+    ax.legend()
+
+    plt.show()
+
+
+import sys, gc
+import numpy as np
+
+def mem_report(scope, top=20, min_mb=1.0):
+    rows = []
+
+    for name, obj in scope.items():
+        if name.startswith("_"):
+            continue
+
+        try:
+            if isinstance(obj, np.ndarray):
+                size = obj.nbytes
+                extra = f"shape={obj.shape}, dtype={obj.dtype}"
+            elif hasattr(obj, "memory_usage"):  # pandas df/series
+                size = obj.memory_usage(deep=True).sum()
+                extra = f"shape={getattr(obj, 'shape', None)}"
+            elif hasattr(obj, "element_size") and hasattr(obj, "nelement"):  # torch tensor
+                size = obj.element_size() * obj.nelement()
+                extra = f"shape={tuple(obj.shape)}, dtype={obj.dtype}"
+            else:
+                size = sys.getsizeof(obj)
+                extra = type(obj).__name__
+
+            mb = size / 1024**2
+            if mb >= min_mb:
+                rows.append((mb, name, extra))
+
+        except Exception:
+            pass
+
+    rows.sort(reverse=True)
+
+    print("\n--- memory report ---")
+    for mb, name, extra in rows[:top]:
+        print(f"{mb:9.2f} MB | {name:<30} | {extra}")
+    print("---------------------\n")
+
+
+
+
+
 #NOTE VARIOUS EMISSIONS
 
 emission_fwd_return_sigma = [
