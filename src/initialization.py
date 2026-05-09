@@ -21,6 +21,109 @@ import numpy as np
 #here we will make the function for generation of instructions
 
 
+import numpy as np
+
+
+class MCTSTraceBuffer:
+    """
+    Compact numeric trace buffer for MCTS generation.
+
+    This replaces a list of dictionaries with fixed-width numeric arrays.
+
+    It intentionally does not store parent_key or alpha_parent_key because
+    tuple/path keys are very memory-heavy. Store parent indices, depths, tf ids,
+    and offsets instead.
+    """
+
+    def __init__(self, init_capacity=100_000, grow_by=100_000):
+        self._capacity = int(init_capacity)
+        self._grow_by = int(grow_by)
+        self._n = 0
+
+        self._dtype = np.dtype([
+            ("new_idx", np.int32),
+            ("parent_idx", np.int32),
+            ("parent_depth", np.int16),
+            ("child_depth", np.int16),
+            ("child_tf", np.int16),
+            ("x_offset", np.int32),
+
+            ("alpha_used", np.int8),
+            ("alpha_action", np.int8),
+            ("alpha_parent_idx", np.int32),
+            ("alpha_depth", np.int16),
+            ("alpha_offset", np.int32),
+        ])
+
+        self._arr = np.zeros(self._capacity, dtype=self._dtype)
+
+        #sentinel values
+        self._arr["alpha_parent_idx"][:] = -1
+        self._arr["alpha_depth"][:] = -1
+        self._arr["alpha_offset"][:] = 0
+
+    def _grow(self):
+        new_capacity = self._capacity + self._grow_by
+
+        new_arr = np.zeros(new_capacity, dtype=self._dtype)
+        new_arr[:self._n] = self._arr[:self._n]
+
+        new_arr["alpha_parent_idx"][self._n:] = -1
+        new_arr["alpha_depth"][self._n:] = -1
+        new_arr["alpha_offset"][self._n:] = 0
+
+        self._arr = new_arr
+        self._capacity = new_capacity
+
+    def append(
+        self,
+        new_idx,
+        parent_idx,
+        parent_depth,
+        child_depth,
+        child_tf,
+        x_offset,
+        alpha_used=False,
+        alpha_action=0,
+        alpha_parent_idx=-1,
+        alpha_depth=-1,
+        alpha_offset=0,
+    ):
+        if self._n >= self._capacity:
+            self._grow()
+
+        i = self._n
+
+        self._arr["new_idx"][i] = int(new_idx)
+        self._arr["parent_idx"][i] = int(parent_idx)
+        self._arr["parent_depth"][i] = int(parent_depth)
+        self._arr["child_depth"][i] = int(child_depth)
+        self._arr["child_tf"][i] = int(child_tf)
+        self._arr["x_offset"][i] = int(x_offset)
+
+        self._arr["alpha_used"][i] = int(bool(alpha_used))
+        self._arr["alpha_action"][i] = int(alpha_action)
+        self._arr["alpha_parent_idx"][i] = int(alpha_parent_idx)
+        self._arr["alpha_depth"][i] = int(alpha_depth)
+        self._arr["alpha_offset"][i] = int(alpha_offset)
+
+        self._n += 1
+
+    def as_array(self, copy=False):
+        out = self._arr[:self._n]
+        return out.copy() if copy else out
+
+    def __len__(self):
+        return self._n
+
+    def clear(self):
+        self._n = 0
+
+
+
+
+
+
 class Grammar:
     '''
     Temporary class that will contain grammar structures and rules
@@ -227,7 +330,14 @@ class Grammar:
                 self._MCTS_EDGE_EXPLORE_COUNT = {}
 
                 self._MCTS_CHILDREN = {}
-                self._MCTS_TRACE = []
+                self._MCTS_TRACE_ENABLED = spec_gram_args.get("trace_enabled", True)
+                self._MCTS_TRACE = None
+
+                if self._MCTS_TRACE_ENABLED:
+                    self._MCTS_TRACE = MCTSTraceBuffer(
+                        init_capacity=spec_gram_args.get("trace_init_capacity", 100_000),
+                        grow_by=spec_gram_args.get("trace_grow_by", 100_000),
+                    )
 
                 self._MCTS_EXPLOIT_T = 0
                 self._MCTS_EXPLORE_T = 0
@@ -4116,23 +4226,25 @@ def generate_instructions(
                     if alpha_depth is not None:
                         child_depth = max(parent_depth, alpha_depth) + 1
 
-                    grm_prior._MCTS_TRACE.append({
-                        "new_idx"          : int(inst_inst[0, 0]),
-                        "parent_idx"       : int(parent_abs_idx),
-                        "parent_key"       : parent_key,
-                        "parent_depth"     : int(parent_depth),
-                        "child_depth"      : int(child_depth),
-                        "child_tf"         : int(child_tf),
-                        "x_offset"         : int(inst_inst[0, 5]),
+                    if (
+                        grm_prior._mode == "train"
+                        and getattr(grm_prior, "_MCTS_TRACE_ENABLED", False)
+                        and grm_prior._MCTS_TRACE is not None
+                    ):
+                        grm_prior._MCTS_TRACE.append(
+                            new_idx=int(inst_inst[0, 0]),
+                            parent_idx=int(parent_abs_idx),
+                            parent_depth=int(parent_depth),
+                            child_depth=int(child_depth),
+                            child_tf=int(child_tf),
+                            x_offset=int(inst_inst[0, 5]),
 
-                        "alpha_used"       : bool(alpha_used),
-                        "alpha_action"     : int(alpha_action),
-                        "alpha_is_sensor"  : bool(alpha_action == 1),
-                        "alpha_parent_idx" : None if alpha_parent_abs_idx is None else int(alpha_parent_abs_idx),
-                        "alpha_parent_key" : alpha_parent_key,
-                        "alpha_depth"      : alpha_depth,
-                        "alpha_offset"     : None if alpha_action == 0 else int(inst_inst[0, 6]),
-                    })
+                            alpha_used=bool(alpha_used),
+                            alpha_action=int(alpha_action),
+                            alpha_parent_idx=-1 if alpha_parent_abs_idx is None else int(alpha_parent_abs_idx),
+                            alpha_depth=-1 if alpha_depth is None else int(alpha_depth),
+                            alpha_offset=0 if alpha_action == 0 else int(inst_inst[0, 6]),
+                        )
 
             case 'UCB1-tMAT':
 

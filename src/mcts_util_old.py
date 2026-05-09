@@ -310,7 +310,6 @@ class MCTSRunStore:
         return self.save_pickle_gz(path, obj)
 
 
-
 @contextmanager
 def capture_console(store: MCTSRunStore, section: str, k: int | None = None):
     """
@@ -368,233 +367,6 @@ def capture_plots(store: MCTSRunStore, section: str, k: int, save: bool = True):
         plt.show = old_show
         store.save_open_figures(k=k, section=section, save=save)
 
-
-def mcts_exploit_policy_snapshot(G, X, depth_gamma=0.70):
-    """
-    Snapshot the exploit-only MCTS policy.
-
-    This ignores exploration terms entirely.
-
-    parent_policy:
-        softmax over node exploitation values Q_node
-
-    child_policies:
-        softmax over edge exploitation values Q_edge
-
-    parent_weights:
-        parent-policy probability weighted by depth discount
-    """
-    legal_idx = np.asarray(X._L_idx, dtype=np.int64)
-
-    if legal_idx.size == 0:
-        return {
-            "parent_policy": {},
-            "child_policies": {},
-            "parent_weights": {},
-        }
-
-    valid_mask = np.ones(legal_idx.shape[0], dtype=bool)
-
-    if hasattr(G, "_mcts_valid_depth_parent_mask"):
-        valid_mask &= G._mcts_valid_depth_parent_mask(
-            instructions=X._instructions,
-            legal_idx=legal_idx,
-        )
-
-    temp = getattr(G, "_softmax_temp", 1.0)
-    base = getattr(G, "_MCTS_SOFTMAX_BASE", np.e)
-
-    parent_scores = {}
-    parent_depths = {}
-
-    for i, idx in enumerate(legal_idx):
-        if not valid_mask[i]:
-            continue
-
-        idx = int(idx)
-        parent_key = G._mcts_state_key(X._instructions, idx)
-
-        q = float(mcts_getdict(G, "_MCTS_NODE_MU").get(
-            parent_key,
-            getattr(G, "_MCTS_BASE_PRIOR", 0.0),
-        ))
-
-        if hasattr(G, "_mcts_row_depth"):
-            d = int(G._mcts_row_depth(X._instructions, idx))
-        else:
-            d = 0
-
-        #duplicate rows can map to the same state key
-        if parent_key not in parent_scores or q > parent_scores[parent_key]:
-            parent_scores[parent_key] = q
-            parent_depths[parent_key] = d
-
-    parent_policy = _softmax_dict(
-        parent_scores,
-        base=base,
-        temp=temp,
-    )
-
-    parent_weights = {}
-    for parent_key, p in parent_policy.items():
-        d = parent_depths.get(parent_key, 0)
-        parent_weights[parent_key] = float(p * (depth_gamma ** d))
-
-    sw = sum(parent_weights.values())
-    if sw > 0:
-        parent_weights = {k: v / sw for k, v in parent_weights.items()}
-
-    child_policies = {}
-
-    for parent_key in parent_policy.keys():
-        opened = mcts_getdict(G, "_MCTS_CHILDREN").get(parent_key, set())
-
-        if opened is None or len(opened) == 0:
-            continue
-
-        child_scores = {}
-
-        for child_tf in sorted(opened):
-            child_tf = int(child_tf)
-            edge_key = (parent_key, child_tf)
-
-            q = float(mcts_getdict(G, "_MCTS_EDGE_MU").get(
-                edge_key,
-                getattr(G, "_MCTS_BASE_PRIOR", 0.0),
-            ))
-
-            child_scores[child_tf] = q
-
-        child_policies[parent_key] = _softmax_dict(
-            child_scores,
-            base=base,
-            temp=temp,
-        )
-
-    return {
-        "parent_policy": parent_policy,
-        "child_policies": child_policies,
-        "parent_weights": parent_weights,
-    }
-
-
-def _softmax_dict(scores, base=np.e, temp=1.0):
-    """
-    Small local softmax helper for dict[key] -> score.
-    """
-    if scores is None or len(scores) == 0:
-        return {}
-
-    keys = list(scores.keys())
-    vals = np.asarray([scores[k] for k in keys], dtype=np.float64)
-
-    valid = np.isfinite(vals)
-    if not np.any(valid):
-        p = 1.0 / len(keys)
-        return {k: p for k in keys}
-
-    temp = float(np.clip(temp, 1e-6, 1.0))
-    vals = vals / temp
-
-    if base == 1:
-        w = valid.astype(np.float64)
-    else:
-        z = np.full(vals.shape, -np.inf, dtype=np.float64)
-        z[valid] = np.log(base) * vals[valid]
-        z[valid] -= np.max(z[valid])
-
-        w = np.zeros(vals.shape, dtype=np.float64)
-        w[valid] = np.exp(z[valid])
-
-    if w.sum() <= 0 or not np.isfinite(w.sum()):
-        w = valid.astype(np.float64)
-
-    probs = w / w.sum()
-    return {k: float(p) for k, p in zip(keys, probs)}
-
-
-def _policy_tv_distance(p_old, p_new):
-    """
-    Total variation distance between two sparse probability dictionaries.
-    """
-    if p_old is None:
-        p_old = {}
-    if p_new is None:
-        p_new = {}
-
-    keys = set(p_old.keys()) | set(p_new.keys())
-
-    if len(keys) == 0:
-        return np.nan
-
-    return 0.5 * float(sum(abs(p_old.get(k, 0.0) - p_new.get(k, 0.0)) for k in keys))
-
-
-def mcts_root_weighted_exploit_policy_drift(prev_snap, curr_snap):
-    """
-    Compare two exploit-only MCTS policy snapshots.
-
-    This measures how much the learned exploitation policy changes,
-    ignoring exploration coefficient decay.
-    """
-    if prev_snap is None:
-        return {
-            "parent_drift": np.nan,
-            "child_drift": np.nan,
-            "total_drift": np.nan,
-        }
-
-    parent_drift = _policy_tv_distance(
-        prev_snap["parent_policy"],
-        curr_snap["parent_policy"],
-    )
-
-    all_parent_keys = (
-        set(prev_snap["child_policies"].keys())
-        | set(curr_snap["child_policies"].keys())
-    )
-
-    child_vals = []
-    child_weights = []
-
-    for parent_key in all_parent_keys:
-        p_old = prev_snap["child_policies"].get(parent_key, {})
-        p_new = curr_snap["child_policies"].get(parent_key, {})
-
-        tv = _policy_tv_distance(p_old, p_new)
-
-        if not np.isfinite(tv):
-            continue
-
-        w = curr_snap["parent_weights"].get(
-            parent_key,
-            prev_snap["parent_weights"].get(parent_key, 0.0),
-        )
-
-        child_vals.append(tv)
-        child_weights.append(w)
-
-    if len(child_vals) == 0:
-        child_drift = np.nan
-    else:
-        child_vals = np.asarray(child_vals, dtype=np.float64)
-        child_weights = np.asarray(child_weights, dtype=np.float64)
-
-        if child_weights.sum() <= 0:
-            child_drift = float(np.mean(child_vals))
-        else:
-            child_drift = float(np.sum(child_vals * child_weights) / child_weights.sum())
-
-    vals = np.asarray([parent_drift, child_drift], dtype=np.float64)
-    vals = vals[np.isfinite(vals)]
-
-    total_drift = np.nan if vals.size == 0 else float(np.mean(vals))
-
-    return {
-        "parent_drift": parent_drift,
-        "child_drift": child_drift,
-        "total_drift": total_drift,
-    }
 
 # ---------------------------------------------------------------------
 # sparse MCTS helpers
@@ -684,56 +456,6 @@ def top_items_json(items, count_dict=None, explore_count_dict=None) -> list[dict
         out.append(row)
 
     return out
-
-
-# ---------------------------------------------------------------------
-# progressive widening threshold helpers
-# ---------------------------------------------------------------------
-
-def decayed_pw_thresholds(
-    k: int,
-    *,
-    freeze_threshold: float = 0.55,
-    unfreeze_threshold: float = 0.25,
-    decay_rate: float = 0.01,
-    floor: float = 0.02,
-) -> tuple[float, float]:
-    """
-    Return exponentially decayed freeze/unfreeze thresholds.
-
-    Lower thresholds later in training make the grammar more willing to
-    enter near-freeze mode as the run gets older.
-    """
-    decay = float(np.exp(-float(decay_rate) * int(k)))
-
-    ft = max(float(floor), float(freeze_threshold) * decay)
-    ut = max(float(floor), float(unfreeze_threshold) * decay)
-
-    # preserve hysteresis ordering
-    if ut >= ft:
-        ut = max(float(floor), 0.5 * ft)
-
-    return ft, ut
-
-
-def current_pw_scale(G, baseline_pw_c: float = 0.75) -> float:
-    """
-    Approximate current PW scale from the live grammar's _MCTS_PW_C.
-    If the grammar has not initialized this yet, treat it as baseline scale=1.
-    """
-    pw_c = getattr(G, "_MCTS_PW_C", None)
-
-    if pw_c is None:
-        return 1.0
-
-    baseline_pw_c = float(baseline_pw_c)
-    if baseline_pw_c <= 0:
-        return np.nan
-
-    try:
-        return float(pw_c) / baseline_pw_c
-    except Exception:
-        return np.nan
 
 
 # ---------------------------------------------------------------------
@@ -945,15 +667,7 @@ def plot_mcts_alpha_sensor_probability(alpha_sensor_prob_hist, figsize=(10, 4), 
     return maybe_show(fig, show)
 
 
-def plot_mcts_exploration_influence(
-    influence_hist,
-    k=0.01,
-    figsize=(12, 4),
-    freeze_threshold_hist=None,
-    unfreeze_threshold_hist=None,
-    pw_scale_hist=None,
-    show: bool = False,
-):
+def plot_mcts_exploration_influence(influence_hist, k=0.01, figsize=(12, 4), show: bool = False):
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
 
     y = np.asarray(influence_hist, dtype=np.float64)
@@ -973,35 +687,16 @@ def plot_mcts_exploration_influence(
     for i in range(1, y.shape[0]):
         hp[i] = hp[i - 1] * (1 - np.e ** -k) + y[i] * (np.e ** -k)
 
-    ax.plot(x, hp, linewidth=2, label="EMA/Hawkes")
+    ax.plot(x, hp, linewidth=2, label="Hawkes")
+    ax.axhline(0.55, linestyle="--", alpha=0.5, label="near-freeze threshold")
+    ax.axhline(0.25, linestyle="--", alpha=0.5, label="explore threshold")
 
-    if freeze_threshold_hist is not None and len(freeze_threshold_hist) > 0:
-        ft = np.asarray(freeze_threshold_hist, dtype=np.float64)
-        ax.plot(np.arange(ft.shape[0]), ft, linestyle="--", alpha=0.65, label="freeze threshold")
-    else:
-        ax.axhline(0.55, linestyle="--", alpha=0.5, label="freeze threshold")
-
-    if unfreeze_threshold_hist is not None and len(unfreeze_threshold_hist) > 0:
-        ut = np.asarray(unfreeze_threshold_hist, dtype=np.float64)
-        ax.plot(np.arange(ut.shape[0]), ut, linestyle="--", alpha=0.65, label="unfreeze threshold")
-    else:
-        ax.axhline(0.25, linestyle="--", alpha=0.5, label="unfreeze threshold")
-
-    ax.set_title("UCT exploration influence + PW mode")
+    ax.set_title("UCT exploration influence from softmax ablation")
     ax.set_xlabel("iteration")
     ax.set_ylabel("policy influence")
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.25)
-
-    if pw_scale_hist is not None and len(pw_scale_hist) > 0:
-        #ax2 = ax.twinx()
-        ps = np.asarray(pw_scale_hist, dtype=np.float64)
-        ax.plot(np.arange(ps.shape[0]), ps, alpha=0.75, label="PW scale")
-
-        lines1, labels1 = ax.get_legend_handles_labels()
-        ax.legend(lines1, labels1, fontsize=8, loc="best")
-    else:
-        ax.legend(fontsize=8, loc="best")
+    ax.legend()
 
     return maybe_show(fig, show)
 
@@ -1031,7 +726,7 @@ def plot_mcts_policy_drift_hawkes(
     ax.axhline(0.05, linestyle="--", alpha=0.40, label="mostly stable")
     ax.axhline(0.05, linestyle="--", alpha=0.40, label="stable")
 
-    ax.set_title("hawkes/EMA smoothing on root-weighted MCTS expected policy inference delta")
+    ax.set_title("hawkes/EMA smoothing on root-weighted MCTS policy delta")
     ax.set_xlabel("iteration")
     ax.set_ylabel("policy drift")
     ax.set_ylim(1e-2, 1)
@@ -1162,40 +857,12 @@ def make_summary_dashboard(histories: dict, k: int, figsize=(17, 8), show: bool 
 
     infl = histories.get("g_mcts_uct_explore_influence", [])
     infl_ema = histories.get("g_mcts_uct_explore_influence_ema", [])
-    pw_scale = histories.get("g_mcts_pw_scale", [])
-    freeze_thresh = histories.get("g_mcts_pw_freeze_threshold", [])
-    unfreeze_thresh = histories.get("g_mcts_pw_unfreeze_threshold", [])
 
     if len(infl) > 0:
-        x = np.arange(len(infl))
-
-        axs[5].plot(x, infl, label="raw")
-        axs[5].plot(x, infl_ema, label="ema")
-
-        if len(freeze_thresh) == len(infl):
-            axs[5].plot(x, freeze_thresh, linestyle="--", alpha=0.65, label="freeze threshold")
-
-        if len(unfreeze_thresh) == len(infl):
-            axs[5].plot(x, unfreeze_thresh, linestyle="--", alpha=0.65, label="unfreeze threshold")
-
-        axs[5].set_title("UCT explore influence + PW scale")
-        axs[5].set_xlabel("iteration")
-        axs[5].set_ylabel("explore influence")
-        axs[5].set_ylim(0, 1)
-        axs[5].grid(alpha=0.25)
-
-        if len(pw_scale) > 0:
-            ax_pw = axs[5].twinx()
-            x_pw = np.arange(len(pw_scale))
-            ax_pw.plot(x_pw, pw_scale, alpha=0.85, label="PW scale")
-            ax_pw.set_ylabel("PW scale")
-            ax_pw.set_ylim(0, 1.05)
-
-            lines1, labels1 = axs[5].get_legend_handles_labels()
-            lines2, labels2 = ax_pw.get_legend_handles_labels()
-            axs[5].legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="best")
-        else:
-            axs[5].legend(fontsize=8)
+        axs[5].plot(infl, label="raw")
+        axs[5].plot(infl_ema, label="ema")
+        axs[5].set_title("UCT explore influence")
+        axs[5].legend(fontsize=8)
 
     h_val = histories.get("h", np.nan)
     freeze = histories.get("freeze_expansion", None)
@@ -1238,9 +905,6 @@ def save_standard_iteration_plots(
     fig = plot_mcts_exploration_influence(
         histories["g_mcts_uct_explore_influence"],
         k=-np.log(0.314),
-        freeze_threshold_hist=histories.get("g_mcts_pw_freeze_threshold"),
-        unfreeze_threshold_hist=histories.get("g_mcts_pw_unfreeze_threshold"),
-        pw_scale_hist=histories.get("g_mcts_pw_scale"),
         show=False,
     )
     paths["exploration_influence"] = store.save_fig(fig, k, "exploration_influence")
@@ -1258,142 +922,6 @@ def save_standard_iteration_plots(
     paths["summary_dashboard"] = store.save_fig(fig, k, "summary_dashboard")
 
     return paths
-
-def init_pw_walk_state(
-    G,
-    *,
-    base_pw_c=None,
-    base_pw_alpha=None,
-    base_expand_prob=None,
-    start_scale=1.0,
-):
-    """
-    Initialize baseline progressive widening values.
-
-    scale=1.0 means original widening.
-    scale near 0.0 means almost frozen.
-    """
-    if not hasattr(G, "_MCTS_PW_BASE_C"):
-        G._MCTS_PW_BASE_C = float(
-            getattr(G, "_MCTS_PW_C", 0.75) if base_pw_c is None else base_pw_c
-        )
-
-    if not hasattr(G, "_MCTS_PW_BASE_ALPHA"):
-        G._MCTS_PW_BASE_ALPHA = float(
-            getattr(G, "_MCTS_PW_ALPHA", 0.30) if base_pw_alpha is None else base_pw_alpha
-        )
-
-    if not hasattr(G, "_MCTS_EXPAND_PROB_BASE"):
-        G._MCTS_EXPAND_PROB_BASE = float(
-            getattr(G, "_MCTS_EXPAND_PROB", 0.10) if base_expand_prob is None else base_expand_prob
-        )
-
-    if not hasattr(G, "_MCTS_PW_SCALE"):
-        G._MCTS_PW_SCALE = float(start_scale)
-
-    return {
-        "base_pw_c": G._MCTS_PW_BASE_C,
-        "base_pw_alpha": G._MCTS_PW_BASE_ALPHA,
-        "base_expand_prob": G._MCTS_EXPAND_PROB_BASE,
-        "scale": G._MCTS_PW_SCALE,
-    }
-
-
-def apply_pw_scale_to_grammar(G, scale, *, min_scale=0.02, max_scale=1.0):
-    """
-    Apply continuous PW scale to the actual grammar attributes.
-
-    This changes:
-        G._MCTS_PW_C
-        G._MCTS_EXPAND_PROB
-
-    It leaves alpha/exponent unchanged by default.
-    """
-    init_pw_walk_state(G)
-
-    scale = float(np.clip(scale, min_scale, max_scale))
-
-    G._MCTS_PW_SCALE = scale
-    G._MCTS_PW_C = float(G._MCTS_PW_BASE_C * scale)
-    G._MCTS_PW_ALPHA = float(G._MCTS_PW_BASE_ALPHA)
-    G._MCTS_EXPAND_PROB = float(G._MCTS_EXPAND_PROB_BASE * scale)
-
-    # keep possible backing dictionaries synchronized
-    for attr in ("_spec_gram_args", "spec_gram_args", "_MCTS_SPEC_GRAM_ARGS", "_mcts_spec_gram_args"):
-        d = getattr(G, attr, None)
-        if isinstance(d, dict):
-            d["pw_c"] = G._MCTS_PW_C
-            d["pw_alpha"] = G._MCTS_PW_ALPHA
-            d["expand_prob"] = G._MCTS_EXPAND_PROB
-
-    return {
-        "pw_scale": float(G._MCTS_PW_SCALE),
-        "pw_c": float(G._MCTS_PW_C),
-        "pw_alpha": float(G._MCTS_PW_ALPHA),
-        "expand_prob": float(G._MCTS_EXPAND_PROB),
-    }
-
-
-def walk_pw_scale_from_thresholds(
-    G,
-    *,
-    ema,
-    freeze_threshold,
-    unfreeze_threshold,
-    down_step=0.05,
-    up_step=0.05,
-    min_scale=0.02,
-    max_scale=1.0,
-):
-    """
-    Walk PW scale down/up when thresholds are crossed.
-
-    if ema > freeze_threshold:
-        scale walks lower
-
-    if ema < unfreeze_threshold:
-        scale walks higher
-
-    otherwise:
-        scale holds steady
-    """
-    init_pw_walk_state(G)
-
-    old_scale = float(getattr(G, "_MCTS_PW_SCALE", 1.0))
-
-    if not np.isfinite(ema):
-        action = "hold_nan"
-        new_scale = old_scale
-
-    elif ema > freeze_threshold:
-        action = "walk_down"
-        new_scale = old_scale - float(down_step)
-
-    elif ema < unfreeze_threshold:
-        action = "walk_up"
-        new_scale = old_scale + float(up_step)
-
-    else:
-        action = "hold"
-        new_scale = old_scale
-
-    pw_info = apply_pw_scale_to_grammar(
-        G,
-        new_scale,
-        min_scale=min_scale,
-        max_scale=max_scale,
-    )
-
-    pw_info.update({
-        "pw_action": action,
-        "pw_old_scale": old_scale,
-        "pw_new_scale": float(getattr(G, "_MCTS_PW_SCALE", new_scale)),
-        "pw_freeze_threshold": float(freeze_threshold),
-        "pw_unfreeze_threshold": float(unfreeze_threshold),
-        "pw_ema": float(ema) if np.isfinite(ema) else np.nan,
-    })
-
-    return pw_info
 
 
 # ---------------------------------------------------------------------
@@ -1418,34 +946,20 @@ def default_initialization_kwargs(G):
 
         "chunk_size"  : 1,
 
-        "wf_windows"  : 60,
+        "wf_windows"  : 200,
         "verbose"     : 0,
     }
 
 
 def default_solver_kwargs():
-    delta = 12
     return {
         "offset"   : 12,
         "t_vec"    : "Close",
         "t_mode"   : "AD",
         "emission" : [
-    # numerator: P[t+offset] - MIN_delta(P[t])
-    {"ID": 5,
-     "x": "tvec", "offset": True,
-     "alpha": {"ID": 2, "x": "tvec", "offset": False, "delta1": delta}},
-
-    # divide by range: (MAX_delta(P[t]) - MIN_delta(P[t]))
+    {"ID": 5, "alpha": "tvec", "offset": False},                 # P[t+off] - P[t]
     {"ID": "divide"},
-    {"ID": 5,
-     "x": {"ID": 1, "x": "tvec", "offset": False, "delta1": delta},
-     "alpha": {"ID": 2, "x": "tvec", "offset": False, "delta1": delta}},
-
-    # *2
-    {"ID": 6, "alpha": "emit"},
-
-    # -1
-    {"ID": 5, "alpha": 1.0},
+    {"ID": 18, "x": "tvec", "offset": False, "delta1": 24, "min_count": 2},  # STD over last ~2h
 ],
         "AD_cond"  : ("gt", 0),
     }
@@ -1454,8 +968,8 @@ def default_solver_kwargs():
 def default_logwalker_kwargs():
     return {
         "start": 0,
-        "destination": 1,
-        "steps": 12,
+        "destination": 1.5,
+        "steps": 20,
         "exhaust_mode": "steps",
         "exwhen": 100,
         "min_walk": 3,
@@ -1485,16 +999,6 @@ def run_mcts_tmp_loop(
     store_full_mcts_dict_history: bool = True,
     mem_report_after: int = 3,
     break_h_threshold: float = 0.01,
-    pw_freeze_threshold: float = 0.4,
-    pw_unfreeze_threshold: float = 0.2,
-    pw_threshold_decay_rate: float = 0.01,
-    pw_threshold_floor: float = 0.02,
-    pw_walk_down_step: float = 0.1,
-    pw_walk_up_step: float = 0.05,
-    pw_min_scale: float = 0.01,
-    pw_max_scale: float = 1.0,
-    pw_ema_alpha: float = 0.10,
-    pw_baseline_c: float = 0.75,
     initialization_kwargs_fn: Callable[[Any], dict] = default_initialization_kwargs,
     solver_kwargs_fn: Callable[[], dict] = default_solver_kwargs,
     logwalker_kwargs_fn: Callable[[], dict] = default_logwalker_kwargs,
@@ -1582,12 +1086,6 @@ def run_mcts_tmp_loop(
         "g_mcts_uct_explore_influence": [],
         "g_mcts_uct_explore_influence_ema": [],
         "g_mcts_pw_modes": [],
-        "g_mcts_pw_scale": [],
-        "g_mcts_pw_action": [],
-        "g_mcts_pw_freeze_threshold": [],
-        "g_mcts_pw_unfreeze_threshold": [],
-        "g_mcts_pw_c": [],
-        "g_mcts_expand_prob": [],
 
         "g_mcts_policy_parent_drift": [],
         "g_mcts_policy_child_drift": [],
@@ -1854,62 +1352,17 @@ def run_mcts_tmp_loop(
 
             uct_infl = ablation["uct_explore_influence"]
 
-            # update EMA exactly like the old function, but do not use binary PW switching
-            if np.isfinite(uct_infl):
-                if not hasattr(G, "_MCTS_EXPLORE_INFLUENCE_EMA"):
-                    G._MCTS_EXPLORE_INFLUENCE_EMA = float(uct_infl)
-                else:
-                    G._MCTS_EXPLORE_INFLUENCE_EMA = (
-                        (1.0 - pw_ema_alpha) * float(G._MCTS_EXPLORE_INFLUENCE_EMA)
-                        + pw_ema_alpha * float(uct_infl)
-                    )
-
-            infl_ema = float(getattr(G, "_MCTS_EXPLORE_INFLUENCE_EMA", np.nan))
-
-            decay = float(np.exp(-float(pw_threshold_decay_rate) * float(k)))
-            pw_freeze_threshold_t = max(
-                float(pw_threshold_floor),
-                float(pw_freeze_threshold) * decay,
+            pw_mode, infl_ema = _E.mcts_update_pw_mode_from_ablation(
+                G=G,
+                explore_influence=uct_infl,
+                freeze_threshold=0.55,
+                unfreeze_threshold=0.25,
+                ema_alpha=0.10,
             )
-            pw_unfreeze_threshold_t = max(
-                float(pw_threshold_floor),
-                float(pw_unfreeze_threshold) * decay,
-            )
-
-            pw_info = walk_pw_scale_from_thresholds(
-                G,
-                ema=infl_ema,
-                freeze_threshold=pw_freeze_threshold_t,
-                unfreeze_threshold=pw_unfreeze_threshold_t,
-                down_step=pw_walk_down_step,
-                up_step=pw_walk_up_step,
-                min_scale=pw_min_scale,
-                max_scale=pw_max_scale,
-            )
-
-            pw_mode = pw_info["pw_action"]
 
             histories["g_mcts_uct_explore_influence"].append(uct_infl)
             histories["g_mcts_uct_explore_influence_ema"].append(infl_ema)
             histories["g_mcts_pw_modes"].append(pw_mode)
-
-            histories["g_mcts_pw_scale"].append(pw_info["pw_scale"])
-            histories["g_mcts_pw_action"].append(pw_info["pw_action"])
-            histories["g_mcts_pw_freeze_threshold"].append(pw_freeze_threshold_t)
-            histories["g_mcts_pw_unfreeze_threshold"].append(pw_unfreeze_threshold_t)
-            histories["g_mcts_pw_c"].append(pw_info["pw_c"])
-            histories["g_mcts_expand_prob"].append(pw_info["expand_prob"])
-
-            store.log(
-                "PW WALK | "
-                f"action={pw_info['pw_action']} | "
-                f"ema={infl_ema:.4f} | "
-                f"scale={pw_info['pw_old_scale']:.4f}->{pw_info['pw_new_scale']:.4f} | "
-                f"freeze_t={pw_freeze_threshold_t:.4f} | "
-                f"unfreeze_t={pw_unfreeze_threshold_t:.4f} | "
-                f"pw_c={pw_info['pw_c']:.6f} | "
-                f"expand_prob={pw_info['expand_prob']:.6f}"
-            )
 
             with capture_console(store, "original_exploration_influence_plot", k=k), capture_plots(
                 store, "original_exploration_influence", k=k, save=save_helper_plots
@@ -1920,13 +1373,14 @@ def run_mcts_tmp_loop(
                     figsize=(12, 4),
                 )
 
-            curr_snap = mcts_exploit_policy_snapshot(
+            # policy delta
+            curr_snap = _E.mcts_policy_snapshot(
                 G=G,
                 X=X,
                 depth_gamma=0.70,
             )
 
-            policy_drift = mcts_root_weighted_exploit_policy_drift(
+            policy_drift = _E.mcts_root_weighted_policy_drift(
                 prev_snap=mcts_prev_policy_snapshot,
                 curr_snap=curr_snap,
             )
@@ -2035,9 +1489,6 @@ def run_mcts_tmp_loop(
                 policy_h_hist=hp,
                 uct_explore_influence_hist=histories["g_mcts_uct_explore_influence"],
                 uct_explore_influence_ema_hist=histories["g_mcts_uct_explore_influence_ema"],
-                pw_freeze_threshold_hist=histories["g_mcts_pw_freeze_threshold"],
-                pw_unfreeze_threshold_hist=histories["g_mcts_pw_unfreeze_threshold"],
-                pw_scale_hist=histories["g_mcts_pw_scale"],
                 prop_g=gene_eval_details.get("prop_g", []),
                 observed_scores_g=gene_eval_details.get("observed_scores_g", []),
                 fpc_std_g=gene_eval_details.get("fpc_std_g", []),
@@ -2103,15 +1554,6 @@ def run_mcts_tmp_loop(
                 "uct_explore_influence": uct_infl,
                 "uct_explore_influence_ema": infl_ema,
                 "pw_mode": pw_mode,
-                "pw_action": pw_info["pw_action"],
-                "pw_scale": pw_info["pw_scale"],
-                "pw_old_scale": pw_info["pw_old_scale"],
-                "pw_new_scale": pw_info["pw_new_scale"],
-                "pw_freeze_threshold": pw_freeze_threshold_t,
-                "pw_unfreeze_threshold": pw_unfreeze_threshold_t,
-                "pw_c": pw_info["pw_c"],
-                "pw_alpha": pw_info["pw_alpha"],
-                "expand_prob": pw_info["expand_prob"],
                 "q_mean": ablation.get("q_mean", np.nan),
                 "u_mean": ablation.get("u_mean", np.nan),
                 "u_cv": ablation.get("u_cv", np.nan),
@@ -2145,9 +1587,6 @@ def run_mcts_tmp_loop(
 
             store.write_status("running", k=k, extra={
                 "last_h": h,
-                "last_pw_mode": pw_mode,
-                "last_pw_freeze_threshold": pw_freeze_threshold_t,
-                "last_pw_unfreeze_threshold": pw_unfreeze_threshold_t,
                 "last_elapsed_sec": elapsed,
                 "last_summary_png": recreated_paths.get("summary_dashboard"),
                 "last_zscore_mean": zscore_stats["mean"],

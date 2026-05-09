@@ -26,7 +26,7 @@ G = _I.Grammar(
 
     #this is now a prior for alpha-MCTS const-vs-sensor selection
     #not a direct random alpha sensor frequency inside the MCTS branch.
-    alpha_sensor_freq=0.35,
+    alpha_sensor_freq=0.5,
 
     node_fitness='count_pop_dead',
     count_explore=True,
@@ -35,8 +35,10 @@ G = _I.Grammar(
     explore_const=np.sqrt(2),
     spec_gram_args={
         "key_mode"       : "path",
-        "max_depth"      : 4,
-        "max_path_depth" : 7,
+        "max_depth"      : 5,
+        "max_path_depth" : 6,
+
+        "trace_enabled"  : False,
 
         #progressive widening
 

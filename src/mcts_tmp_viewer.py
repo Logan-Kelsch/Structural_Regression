@@ -1,18 +1,19 @@
-# mcts_tmp_viewer.py
+# mcts_tmp_viewer1.py
 #
 # Streamlit live/past viewer for mcts_util.py runs.
 #
-# Run:
-#     streamlit run mcts_tmp_viewer.py
+# Run from your project root:
+#     streamlit run mcts_tmp_viewer1.py
 #
-# It can watch mcts_runs/tmp live while the notebook loop is running,
-# and it can also browse older named runs in mcts_runs/.
+# It watches mcts_runs/tmp live while the loop is running and can also browse
+# completed named runs in mcts_runs/.
 
 from __future__ import annotations
 
 import json
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -26,10 +27,10 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------------------
-# file readers
+# small file readers
 # ---------------------------------------------------------------------
 
-def read_json(path, default=None):
+def read_json(path: str | Path, default: Any = None) -> Any:
     path = Path(path)
 
     if not path.exists():
@@ -42,7 +43,7 @@ def read_json(path, default=None):
         return default
 
 
-def read_jsonl(path):
+def read_jsonl(path: str | Path) -> list[dict]:
     path = Path(path)
 
     if not path.exists():
@@ -50,36 +51,39 @@ def read_jsonl(path):
 
     rows = []
 
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
 
-            if not line:
-                continue
+                if not line:
+                    continue
 
-            try:
-                rows.append(json.loads(line))
-            except Exception:
-                pass
+                try:
+                    rows.append(json.loads(line))
+                except Exception:
+                    pass
+    except Exception:
+        return []
 
     return rows
 
 
-def read_text_tail(path, n_lines=250):
+def read_text_tail(path: str | Path, n_lines: int = 300) -> str:
     path = Path(path)
 
     if not path.exists():
         return ""
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
         return "".join(lines[-int(n_lines):])
     except Exception as e:
         return f"could not read log: {e}"
 
 
-def list_run_dirs(root):
+def list_run_dirs(root: str | Path) -> list[Path]:
     root = Path(root)
 
     if not root.exists():
@@ -90,17 +94,26 @@ def list_run_dirs(root):
     return dirs
 
 
-def load_metrics(run_dir):
-    rows = read_jsonl(Path(run_dir) / "metrics.jsonl")
+@st.cache_data(ttl=2, show_spinner=False)
+def load_metrics_cached(run_dir_text: str, mtime_ns: int | None) -> pd.DataFrame:
+    del mtime_ns
+    rows = read_jsonl(Path(run_dir_text) / "metrics.jsonl")
 
     if not rows:
         return pd.DataFrame()
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+
+    if "k" in df.columns:
+        df["k"] = pd.to_numeric(df["k"], errors="coerce").astype("Int64")
+
+    return df
 
 
-def load_plot_index(run_dir):
-    rows = read_jsonl(Path(run_dir) / "plot_index.jsonl")
+@st.cache_data(ttl=2, show_spinner=False)
+def load_plot_index_cached(run_dir_text: str, mtime_ns: int | None) -> pd.DataFrame:
+    del mtime_ns
+    rows = read_jsonl(Path(run_dir_text) / "plot_index.jsonl")
 
     if not rows:
         return pd.DataFrame(columns=["k", "section", "path"])
@@ -113,7 +126,26 @@ def load_plot_index(run_dir):
     return df
 
 
-def resolve_path(run_dir, p):
+def path_mtime_ns(path: str | Path) -> int | None:
+    path = Path(path)
+
+    try:
+        return path.stat().st_mtime_ns
+    except Exception:
+        return None
+
+
+def load_metrics(run_dir: str | Path) -> pd.DataFrame:
+    run_dir = Path(run_dir)
+    return load_metrics_cached(str(run_dir), path_mtime_ns(run_dir / "metrics.jsonl"))
+
+
+def load_plot_index(run_dir: str | Path) -> pd.DataFrame:
+    run_dir = Path(run_dir)
+    return load_plot_index_cached(str(run_dir), path_mtime_ns(run_dir / "plot_index.jsonl"))
+
+
+def resolve_path(run_dir: str | Path, p: Any) -> Path | None:
     if p is None:
         return None
 
@@ -130,22 +162,20 @@ def resolve_path(run_dir, p):
     return None
 
 
-def get_section_images(plot_df, run_dir, selected_k, section):
+def get_section_images(plot_df: pd.DataFrame, run_dir: str | Path, selected_k: int | None, section: str) -> list[Path]:
     if plot_df.empty:
         return []
 
-    df = plot_df.copy()
-
-    if "section" not in df.columns or "path" not in df.columns:
+    if "section" not in plot_df.columns or "path" not in plot_df.columns:
         return []
 
-    keep = df["section"].astype(str).eq(str(section))
+    keep = plot_df["section"].astype(str).eq(str(section))
 
-    if selected_k is not None and "k" in df.columns:
-        keep &= df["k"].astype("Int64").eq(int(selected_k))
+    if selected_k is not None and "k" in plot_df.columns:
+        keep &= plot_df["k"].astype("Int64").eq(int(selected_k))
 
     paths = []
-    for p in df.loc[keep, "path"].tolist():
+    for p in plot_df.loc[keep, "path"].tolist():
         rp = resolve_path(run_dir, p)
         if rp is not None:
             paths.append(rp)
@@ -153,16 +183,14 @@ def get_section_images(plot_df, run_dir, selected_k, section):
     return paths
 
 
-def latest_image_for_section(plot_df, run_dir, section):
+def latest_image_for_section(plot_df: pd.DataFrame, run_dir: str | Path, section: str) -> Path | None:
     if plot_df.empty:
         return None
 
-    df = plot_df.copy()
-
-    if "section" not in df.columns or "path" not in df.columns:
+    if "section" not in plot_df.columns or "path" not in plot_df.columns:
         return None
 
-    df = df[df["section"].astype(str).eq(str(section))]
+    df = plot_df[plot_df["section"].astype(str).eq(str(section))].copy()
 
     if df.empty:
         return None
@@ -176,6 +204,46 @@ def latest_image_for_section(plot_df, run_dir, section):
             return rp
 
     return None
+
+
+def metric_value(status: dict, latest: pd.Series | None, status_key: str, metric_key: str, default: Any = np.nan) -> Any:
+    v = status.get(status_key, None)
+
+    if v is not None:
+        return v
+
+    if latest is not None and metric_key in latest.index:
+        return latest.get(metric_key, default)
+
+    return default
+
+
+def fmt_float(x: Any, nd: int = 4, default: str = "NA") -> str:
+    try:
+        v = float(x)
+        if not np.isfinite(v):
+            return default
+        return f"{v:.{nd}f}"
+    except Exception:
+        return default
+
+
+def fmt_int(x: Any, default: str = "NA") -> str:
+    try:
+        v = float(x)
+        if not np.isfinite(v):
+            return default
+        return f"{v:.0f}"
+    except Exception:
+        return default
+
+
+def safe_metric_cols(df: pd.DataFrame, cols: list[str]) -> list[str]:
+    return [c for c in cols if c in df.columns]
+
+
+def read_trace_tail(run_dir: str | Path, n_lines: int = 200) -> str:
+    return read_text_tail(Path(run_dir) / "mcts_trace.jsonl", n_lines=n_lines)
 
 
 # ---------------------------------------------------------------------
@@ -192,15 +260,13 @@ run_names = [p.name for p in runs]
 
 if "tmp" in run_names:
     default_idx = run_names.index("tmp")
+elif runs:
+    default_idx = 0
 else:
-    default_idx = 0 if run_names else None
+    default_idx = None
 
 if runs:
-    selected_name = st.sidebar.selectbox(
-        "run",
-        run_names,
-        index=default_idx,
-    )
+    selected_name = st.sidebar.selectbox("run", run_names, index=default_idx)
     run_dir = run_root / selected_name
 else:
     selected_name = st.sidebar.text_input("run name", "tmp")
@@ -213,7 +279,8 @@ if manual_run_dir.strip():
 auto_refresh = st.sidebar.checkbox("auto refresh", value=True)
 refresh_sec = st.sidebar.slider("refresh seconds", 1, 30, 3)
 show_original_plots = st.sidebar.checkbox("include original captured helper plots", value=True)
-log_tail_lines = st.sidebar.slider("log tail lines", 50, 2000, 300, 50)
+log_tail_lines = st.sidebar.slider("log tail lines", 50, 3000, 300, 50)
+trace_tail_lines = st.sidebar.slider("trace tail lines", 25, 1000, 150, 25)
 
 
 # ---------------------------------------------------------------------
@@ -226,15 +293,27 @@ st.caption(f"reading: {run_dir}")
 status = read_json(run_dir / "status.json", default={})
 metrics = load_metrics(run_dir)
 plot_df = load_plot_index(run_dir)
-tops_rows = read_jsonl(run_dir / "tops.jsonl")
 
-top_cols = st.columns(6)
+latest = None if metrics.empty else metrics.iloc[-1]
+
+edge_explore_value = metric_value(
+    status,
+    latest,
+    "last_mcts_edge_explore_count_total",
+    "mcts_edge_explore_count_total",
+)
+
+last_h_value = metric_value(status, latest, "last_h", "policy_h")
+
+# top status cards
+top_cols = st.columns(7)
 top_cols[0].metric("status", status.get("status", "missing"))
 top_cols[1].metric("last iter", status.get("last_iteration", "NA"))
-top_cols[2].metric("last h", status.get("last_h", "NA"))
-top_cols[3].metric("last z mean", status.get("last_zscore_mean", "NA"))
-top_cols[4].metric("last z max", status.get("last_zscore_max", "NA"))
-top_cols[5].metric("updated", status.get("updated_at", "NA"))
+top_cols[2].metric("edge explore n", fmt_int(edge_explore_value))
+top_cols[3].metric("last z mean", fmt_float(metric_value(status, latest, "last_zscore_mean", "zscore_mean")))
+top_cols[4].metric("last z max", fmt_float(metric_value(status, latest, "last_zscore_max", "zscore_max")))
+top_cols[5].metric("last h", fmt_float(last_h_value))
+top_cols[6].metric("updated", status.get("updated_at", "NA"))
 
 if not run_dir.exists():
     st.warning(f"Run folder does not exist: {run_dir}")
@@ -253,20 +332,21 @@ if metrics.empty:
         st.rerun()
     st.stop()
 
-latest = metrics.iloc[-1]
-latest_k = int(latest["k"])
+latest_k = int(metrics["k"].dropna().max()) if "k" in metrics.columns else int(len(metrics) - 1)
+latest = metrics[metrics["k"].astype("Int64").eq(latest_k)].iloc[-1] if "k" in metrics.columns else metrics.iloc[-1]
 
 summary_cols = st.columns(8)
 summary_cols[0].metric("iteration", latest_k)
-summary_cols[1].metric("h", f"{latest.get('policy_h', np.nan):.6f}")
-summary_cols[2].metric("z mean", f"{latest.get('zscore_mean', np.nan):.4f}")
-summary_cols[3].metric("z max", f"{latest.get('zscore_max', np.nan):.4f}")
-summary_cols[4].metric("p min", f"{latest.get('pval_min', np.nan):.4g}")
-summary_cols[5].metric("alpha p(sensor)", f"{latest.get('alpha_sensor_prob', np.nan):.4f}")
-summary_cols[6].metric("UCT infl.", f"{latest.get('uct_explore_influence', np.nan):.4f}")
+summary_cols[1].metric("edge explore n", fmt_int(latest.get("mcts_edge_explore_count_total", edge_explore_value)))
+summary_cols[2].metric("z mean", fmt_float(latest.get("zscore_mean", np.nan)))
+summary_cols[3].metric("z max", fmt_float(latest.get("zscore_max", np.nan)))
+summary_cols[4].metric("p min", fmt_float(latest.get("pval_min", np.nan), nd=4))
+summary_cols[5].metric("PW scale", fmt_float(latest.get("pw_scale", np.nan)))
+summary_cols[6].metric("PW action", str(latest.get("pw_action", "NA")))
 summary_cols[7].metric("freeze", str(latest.get("freeze_expansion", False)))
 
-tab_live, tab_curves, tab_iter, tab_plots, tab_arrays, tab_tops, tab_log, tab_runs = st.tabs([
+
+tab_live, tab_curves, tab_iter, tab_plots, tab_arrays, tab_tops, tab_log, tab_trace, tab_runs = st.tabs([
     "live summary",
     "metric curves",
     "iteration browser",
@@ -274,6 +354,7 @@ tab_live, tab_curves, tab_iter, tab_plots, tab_arrays, tab_tops, tab_log, tab_ru
     "arrays",
     "top edges",
     "console log",
+    "trace",
     "runs",
 ])
 
@@ -284,7 +365,7 @@ with tab_live:
     latest_summary = latest_image_for_section(plot_df, run_dir, "summary_dashboard")
 
     if latest_summary is not None:
-        st.image(str(latest_summary), caption=str(latest_summary), use_container_width=True)
+        st.image(str(latest_summary), caption=str(latest_summary), width="stretch")
     else:
         st.info("No summary_dashboard image yet.")
 
@@ -308,7 +389,7 @@ with tab_live:
         with cols[i % 2]:
             st.write(section)
             if p is not None:
-                st.image(str(p), use_container_width=True)
+                st.image(str(p), width="stretch")
             else:
                 st.caption("not available")
 
@@ -329,16 +410,29 @@ with tab_curves:
             "pval_min",
             "pval_mean",
         ],
-        "MCTS growth": [
+        "MCTS x/tf growth": [
             "mcts_node_mu_count",
             "mcts_edge_mu_count",
+            "mcts_edge_explore_count_total",
+            "mcts_trace_len",
+            "mcts_trace_written",
+            "mcts_trace_kept",
+        ],
+        "alpha growth": [
             "alpha_decision_mu_count",
             "alpha_node_mu_count",
             "alpha_edge_mu_count",
         ],
-        "exploration / depth": [
+        "adaptive progressive widening": [
             "uct_explore_influence",
             "uct_explore_influence_ema",
+            "pw_freeze_threshold",
+            "pw_unfreeze_threshold",
+            "pw_scale",
+            "pw_c",
+            "expand_prob",
+        ],
+        "depth / alpha": [
             "depth_prob_delta_sum",
             "alpha_depth_prob_delta_sum",
             "alpha_sensor_prob",
@@ -346,14 +440,16 @@ with tab_curves:
     }
 
     for title, cols in chart_groups.items():
-        have = [c for c in cols if c in metrics.columns]
+        have = safe_metric_cols(metrics, cols)
 
         if have:
             st.write(title)
-            st.line_chart(metrics.set_index("k")[have])
+            plot_df_metric = metrics.copy()
+            plot_df_metric["k"] = pd.to_numeric(plot_df_metric["k"], errors="coerce")
+            st.line_chart(plot_df_metric.set_index("k")[have])
 
     st.subheader("raw metrics")
-    st.dataframe(metrics, use_container_width=True, height=360)
+    st.dataframe(metrics, width="stretch", height=380)
 
 
 with tab_iter:
@@ -361,7 +457,7 @@ with tab_iter:
 
     selected_k = st.slider("iteration", 0, latest_k, latest_k)
 
-    row = metrics[metrics["k"] == selected_k]
+    row = metrics[metrics["k"].astype("Int64").eq(selected_k)]
     if not row.empty:
         st.json(row.iloc[-1].to_dict())
 
@@ -378,6 +474,9 @@ with tab_iter:
         "exploration_influence",
         "policy_drift",
         "fpc_curve_once",
+        "original_depth_helper_plots",
+        "original_exploration_influence",
+        "original_policy_drift",
     ]
 
     section = st.selectbox("plot section", preferred_sections)
@@ -385,7 +484,7 @@ with tab_iter:
 
     if imgs:
         for p in imgs:
-            st.image(str(p), caption=str(p), use_container_width=True)
+            st.image(str(p), caption=str(p), width="stretch")
     else:
         st.info("No images for this section/iteration.")
 
@@ -405,7 +504,6 @@ with tab_plots:
             ]
 
         selected_section = st.selectbox("section", sections_all)
-
         df_sec = plot_df[plot_df["section"].astype(str).eq(selected_section)].copy()
 
         if "k" in df_sec.columns and not df_sec.empty:
@@ -417,7 +515,7 @@ with tab_plots:
         for p in df_sec["path"].tolist():
             rp = resolve_path(run_dir, p)
             if rp is not None:
-                st.image(str(rp), caption=str(rp), use_container_width=True)
+                st.image(str(rp), caption=str(rp), width="stretch")
 
 
 with tab_arrays:
@@ -446,10 +544,10 @@ with tab_arrays:
             if numeric.size > 0:
                 c1, c2, c3, c4, c5 = st.columns(5)
                 c1.metric("n", int(numeric.size))
-                c2.metric("mean", f"{np.mean(numeric):.6f}")
-                c3.metric("std", f"{np.std(numeric):.6f}")
-                c4.metric("min", f"{np.min(numeric):.6f}")
-                c5.metric("max", f"{np.max(numeric):.6f}")
+                c2.metric("mean", fmt_float(np.mean(numeric), nd=6))
+                c3.metric("std", fmt_float(np.std(numeric), nd=6))
+                c4.metric("min", fmt_float(np.min(numeric), nd=6))
+                c5.metric("max", fmt_float(np.max(numeric), nd=6))
 
                 show_n = min(5000, numeric.size)
                 st.line_chart(numeric[:show_n])
@@ -474,15 +572,15 @@ with tab_tops:
 
         with c1:
             st.write("top x/tf edges")
-            st.dataframe(pd.DataFrame(tops.get("top_edges", [])), use_container_width=True)
+            st.dataframe(pd.DataFrame(tops.get("top_edges", [])), width="stretch")
 
         with c2:
             st.write("top alpha decisions")
-            st.dataframe(pd.DataFrame(tops.get("top_alpha_decisions", [])), use_container_width=True)
+            st.dataframe(pd.DataFrame(tops.get("top_alpha_decisions", [])), width="stretch")
 
         with c3:
             st.write("top alpha edges")
-            st.dataframe(pd.DataFrame(tops.get("top_alpha_edges", [])), use_container_width=True)
+            st.dataframe(pd.DataFrame(tops.get("top_alpha_edges", [])), width="stretch")
 
 
 with tab_log:
@@ -494,6 +592,22 @@ with tab_log:
     )
 
 
+with tab_trace:
+    st.subheader("MCTS trace tail")
+
+    trace_path = run_dir / "mcts_trace.jsonl"
+
+    if not trace_path.exists():
+        st.info("No mcts_trace.jsonl file yet. This is expected if trace draining is disabled or no trace has been written.")
+    else:
+        st.caption(str(trace_path))
+        st.text_area(
+            "mcts_trace.jsonl tail",
+            read_trace_tail(run_dir, n_lines=trace_tail_lines),
+            height=620,
+        )
+
+
 with tab_runs:
     st.subheader("available runs")
 
@@ -502,18 +616,26 @@ with tab_runs:
     for p in list_run_dirs(run_root):
         status_p = read_json(p / "status.json", default={})
         metrics_p = load_metrics(p)
+        latest_p = None if metrics_p.empty else metrics_p.iloc[-1]
 
         rows.append({
             "run": p.name,
             "path": str(p),
             "status": status_p.get("status"),
             "last_iteration": status_p.get("last_iteration"),
+            "edge_explore_n": metric_value(
+                status_p,
+                latest_p,
+                "last_mcts_edge_explore_count_total",
+                "mcts_edge_explore_count_total",
+            ),
+            "last_h": metric_value(status_p, latest_p, "last_h", "policy_h"),
             "updated_at": status_p.get("updated_at"),
             "n_metric_rows": int(len(metrics_p)),
             "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(p.stat().st_mtime)),
         })
 
-    st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch")
 
 
 if auto_refresh:

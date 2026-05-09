@@ -1,35 +1,1668 @@
 time,k,path,size_mb,delta_mb,type,desc,rss_gb,vms_gb,sys_mem_percent
-2026-05-08 13:06:02,0,l:last_X,39.1429,39.1429,Population,Population,0.3552,1.8762,75.8
-2026-05-08 13:06:02,0,l:X,39.1429,39.1429,Population,Population,0.3552,1.8762,75.8
-2026-05-08 13:06:02,0,l:last_X._X_inst,38.2046,38.2046,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3552,1.8762,75.8
-2026-05-08 13:06:02,0,l:X._X_inst,38.2046,38.2046,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3552,1.8762,75.8
-2026-05-08 13:06:02,0,l:G,8.8689,8.8689,Grammar,Grammar,0.3552,1.8762,75.8
-2026-05-08 13:06:02,0,l:G._MCTS_TRACE,8.3794,8.3794,list,list len=18605,0.3552,1.8762,75.8
-2026-05-08 13:08:31,5,l:last_X,39.1429,0.0,Population,Population,0.63,2.153,84.0
-2026-05-08 13:08:31,5,l:X,39.1429,0.0,Population,Population,0.63,2.153,84.0
-2026-05-08 13:08:31,5,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.63,2.153,84.0
-2026-05-08 13:08:31,5,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.63,2.153,84.0
-2026-05-08 13:08:31,5,l:G,33.3476,24.4788,Grammar,Grammar,0.63,2.153,84.0
-2026-05-08 13:08:31,5,l:G._MCTS_TRACE,31.8492,23.4698,list,list len=70611,0.63,2.153,84.0
-2026-05-08 13:08:31,5,l:histories,2.2705,2.2705,dict,dict len=31,0.63,2.153,84.0
-2026-05-08 13:08:31,5,l:histories['g_mcts_trace'],2.0503,2.0503,list,list len=6,0.63,2.153,84.0
-2026-05-08 13:13:18,10,l:G,53.5769,20.2292,Grammar,Grammar,0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:G._MCTS_TRACE,52.0695,20.2203,list,list len=115485,0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:last_X,39.1429,0.0,Population,Population,0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:X,39.1429,0.0,Population,Population,0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:histories,6.6018,4.3313,dict,dict len=31,0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:histories['g_mcts_trace'],6.1788,4.1286,list,list len=11,0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:initialization_kwargs,1.3071,1.3071,dict,dict len=15,0.9289,2.5038,87.4
-2026-05-08 13:13:18,10,l:initialization_kwargs['grmr_prior'],1.3055,1.3055,Grammar,Grammar,0.9289,2.5038,87.4
-2026-05-08 13:19:00,15,l:G,71.1991,17.6222,Grammar,Grammar,1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:G._MCTS_TRACE,69.6934,17.6239,list,list len=154732,1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:last_X,39.1429,0.0,Population,Population,1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:X,39.1429,0.0,Population,Population,1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:histories,12.3935,5.7917,dict,dict len=31,1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:histories['g_mcts_trace'],11.7686,5.5897,list,list len=16,1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:initialization_kwargs,1.6719,0.3647,dict,dict len=15,1.2766,2.9006,93.4
-2026-05-08 13:19:00,15,l:initialization_kwargs['grmr_prior'],1.6702,0.3647,Grammar,Grammar,1.2766,2.9006,93.4
+2026-05-09 17:38:01,0,l:last_X,38.9953,38.9953,Population,Population,0.3506,3.0027,40.3
+2026-05-09 17:38:01,0,l:X,38.9953,38.9953,Population,Population,0.3506,3.0027,40.3
+2026-05-09 17:38:01,0,l:last_X._X_inst,38.2046,38.2046,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3506,3.0027,40.3
+2026-05-09 17:38:01,0,l:X._X_inst,38.2046,38.2046,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3506,3.0027,40.3
+2026-05-09 17:38:09,1,l:last_X,38.9954,0.0001,Population,Population,0.3581,3.011,40.5
+2026-05-09 17:38:09,1,l:X,38.9954,0.0001,Population,Population,0.3581,3.011,40.5
+2026-05-09 17:38:09,1,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3581,3.011,40.5
+2026-05-09 17:38:09,1,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3581,3.011,40.5
+2026-05-09 17:38:56,2,l:last_X,38.9954,-0.0,Population,Population,0.3802,3.0325,38.7
+2026-05-09 17:38:56,2,l:X,38.9954,-0.0,Population,Population,0.3802,3.0325,38.7
+2026-05-09 17:38:56,2,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3802,3.0325,38.7
+2026-05-09 17:38:56,2,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3802,3.0325,38.7
+2026-05-09 17:39:13,3,l:last_X,38.9955,0.0001,Population,Population,0.395,3.0472,38.9
+2026-05-09 17:39:13,3,l:X,38.9955,0.0001,Population,Population,0.395,3.0472,38.9
+2026-05-09 17:39:13,3,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.395,3.0472,38.9
+2026-05-09 17:39:13,3,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.395,3.0472,38.9
+2026-05-09 17:39:20,4,l:last_X,38.9954,-0.0,Population,Population,0.396,3.0482,39.0
+2026-05-09 17:39:20,4,l:X,38.9954,-0.0,Population,Population,0.396,3.0482,39.0
+2026-05-09 17:39:20,4,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.396,3.0482,39.0
+2026-05-09 17:39:20,4,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.396,3.0482,39.0
+2026-05-09 17:39:20,4,l:G,1.0874,1.0874,Grammar,Grammar,0.396,3.0482,39.0
+2026-05-09 17:40:24,5,l:last_X,38.9966,0.0012,Population,Population,0.3832,3.0354,38.7
+2026-05-09 17:40:24,5,l:X,38.9966,0.0012,Population,Population,0.3832,3.0354,38.7
+2026-05-09 17:40:24,5,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3832,3.0354,38.7
+2026-05-09 17:40:24,5,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3832,3.0354,38.7
+2026-05-09 17:40:24,5,l:G,1.6502,0.5628,Grammar,Grammar,0.3832,3.0354,38.7
+2026-05-09 17:41:15,6,l:last_X,38.9966,0.0,Population,Population,0.3934,3.0458,38.9
+2026-05-09 17:41:15,6,l:X,38.9966,0.0,Population,Population,0.3934,3.0458,38.9
+2026-05-09 17:41:15,6,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3934,3.0458,38.9
+2026-05-09 17:41:15,6,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3934,3.0458,38.9
+2026-05-09 17:41:15,6,l:G,2.0943,0.4441,Grammar,Grammar,0.3934,3.0458,38.9
+2026-05-09 17:41:54,7,l:last_X,38.9966,0.0,Population,Population,0.386,3.0383,38.8
+2026-05-09 17:41:54,7,l:X,38.9966,0.0,Population,Population,0.386,3.0383,38.8
+2026-05-09 17:41:54,7,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.386,3.0383,38.8
+2026-05-09 17:41:54,7,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.386,3.0383,38.8
+2026-05-09 17:41:54,7,l:G,2.3339,0.2397,Grammar,Grammar,0.386,3.0383,38.8
+2026-05-09 17:42:35,8,l:last_X,38.9966,0.0,Population,Population,0.3965,3.0485,39.0
+2026-05-09 17:42:35,8,l:X,38.9966,0.0,Population,Population,0.3965,3.0485,39.0
+2026-05-09 17:42:35,8,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3965,3.0485,39.0
+2026-05-09 17:42:35,8,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.3965,3.0485,39.0
+2026-05-09 17:42:35,8,l:G,2.6595,0.3255,Grammar,Grammar,0.3965,3.0485,39.0
+2026-05-09 17:43:09,9,l:last_X,38.9966,0.0,Population,Population,0.4059,3.0586,39.1
+2026-05-09 17:43:09,9,l:X,38.9966,0.0,Population,Population,0.4059,3.0586,39.1
+2026-05-09 17:43:09,9,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4059,3.0586,39.1
+2026-05-09 17:43:09,9,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4059,3.0586,39.1
+2026-05-09 17:43:09,9,l:G,3.0554,0.3959,Grammar,Grammar,0.4059,3.0586,39.1
+2026-05-09 17:43:09,9,l:G._MCTS_CHILDREN,1.0672,1.0672,dict,dict len=2611,0.4059,3.0586,39.1
+2026-05-09 17:43:27,10,l:last_X,38.9966,0.0,Population,Population,0.4076,3.0605,39.0
+2026-05-09 17:43:27,10,l:X,38.9966,0.0,Population,Population,0.4076,3.0605,39.0
+2026-05-09 17:43:27,10,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4076,3.0605,39.0
+2026-05-09 17:43:27,10,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4076,3.0605,39.0
+2026-05-09 17:43:27,10,l:G,3.0991,0.0437,Grammar,Grammar,0.4076,3.0605,39.0
+2026-05-09 17:43:27,10,l:G._MCTS_CHILDREN,1.0867,0.0195,dict,dict len=2662,0.4076,3.0605,39.0
+2026-05-09 17:44:07,11,l:last_X,38.9966,0.0,Population,Population,0.4087,3.0615,39.6
+2026-05-09 17:44:07,11,l:X,38.9966,0.0,Population,Population,0.4087,3.0615,39.6
+2026-05-09 17:44:07,11,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4087,3.0615,39.6
+2026-05-09 17:44:07,11,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4087,3.0615,39.6
+2026-05-09 17:44:07,11,l:G,3.7811,0.6821,Grammar,Grammar,0.4087,3.0615,39.6
+2026-05-09 17:44:07,11,l:G._MCTS_CHILDREN,1.2404,0.1537,dict,dict len=2844,0.4087,3.0615,39.6
+2026-05-09 17:44:07,11,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.1778,1.1778,dict,dict len=11238,0.4087,3.0615,39.6
+2026-05-09 17:44:44,12,l:last_X,38.9966,0.0,Population,Population,0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:X,38.9966,0.0,Population,Population,0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:G,3.9543,0.1732,Grammar,Grammar,0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:initialization_kwargs,1.3572,1.3572,dict,dict len=15,0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:initialization_kwargs['grmr_prior'],1.3556,1.3556,Grammar,Grammar,0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:G._MCTS_CHILDREN,1.3126,0.0722,dict,dict len=2993,0.4139,3.0659,39.8
+2026-05-09 17:44:44,12,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.2314,0.0536,dict,dict len=12218,0.4139,3.0659,39.8
+2026-05-09 17:45:13,13,l:last_X,38.9966,0.0,Population,Population,0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:X,38.9966,0.0,Population,Population,0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:G,4.0456,0.0912,Grammar,Grammar,0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:initialization_kwargs,1.3572,0.0,dict,dict len=15,0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:initialization_kwargs['grmr_prior'],1.3556,0.0,Grammar,Grammar,0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:G._MCTS_CHILDREN,1.347,0.0345,dict,dict len=3081,0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.2647,0.0333,dict,dict len=12826,0.4218,3.0747,39.9
+2026-05-09 17:45:13,13,l:histories,1.1045,1.1045,dict,dict len=37,0.4218,3.0747,39.9
+2026-05-09 17:45:40,14,l:last_X,38.9966,0.0,Population,Population,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:X,38.9966,0.0,Population,Population,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:G,4.1355,0.09,Grammar,Grammar,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:G._MCTS_CHILDREN,1.3803,0.0333,dict,dict len=3166,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:initialization_kwargs,1.3572,0.0,dict,dict len=15,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:initialization_kwargs['grmr_prior'],1.3556,0.0,Grammar,Grammar,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.298,0.0333,dict,dict len=13435,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:histories,1.259,0.1545,dict,dict len=37,0.4236,3.0757,39.9
+2026-05-09 17:45:40,14,l:histories['g_mcts_children'],1.1176,1.1176,list,list len=15,0.4236,3.0757,39.9
+2026-05-09 17:46:08,15,l:last_X,38.9966,0.0,Population,Population,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:X,38.9966,0.0,Population,Population,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:G,4.2613,0.1257,Grammar,Grammar,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:G._MCTS_CHILDREN,1.4214,0.0411,dict,dict len=3271,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:histories,1.4134,0.1544,dict,dict len=37,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:initialization_kwargs,1.3572,0.0,dict,dict len=15,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:initialization_kwargs['grmr_prior'],1.3556,0.0,Grammar,Grammar,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.3478,0.0498,dict,dict len=14275,0.4032,3.0561,39.7
+2026-05-09 17:46:08,15,l:histories['g_mcts_children'],1.2583,0.1407,list,list len=16,0.4032,3.0561,39.7
+2026-05-09 17:46:48,16,l:last_X,38.9966,0.0,Population,Population,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:X,38.9966,0.0,Population,Population,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:G,4.3528,0.0915,Grammar,Grammar,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:histories,1.57,0.1566,dict,dict len=37,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:G._MCTS_CHILDREN,1.45,0.0286,dict,dict len=3344,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:histories['g_mcts_children'],1.3991,0.1408,list,list len=17,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.3831,0.0353,dict,dict len=14989,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:initialization_kwargs,1.3572,0.0,dict,dict len=15,0.4137,3.0662,39.8
+2026-05-09 17:46:48,16,l:initialization_kwargs['grmr_prior'],1.3556,0.0,Grammar,Grammar,0.4137,3.0662,39.8
+2026-05-09 17:47:15,17,l:last_X,38.9966,0.0,Population,Population,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:X,38.9966,0.0,Population,Population,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:G,4.4051,0.0523,Grammar,Grammar,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:histories,1.7246,0.1546,dict,dict len=37,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:histories['g_mcts_children'],1.5398,0.1407,list,list len=18,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:G._MCTS_CHILDREN,1.4641,0.0141,dict,dict len=3380,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.411,0.0279,dict,dict len=15499,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:initialization_kwargs,1.3572,0.0,dict,dict len=15,0.4284,3.081,40.0
+2026-05-09 17:47:15,17,l:initialization_kwargs['grmr_prior'],1.3556,0.0,Grammar,Grammar,0.4284,3.081,40.0
+2026-05-09 17:47:28,18,l:last_X,38.9953,-0.0014,Population,Population,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:X,38.9953,-0.0014,Population,Population,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:G,4.432,0.0268,Grammar,Grammar,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:histories,1.8785,0.154,dict,dict len=37,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:histories['g_mcts_children'],1.6805,0.1407,list,list len=19,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:G._MCTS_CHILDREN,1.4743,0.0102,dict,dict len=3406,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.4215,0.0105,dict,dict len=15690,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:initialization_kwargs,1.3572,0.0,dict,dict len=15,0.4299,3.0829,40.0
+2026-05-09 17:47:28,18,l:initialization_kwargs['grmr_prior'],1.3556,0.0,Grammar,Grammar,0.4299,3.0829,40.0
+2026-05-09 17:48:16,19,l:last_X,38.9966,0.0014,Population,Population,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:X,38.9966,0.0014,Population,Population,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:G,4.629,0.197,Grammar,Grammar,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:histories,2.0337,0.1552,dict,dict len=37,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:histories['g_mcts_children'],1.8212,0.1407,list,list len=20,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:G._MCTS_CHILDREN,1.5483,0.074,dict,dict len=3595,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.4874,0.066,dict,dict len=16895,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:initialization_kwargs,1.3572,0.0,dict,dict len=15,0.4163,3.0692,39.8
+2026-05-09 17:48:16,19,l:initialization_kwargs['grmr_prior'],1.3556,0.0,Grammar,Grammar,0.4163,3.0692,39.8
+2026-05-09 17:48:40,20,l:last_X,38.9966,0.0,Population,Population,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:X,38.9966,0.0,Population,Population,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:G,4.6759,0.0469,Grammar,Grammar,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:histories,2.1892,0.1555,dict,dict len=37,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:histories['g_mcts_children'],1.9619,0.1407,list,list len=21,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:G._MCTS_CHILDREN,1.5624,0.0141,dict,dict len=3631,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.5075,0.0201,dict,dict len=17262,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:initialization_kwargs,1.3588,0.0015,dict,dict len=15,0.432,3.0849,40.1
+2026-05-09 17:48:40,20,l:initialization_kwargs['grmr_prior'],1.3571,0.0015,Grammar,Grammar,0.432,3.0849,40.1
+2026-05-09 17:49:24,21,l:last_X,38.9966,0.0,Population,Population,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:X,38.9966,0.0,Population,Population,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:G,4.755,0.0791,Grammar,Grammar,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:histories,2.3447,0.1555,dict,dict len=37,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:histories['g_mcts_children'],2.1026,0.1407,list,list len=22,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:G._MCTS_CHILDREN,1.5839,0.0215,dict,dict len=3686,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.5516,0.0441,dict,dict len=18067,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4334,3.0858,40.1
+2026-05-09 17:49:24,21,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4334,3.0858,40.1
+2026-05-09 17:50:04,22,l:last_X,38.9966,0.0,Population,Population,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:X,38.9966,0.0,Population,Population,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:G,4.8459,0.0909,Grammar,Grammar,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:histories,2.5002,0.1555,dict,dict len=37,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:histories['g_mcts_children'],2.2433,0.1407,list,list len=23,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:G._MCTS_CHILDREN,1.6109,0.027,dict,dict len=3755,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.5955,0.0439,dict,dict len=18869,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4344,3.0868,40.0
+2026-05-09 17:50:04,22,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4344,3.0868,40.0
+2026-05-09 17:50:38,23,l:last_X,38.9966,0.0,Population,Population,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:X,38.9966,0.0,Population,Population,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:G,4.9067,0.0608,Grammar,Grammar,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:histories,2.6557,0.1555,dict,dict len=37,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:histories['g_mcts_children'],2.384,0.1407,list,list len=24,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:G._MCTS_CHILDREN,1.629,0.018,dict,dict len=3801,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.628,0.0325,dict,dict len=19368,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4353,3.0878,39.9
+2026-05-09 17:50:38,23,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4353,3.0878,39.9
+2026-05-09 17:51:03,24,l:last_X,38.9966,0.0,Population,Population,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:X,38.9966,0.0,Population,Population,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:G,4.9441,0.0374,Grammar,Grammar,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:histories,2.8132,0.1575,dict,dict len=37,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:histories['g_mcts_children'],2.5248,0.1408,list,list len=25,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.646,0.018,dict,dict len=19695,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:G._MCTS_CHILDREN,1.6387,0.0098,dict,dict len=3826,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4219,3.074,40.1
+2026-05-09 17:51:03,24,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4219,3.074,40.1
+2026-05-09 17:51:27,25,l:last_X,38.9966,0.0,Population,Population,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:X,38.9966,0.0,Population,Population,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:G,4.9702,0.0261,Grammar,Grammar,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:histories,2.9687,0.1556,dict,dict len=37,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:histories['g_mcts_children'],2.6655,0.1407,list,list len=26,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.6574,0.0114,dict,dict len=19903,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:G._MCTS_CHILDREN,1.6446,0.0059,dict,dict len=3841,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4248,3.077,39.9
+2026-05-09 17:51:27,25,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4248,3.077,39.9
+2026-05-09 17:51:54,26,l:last_X,38.9966,0.0,Population,Population,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:X,38.9966,0.0,Population,Population,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:G,5.0135,0.0433,Grammar,Grammar,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:histories,3.1243,0.1555,dict,dict len=37,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:histories['g_mcts_children'],2.8062,0.1407,list,list len=27,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.6913,0.0339,dict,dict len=20322,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:G._MCTS_CHILDREN,1.6571,0.0125,dict,dict len=3873,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4394,3.0917,40.1
+2026-05-09 17:51:54,26,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4394,3.0917,40.1
+2026-05-09 17:52:19,27,l:last_X,38.9966,0.0,Population,Population,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:X,38.9966,0.0,Population,Population,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:G,5.0552,0.0416,Grammar,Grammar,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:histories,3.2798,0.1555,dict,dict len=37,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:histories['g_mcts_children'],2.9469,0.1407,list,list len=28,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.7127,0.0214,dict,dict len=20708,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:G._MCTS_CHILDREN,1.6701,0.0129,dict,dict len=3906,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.426,3.0789,39.9
+2026-05-09 17:52:19,27,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.426,3.0789,39.9
+2026-05-09 17:52:41,28,l:last_X,38.9966,0.0,Population,Population,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:X,38.9966,0.0,Population,Population,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:G,5.0756,0.0204,Grammar,Grammar,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:histories,3.4353,0.1555,dict,dict len=37,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:histories['g_mcts_children'],3.0876,0.1407,list,list len=29,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.7221,0.0094,dict,dict len=20877,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:G._MCTS_CHILDREN,1.672,0.002,dict,dict len=3911,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4267,3.0789,40.0
+2026-05-09 17:52:41,28,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4267,3.0789,40.0
+2026-05-09 17:53:32,29,l:last_X,38.9966,0.0,Population,Population,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:X,38.9966,0.0,Population,Population,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:G,5.1252,0.0496,Grammar,Grammar,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:histories,3.5908,0.1555,dict,dict len=37,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:histories['g_mcts_children'],3.2283,0.1407,list,list len=30,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.7577,0.0356,dict,dict len=21518,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:G._MCTS_CHILDREN,1.683,0.011,dict,dict len=3939,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.43,3.0828,40.0
+2026-05-09 17:53:32,29,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.43,3.0828,40.0
+2026-05-09 17:53:54,30,l:last_X,38.9966,0.0,Population,Population,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:X,38.9966,0.0,Population,Population,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:G,5.1608,0.0356,Grammar,Grammar,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:histories,3.7463,0.1555,dict,dict len=37,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:histories['g_mcts_children'],3.3691,0.1407,list,list len=31,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,1.7713,0.0136,dict,dict len=21763,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:G._MCTS_CHILDREN,1.6943,0.0114,dict,dict len=3968,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4306,3.0828,40.0
+2026-05-09 17:53:54,30,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4306,3.0828,40.0
+2026-05-09 17:54:18,31,l:last_X,38.9966,0.0,Population,Population,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:X,38.9966,0.0,Population,Population,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:G,5.881,0.7202,Grammar,Grammar,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:histories,3.9019,0.1556,dict,dict len=37,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:histories['g_mcts_children'],3.5098,0.1407,list,list len=32,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.4709,0.6996,dict,dict len=22087,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:G._MCTS_CHILDREN,1.703,0.0086,dict,dict len=3990,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:initialization_kwargs,1.3588,0.0,dict,dict len=15,0.4461,3.0985,40.3
+2026-05-09 17:54:18,31,l:initialization_kwargs['grmr_prior'],1.3571,0.0,Grammar,Grammar,0.4461,3.0985,40.3
+2026-05-09 17:54:27,32,l:last_X,38.9953,-0.0013,Population,Population,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:X,38.9953,-0.0013,Population,Population,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:G,5.8907,0.0097,Grammar,Grammar,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:histories,4.0589,0.157,dict,dict len=37,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:histories['g_mcts_children'],3.6505,0.1408,list,list len=33,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.4761,0.0051,dict,dict len=22180,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:initialization_kwargs,2.0462,0.6875,dict,dict len=15,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:initialization_kwargs['grmr_prior'],2.0446,0.6875,Grammar,Grammar,0.4335,3.0867,40.1
+2026-05-09 17:54:27,32,l:G._MCTS_CHILDREN,1.7065,0.0035,dict,dict len=3999,0.4335,3.0867,40.1
+2026-05-09 17:54:50,33,l:last_X,38.9966,0.0013,Population,Population,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:X,38.9966,0.0013,Population,Population,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:G,5.923,0.0323,Grammar,Grammar,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:histories,4.2146,0.1557,dict,dict len=37,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:histories['g_mcts_children'],3.7912,0.1407,list,list len=34,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.4865,0.0104,dict,dict len=22368,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4344,3.0867,40.0
+2026-05-09 17:54:50,33,l:G._MCTS_CHILDREN,1.7143,0.0078,dict,dict len=4019,0.4344,3.0867,40.0
+2026-05-09 17:55:10,34,l:last_X,38.9966,0.0,Population,Population,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:X,38.9966,0.0,Population,Population,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:G,5.9494,0.0264,Grammar,Grammar,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:histories,4.37,0.1554,dict,dict len=37,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:histories['g_mcts_children'],3.932,0.1407,list,list len=35,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.4969,0.0104,dict,dict len=22557,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4616,3.1149,40.4
+2026-05-09 17:55:10,34,l:G._MCTS_CHILDREN,1.7245,0.0102,dict,dict len=4045,0.4616,3.1149,40.4
+2026-05-09 17:55:43,35,l:last_X,38.9966,0.0,Population,Population,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:X,38.9966,0.0,Population,Population,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:G,5.9985,0.0491,Grammar,Grammar,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:histories,4.5255,0.1555,dict,dict len=37,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:histories['g_mcts_children'],4.0727,0.1407,list,list len=36,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.521,0.0241,dict,dict len=22993,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4492,3.1018,40.3
+2026-05-09 17:55:43,35,l:G._MCTS_CHILDREN,1.7425,0.018,dict,dict len=4091,0.4492,3.1018,40.3
+2026-05-09 17:56:25,36,l:last_X,38.9966,0.0,Population,Population,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:X,38.9966,0.0,Population,Population,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:G,6.0869,0.0885,Grammar,Grammar,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:histories,4.6809,0.1554,dict,dict len=37,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:histories['g_mcts_children'],4.2134,0.1407,list,list len=37,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.5552,0.0342,dict,dict len=23611,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4651,3.1185,40.5
+2026-05-09 17:56:25,36,l:G._MCTS_CHILDREN,1.7726,0.0301,dict,dict len=4168,0.4651,3.1185,40.5
+2026-05-09 17:56:46,37,l:last_X,38.9966,0.0,Population,Population,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:X,38.9966,0.0,Population,Population,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:G,6.1119,0.025,Grammar,Grammar,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:histories,4.8364,0.1555,dict,dict len=37,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:histories['g_mcts_children'],4.3541,0.1407,list,list len=38,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.568,0.0128,dict,dict len=23843,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.466,3.1185,40.5
+2026-05-09 17:56:46,37,l:G._MCTS_CHILDREN,1.7801,0.0074,dict,dict len=4187,0.466,3.1185,40.5
+2026-05-09 17:57:21,38,l:last_X,38.9966,0.0,Population,Population,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:X,38.9966,0.0,Population,Population,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:G,6.1805,0.0686,Grammar,Grammar,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:histories,4.9918,0.1554,dict,dict len=37,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:histories['g_mcts_children'],4.4948,0.1407,list,list len=39,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.5971,0.0291,dict,dict len=24370,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4669,3.1195,40.5
+2026-05-09 17:57:21,38,l:G._MCTS_CHILDREN,1.7985,0.0184,dict,dict len=4234,0.4669,3.1195,40.5
+2026-05-09 17:57:43,39,l:last_X,38.9966,0.0,Population,Population,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:X,38.9966,0.0,Population,Population,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:G,6.1958,0.0153,Grammar,Grammar,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:histories,5.1474,0.1555,dict,dict len=37,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:histories['g_mcts_children'],4.6355,0.1407,list,list len=40,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.6035,0.0064,dict,dict len=24485,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4694,3.1224,40.6
+2026-05-09 17:57:43,39,l:G._MCTS_CHILDREN,1.8055,0.007,dict,dict len=4252,0.4694,3.1224,40.6
+2026-05-09 17:57:57,40,l:last_X,38.9953,-0.0014,Population,Population,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:X,38.9953,-0.0014,Population,Population,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:G,6.2324,0.0366,Grammar,Grammar,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:histories,5.3054,0.1581,dict,dict len=37,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:histories['g_mcts_children'],4.7763,0.1408,list,list len=41,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.6183,0.0148,dict,dict len=24753,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4557,3.1086,40.4
+2026-05-09 17:57:57,40,l:G._MCTS_CHILDREN,1.8228,0.0172,dict,dict len=4296,0.4557,3.1086,40.4
+2026-05-09 17:58:24,41,l:last_X,38.9966,0.0014,Population,Population,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:X,38.9966,0.0014,Population,Population,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:G,6.2813,0.049,Grammar,Grammar,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:histories,5.4611,0.1556,dict,dict len=37,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:histories['g_mcts_children'],4.917,0.1407,list,list len=42,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.6402,0.0219,dict,dict len=25150,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4613,3.1139,40.4
+2026-05-09 17:58:24,41,l:G._MCTS_CHILDREN,1.84,0.0172,dict,dict len=4340,0.4613,3.1139,40.4
+2026-05-09 17:58:47,42,l:last_X,38.9966,0.0,Population,Population,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:X,38.9966,0.0,Population,Population,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:G,6.3041,0.0228,Grammar,Grammar,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:histories,5.6165,0.1554,dict,dict len=37,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:histories['g_mcts_children'],5.0577,0.1407,list,list len=43,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.6533,0.0131,dict,dict len=25387,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4724,3.1253,40.6
+2026-05-09 17:58:47,42,l:G._MCTS_CHILDREN,1.8474,0.0074,dict,dict len=4359,0.4724,3.1253,40.6
+2026-05-09 17:59:25,43,l:last_X,38.9966,0.0,Population,Population,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:X,38.9966,0.0,Population,Population,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:G,6.3383,0.0341,Grammar,Grammar,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:histories,5.7719,0.1554,dict,dict len=37,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:histories['g_mcts_children'],5.1984,0.1407,list,list len=44,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.6773,0.0239,dict,dict len=25820,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4637,3.1168,40.5
+2026-05-09 17:59:25,43,l:G._MCTS_CHILDREN,1.8541,0.0067,dict,dict len=4376,0.4637,3.1168,40.5
+2026-05-09 17:59:48,44,l:last_X,38.9966,0.0,Population,Population,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:X,38.9966,0.0,Population,Population,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:G,6.3572,0.019,Grammar,Grammar,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:histories,5.9275,0.1556,dict,dict len=37,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:histories['g_mcts_children'],5.3391,0.1407,list,list len=45,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.684,0.0067,dict,dict len=25941,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:initialization_kwargs,2.0462,-0.0,dict,dict len=15,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4652,3.1178,40.5
+2026-05-09 17:59:48,44,l:G._MCTS_CHILDREN,1.858,0.0039,dict,dict len=4386,0.4652,3.1178,40.5
+2026-05-09 17:59:58,45,l:last_X,38.9953,-0.0013,Population,Population,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:X,38.9953,-0.0013,Population,Population,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:G,6.3791,0.0218,Grammar,Grammar,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:histories,6.0825,0.155,dict,dict len=37,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:histories['g_mcts_children'],5.4798,0.1407,list,list len=46,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.6895,0.0056,dict,dict len=26042,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4799,3.1325,40.6
+2026-05-09 17:59:58,45,l:G._MCTS_CHILDREN,1.8666,0.0086,dict,dict len=4408,0.4799,3.1325,40.6
+2026-05-09 18:00:27,46,l:last_X,38.9966,0.0013,Population,Population,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:X,38.9966,0.0013,Population,Population,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:G,6.4343,0.0552,Grammar,Grammar,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:histories,6.238,0.1555,dict,dict len=37,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:histories['g_mcts_children'],5.6206,0.1407,list,list len=47,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.716,0.0265,dict,dict len=26521,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:G._MCTS_CHILDREN,1.8823,0.0157,dict,dict len=4448,0.4822,3.1354,40.7
+2026-05-09 18:00:27,46,l:G._MCTS_EDGE_EXPLORE_COUNT,1.0047,1.0047,dict,dict len=10707,0.4822,3.1354,40.7
+2026-05-09 18:00:50,47,l:last_X,38.9966,0.0,Population,Population,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:X,38.9966,0.0,Population,Population,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:G,6.4566,0.0223,Grammar,Grammar,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:histories,6.3934,0.1554,dict,dict len=37,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:histories['g_mcts_children'],5.7613,0.1407,list,list len=48,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.7269,0.0109,dict,dict len=26718,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:G._MCTS_CHILDREN,1.8889,0.0067,dict,dict len=4465,0.47,3.1226,40.6
+2026-05-09 18:00:50,47,l:G._MCTS_EDGE_EXPLORE_COUNT,1.0077,0.003,dict,dict len=10752,0.47,3.1226,40.6
+2026-05-09 18:01:25,48,l:last_X,38.9966,0.0,Population,Population,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:X,38.9966,0.0,Population,Population,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:G,6.8242,0.3676,Grammar,Grammar,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:histories,6.5488,0.1554,dict,dict len=37,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:histories['g_mcts_children'],5.902,0.1407,list,list len=49,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.7694,0.0425,dict,dict len=27487,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:initialization_kwargs,2.0462,0.0,dict,dict len=15,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:initialization_kwargs['grmr_prior'],2.0446,0.0,Grammar,Grammar,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:G._MCTS_CHILDREN,1.9148,0.0258,dict,dict len=4531,0.4707,3.1236,40.6
+2026-05-09 18:01:25,48,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3078,0.3001,dict,dict len=10944,0.4707,3.1236,40.6
+2026-05-09 18:01:46,49,l:last_X,38.9966,0.0,Population,Population,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:X,38.9966,0.0,Population,Population,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:G,6.8418,0.0176,Grammar,Grammar,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:histories,6.7043,0.1555,dict,dict len=37,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:histories['g_mcts_children'],6.0427,0.1407,list,list len=50,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.7799,0.0105,dict,dict len=27677,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:initialization_kwargs,2.3275,0.2813,dict,dict len=15,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:initialization_kwargs['grmr_prior'],2.3259,0.2813,Grammar,Grammar,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:G._MCTS_CHILDREN,1.9183,0.0035,dict,dict len=4540,0.4723,3.1256,40.5
+2026-05-09 18:01:46,49,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3074,-0.0004,dict,dict len=10981,0.4723,3.1256,40.5
+2026-05-09 18:02:14,50,l:last_X,38.9966,0.0,Population,Population,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:X,38.9966,0.0,Population,Population,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:G,6.8727,0.0309,Grammar,Grammar,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:histories,6.8598,0.1555,dict,dict len=37,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:histories['g_mcts_children'],6.1834,0.1407,list,list len=51,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.8022,0.0223,dict,dict len=28080,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:initialization_kwargs,2.3275,0.0,dict,dict len=15,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:initialization_kwargs['grmr_prior'],2.3259,0.0,Grammar,Grammar,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:G._MCTS_CHILDREN,1.9273,0.009,dict,dict len=4563,0.4732,3.1265,40.6
+2026-05-09 18:02:14,50,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3088,0.0014,dict,dict len=11045,0.4732,3.1265,40.6
+2026-05-09 18:02:38,51,l:last_X,38.9966,0.0,Population,Population,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:X,38.9966,0.0,Population,Population,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:histories,7.0153,0.1555,dict,dict len=37,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:G,6.9074,0.0347,Grammar,Grammar,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:histories['g_mcts_children'],6.3241,0.1407,list,list len=52,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.8074,0.0052,dict,dict len=28310,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:initialization_kwargs,2.3275,0.0,dict,dict len=15,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:initialization_kwargs['grmr_prior'],2.3259,0.0,Grammar,Grammar,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:G._MCTS_CHILDREN,1.9387,0.0114,dict,dict len=4592,0.4903,3.1438,40.9
+2026-05-09 18:02:38,51,l:G._MCTS_EDGE_EXPLORE_COUNT,1.311,0.0022,dict,dict len=11122,0.4903,3.1438,40.9
+2026-05-09 18:02:57,52,l:last_X,38.9966,0.0,Population,Population,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:X,38.9966,0.0,Population,Population,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:histories,7.174,0.1587,dict,dict len=37,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:G,6.9219,0.0145,Grammar,Grammar,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:histories['g_mcts_children'],6.4649,0.1408,list,list len=53,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.8233,0.0159,dict,dict len=28461,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:initialization_kwargs,2.3275,0.0,dict,dict len=15,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:initialization_kwargs['grmr_prior'],2.3259,0.0,Grammar,Grammar,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:G._MCTS_CHILDREN,1.9398,0.0012,dict,dict len=4595,0.4915,3.1447,40.8
+2026-05-09 18:02:57,52,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3152,0.0042,dict,dict len=11140,0.4915,3.1447,40.8
+2026-05-09 18:03:23,53,l:last_X,38.9966,0.0,Population,Population,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:X,38.9966,0.0,Population,Population,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:histories,7.3307,0.1566,dict,dict len=37,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:G,6.9522,0.0303,Grammar,Grammar,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:histories['g_mcts_children'],6.6056,0.1407,list,list len=54,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.8395,0.0162,dict,dict len=28754,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:initialization_kwargs,2.3275,0.0,dict,dict len=15,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:initialization_kwargs['grmr_prior'],2.3259,0.0,Grammar,Grammar,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:G._MCTS_CHILDREN,1.9485,0.0086,dict,dict len=4617,0.4924,3.1457,40.7
+2026-05-09 18:03:23,53,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3191,0.0039,dict,dict len=11198,0.4924,3.1457,40.7
+2026-05-09 18:04:11,54,l:last_X,38.9966,0.0,Population,Population,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:X,38.9966,0.0,Population,Population,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:histories,7.4872,0.1565,dict,dict len=37,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:G,7.1451,0.1928,Grammar,Grammar,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:histories['g_mcts_children'],6.7463,0.1407,list,list len=55,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.8984,0.0589,dict,dict len=29820,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:initialization_kwargs,2.329,0.0015,dict,dict len=15,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:initialization_kwargs['grmr_prior'],2.3274,0.0015,Grammar,Grammar,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:G._MCTS_CHILDREN,1.9802,0.0317,dict,dict len=4698,0.4945,3.1477,40.9
+2026-05-09 18:04:11,54,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3374,0.0183,dict,dict len=11423,0.4945,3.1477,40.9
+2026-05-09 18:04:37,55,l:last_X,38.9966,0.0,Population,Population,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:X,38.9966,0.0,Population,Population,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:histories,7.644,0.1568,dict,dict len=37,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:G,7.1594,0.0144,Grammar,Grammar,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:histories['g_mcts_children'],6.887,0.1407,list,list len=56,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.9093,0.0109,dict,dict len=30017,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:initialization_kwargs,2.3994,0.0703,dict,dict len=15,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:initialization_kwargs['grmr_prior'],2.3977,0.0703,Grammar,Grammar,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:G._MCTS_CHILDREN,1.9817,0.0016,dict,dict len=4702,0.4815,3.1344,40.7
+2026-05-09 18:04:37,55,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3384,0.0011,dict,dict len=11439,0.4815,3.1344,40.7
+2026-05-09 18:05:05,56,l:last_X,38.9966,0.0,Population,Population,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:X,38.9966,0.0,Population,Population,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:histories,7.8004,0.1564,dict,dict len=37,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:G,7.1866,0.0272,Grammar,Grammar,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:histories['g_mcts_children'],7.0277,0.1407,list,list len=57,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.9214,0.0121,dict,dict len=30236,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:initialization_kwargs,2.3994,0.0,dict,dict len=15,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:initialization_kwargs['grmr_prior'],2.3977,0.0,Grammar,Grammar,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:G._MCTS_CHILDREN,1.9896,0.0078,dict,dict len=4722,0.4972,3.1506,40.9
+2026-05-09 18:05:05,56,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3427,0.0043,dict,dict len=11502,0.4972,3.1506,40.9
+2026-05-09 18:05:32,57,l:last_X,38.9966,0.0,Population,Population,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:X,38.9966,0.0,Population,Population,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:histories,7.9568,0.1564,dict,dict len=37,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:G,7.2109,0.0243,Grammar,Grammar,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:histories['g_mcts_children'],7.1684,0.1407,list,list len=58,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.9412,0.0198,dict,dict len=30594,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:initialization_kwargs,2.3994,0.0,dict,dict len=15,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:initialization_kwargs['grmr_prior'],2.3977,0.0,Grammar,Grammar,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:G._MCTS_CHILDREN,1.995,0.0055,dict,dict len=4736,0.4826,3.1363,40.8
+2026-05-09 18:05:32,57,l:G._MCTS_EDGE_EXPLORE_COUNT,1.343,0.0003,dict,dict len=11552,0.4826,3.1363,40.8
+2026-05-09 18:06:01,58,l:last_X,38.9966,0.0,Population,Population,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:X,38.9966,0.0,Population,Population,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:histories,8.1133,0.1565,dict,dict len=37,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:histories['g_mcts_children'],7.3092,0.1407,list,list len=59,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:G,7.2285,0.0176,Grammar,Grammar,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.9524,0.0113,dict,dict len=30798,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:initialization_kwargs,2.3994,0.0,dict,dict len=15,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:initialization_kwargs['grmr_prior'],2.3977,0.0,Grammar,Grammar,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:G._MCTS_CHILDREN,1.9962,0.0012,dict,dict len=4739,0.4896,3.1432,40.8
+2026-05-09 18:06:01,58,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3442,0.0011,dict,dict len=11569,0.4896,3.1432,40.8
+2026-05-09 18:06:39,59,l:last_X,38.9966,0.0,Population,Population,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:X,38.9966,0.0,Population,Population,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:histories,8.2697,0.1564,dict,dict len=37,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:histories['g_mcts_children'],7.4499,0.1407,list,list len=60,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:G,7.273,0.0444,Grammar,Grammar,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.9782,0.0258,dict,dict len=31265,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:initialization_kwargs,2.3994,0.0,dict,dict len=15,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:initialization_kwargs['grmr_prior'],2.3977,0.0,Grammar,Grammar,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:G._MCTS_CHILDREN,2.0048,0.0086,dict,dict len=4761,0.4909,3.1441,40.9
+2026-05-09 18:06:39,59,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3491,0.0049,dict,dict len=11642,0.4909,3.1441,40.9
+2026-05-09 18:07:00,60,l:last_X,38.9966,0.0,Population,Population,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:X,38.9966,0.0,Population,Population,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:histories,8.4262,0.1566,dict,dict len=37,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:histories['g_mcts_children'],7.5906,0.1407,list,list len=61,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:G,7.2887,0.0158,Grammar,Grammar,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,2.9859,0.0077,dict,dict len=31404,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:initialization_kwargs,2.3994,0.0,dict,dict len=15,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:initialization_kwargs['grmr_prior'],2.3977,0.0,Grammar,Grammar,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:G._MCTS_CHILDREN,2.0099,0.0051,dict,dict len=4774,0.4932,3.1471,40.9
+2026-05-09 18:07:00,60,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3483,-0.0008,dict,dict len=11677,0.4932,3.1471,40.9
+2026-05-09 18:07:34,61,l:last_X,38.9966,0.0,Population,Population,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:X,38.9966,0.0,Population,Population,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:histories,8.5829,0.1567,dict,dict len=37,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:histories['g_mcts_children'],7.7313,0.1407,list,list len=62,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:G,7.3523,0.0636,Grammar,Grammar,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.0127,0.0268,dict,dict len=31888,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:initialization_kwargs,2.3994,0.0,dict,dict len=15,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:initialization_kwargs['grmr_prior'],2.3977,0.0,Grammar,Grammar,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:G._MCTS_CHILDREN,2.0268,0.0168,dict,dict len=4817,0.4944,3.148,40.9
+2026-05-09 18:07:34,61,l:G._MCTS_EDGE_EXPLORE_COUNT,1.356,0.0077,dict,dict len=11791,0.4944,3.148,40.9
+2026-05-09 18:08:02,62,l:last_X,38.9966,0.0,Population,Population,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:X,38.9966,0.0,Population,Population,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:histories,8.7396,0.1566,dict,dict len=37,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:histories['g_mcts_children'],7.872,0.1407,list,list len=63,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:G,7.5243,0.1719,Grammar,Grammar,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.0314,0.0187,dict,dict len=32226,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:initialization_kwargs,2.3994,0.0,dict,dict len=15,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:initialization_kwargs['grmr_prior'],2.3977,0.0,Grammar,Grammar,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:G._MCTS_CHILDREN,2.0354,0.0086,dict,dict len=4839,0.4957,3.149,40.9
+2026-05-09 18:08:02,62,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3602,0.0042,dict,dict len=11853,0.4957,3.149,40.9
+2026-05-09 18:08:35,63,l:last_X,38.9966,0.0,Population,Population,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:X,38.9966,0.0,Population,Population,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:histories,8.8961,0.1566,dict,dict len=37,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:histories['g_mcts_children'],8.0127,0.1407,list,list len=64,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:G,7.5626,0.0384,Grammar,Grammar,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.0435,0.0122,dict,dict len=32446,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:initialization_kwargs,2.54,0.1406,dict,dict len=15,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:initialization_kwargs['grmr_prior'],2.5383,0.1406,Grammar,Grammar,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:G._MCTS_CHILDREN,2.0491,0.0137,dict,dict len=4874,0.4987,3.1519,41.0
+2026-05-09 18:08:35,63,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3719,0.0118,dict,dict len=11933,0.4987,3.1519,41.0
+2026-05-09 18:09:00,64,l:last_X,38.9966,0.0,Population,Population,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:X,38.9966,0.0,Population,Population,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:histories,9.0558,0.1597,dict,dict len=37,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:histories['g_mcts_children'],8.1535,0.1408,list,list len=65,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:G,7.5794,0.0168,Grammar,Grammar,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.0547,0.0112,dict,dict len=32649,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:initialization_kwargs,2.54,0.0,dict,dict len=15,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:initialization_kwargs['grmr_prior'],2.5383,0.0,Grammar,Grammar,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:G._MCTS_CHILDREN,2.0549,0.0059,dict,dict len=4889,0.4991,3.1519,41.0
+2026-05-09 18:09:00,64,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3781,0.0061,dict,dict len=11976,0.4991,3.1519,41.0
+2026-05-09 18:09:23,65,l:last_X,38.9966,0.0,Population,Population,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:X,38.9966,0.0,Population,Population,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:histories,9.2124,0.1565,dict,dict len=37,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:histories['g_mcts_children'],8.2942,0.1407,list,list len=66,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:G,7.605,0.0255,Grammar,Grammar,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.0633,0.0086,dict,dict len=32804,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:initialization_kwargs,2.5399,-0.0,dict,dict len=15,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:initialization_kwargs['grmr_prior'],2.5383,0.0,Grammar,Grammar,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:G._MCTS_CHILDREN,2.0651,0.0102,dict,dict len=4915,0.5,3.1529,41.0
+2026-05-09 18:09:23,65,l:G._MCTS_EDGE_EXPLORE_COUNT,1.379,0.0009,dict,dict len=12037,0.5,3.1529,41.0
+2026-05-09 18:09:49,66,l:last_X,38.9966,0.0,Population,Population,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:X,38.9966,0.0,Population,Population,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:histories,9.3698,0.1575,dict,dict len=37,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:histories['g_mcts_children'],8.4349,0.1407,list,list len=67,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:G,7.6459,0.0409,Grammar,Grammar,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.083,0.0197,dict,dict len=33161,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:initialization_kwargs,2.54,0.0,dict,dict len=15,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:initialization_kwargs['grmr_prior'],2.5383,0.0,Grammar,Grammar,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:G._MCTS_CHILDREN,2.0773,0.0121,dict,dict len=4946,0.5013,3.1549,41.0
+2026-05-09 18:09:49,66,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3842,0.0052,dict,dict len=12113,0.5013,3.1549,41.0
+2026-05-09 18:10:14,67,l:last_X,38.9966,0.0,Population,Population,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:X,38.9966,0.0,Population,Population,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:histories,9.5275,0.1577,dict,dict len=37,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:histories['g_mcts_children'],8.5756,0.1407,list,list len=68,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:G,7.6683,0.0225,Grammar,Grammar,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.0938,0.0107,dict,dict len=33355,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:initialization_kwargs,2.5415,0.0015,dict,dict len=15,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:initialization_kwargs['grmr_prior'],2.5399,0.0015,Grammar,Grammar,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:G._MCTS_CHILDREN,2.0851,0.0078,dict,dict len=4966,0.5026,3.1558,41.0
+2026-05-09 18:10:14,67,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3872,0.0031,dict,dict len=12158,0.5026,3.1558,41.0
+2026-05-09 18:10:32,68,l:last_X,38.9953,-0.0013,Population,Population,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:X,38.9953,-0.0013,Population,Population,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:histories,9.6937,0.1663,dict,dict len=37,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:histories['g_mcts_children'],8.7163,0.1407,list,list len=69,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:G,7.7074,0.039,Grammar,Grammar,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.1032,0.0095,dict,dict len=33526,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:initialization_kwargs,2.5415,0.0,dict,dict len=15,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:initialization_kwargs['grmr_prior'],2.5399,0.0,Grammar,Grammar,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:G._MCTS_CHILDREN,2.0933,0.0082,dict,dict len=4987,0.5091,3.1627,41.1
+2026-05-09 18:10:32,68,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3903,0.0031,dict,dict len=12203,0.5091,3.1627,41.1
+2026-05-09 18:10:56,69,l:last_X,38.9966,0.0013,Population,Population,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:X,38.9966,0.0013,Population,Population,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:histories,9.8606,0.1668,dict,dict len=37,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:histories['g_mcts_children'],8.857,0.1407,list,list len=70,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:G,7.7436,0.0362,Grammar,Grammar,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.1169,0.0137,dict,dict len=33774,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:initialization_kwargs,2.5554,0.0139,dict,dict len=15,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:initialization_kwargs['grmr_prior'],2.5537,0.0139,Grammar,Grammar,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:G._MCTS_CHILDREN,2.1059,0.0125,dict,dict len=5019,0.5103,3.1637,41.1
+2026-05-09 18:10:56,69,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3947,0.0044,dict,dict len=12268,0.5103,3.1637,41.1
+2026-05-09 18:11:22,70,l:last_X,38.9966,0.0,Population,Population,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:X,38.9966,0.0,Population,Population,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:histories,10.0273,0.1667,dict,dict len=37,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:histories['g_mcts_children'],8.9977,0.1407,list,list len=71,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:G,7.7793,0.0357,Grammar,Grammar,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.1317,0.0148,dict,dict len=34041,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:initialization_kwargs,2.5554,0.0,dict,dict len=15,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:initialization_kwargs['grmr_prior'],2.5537,0.0,Grammar,Grammar,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:G._MCTS_CHILDREN,2.1141,0.0082,dict,dict len=5040,0.5117,3.1646,41.1
+2026-05-09 18:11:22,70,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4019,0.0072,dict,dict len=12326,0.5117,3.1646,41.1
+2026-05-09 18:11:34,71,l:last_X,38.9954,-0.0012,Population,Population,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:X,38.9954,-0.0012,Population,Population,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:histories,10.1936,0.1663,dict,dict len=37,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:histories['g_mcts_children'],9.1385,0.1407,list,list len=72,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:G,7.782,0.0027,Grammar,Grammar,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.1355,0.0038,dict,dict len=34110,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:initialization_kwargs,2.5554,0.0,dict,dict len=15,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:initialization_kwargs['grmr_prior'],2.5537,0.0,Grammar,Grammar,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:G._MCTS_CHILDREN,2.116,0.002,dict,dict len=5045,0.5152,3.1685,41.2
+2026-05-09 18:11:34,71,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3967,-0.0052,dict,dict len=12346,0.5152,3.1685,41.2
+2026-05-09 18:12:01,72,l:last_X,38.9966,0.0012,Population,Population,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:X,38.9966,0.0012,Population,Population,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:histories,10.3604,0.1669,dict,dict len=37,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:histories['g_mcts_children'],9.2792,0.1407,list,list len=73,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:G,7.7969,0.0148,Grammar,Grammar,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.1479,0.0124,dict,dict len=34334,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:initialization_kwargs,2.5554,0.0,dict,dict len=15,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:initialization_kwargs['grmr_prior'],2.5537,0.0,Grammar,Grammar,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:G._MCTS_CHILDREN,2.1199,0.0039,dict,dict len=5055,0.5156,3.1685,41.3
+2026-05-09 18:12:01,72,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3992,0.0025,dict,dict len=12383,0.5156,3.1685,41.3
+2026-05-09 18:12:27,73,l:last_X,38.9966,0.0,Population,Population,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:X,38.9966,0.0,Population,Population,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:histories,10.5292,0.1688,dict,dict len=37,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:histories['g_mcts_children'],9.4199,0.1407,list,list len=74,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:G,7.8185,0.0216,Grammar,Grammar,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.1626,0.0148,dict,dict len=34601,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:initialization_kwargs,2.5554,0.0,dict,dict len=15,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:initialization_kwargs['grmr_prior'],2.5537,0.0,Grammar,Grammar,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:G._MCTS_CHILDREN,2.1239,0.0039,dict,dict len=5065,0.516,3.1694,41.2
+2026-05-09 18:12:27,73,l:G._MCTS_EDGE_EXPLORE_COUNT,1.3981,-0.001,dict,dict len=12417,0.516,3.1694,41.2
+2026-05-09 18:12:54,74,l:last_X,38.9966,0.0,Population,Population,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:X,38.9966,0.0,Population,Population,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:histories,10.6982,0.169,dict,dict len=37,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:histories['g_mcts_children'],9.5606,0.1407,list,list len=75,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:G,7.8378,0.0192,Grammar,Grammar,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.176,0.0134,dict,dict len=34843,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:initialization_kwargs,2.5585,0.0031,dict,dict len=15,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:initialization_kwargs['grmr_prior'],2.5569,0.0031,Grammar,Grammar,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:G._MCTS_CHILDREN,2.1282,0.0043,dict,dict len=5076,0.5118,3.1646,41.1
+2026-05-09 18:12:54,74,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4038,0.0056,dict,dict len=12451,0.5118,3.1646,41.1
+2026-05-09 18:13:20,75,l:last_X,38.9966,0.0,Population,Population,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:X,38.9966,0.0,Population,Population,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:histories,10.867,0.1688,dict,dict len=37,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:histories['g_mcts_children'],9.7013,0.1407,list,list len=76,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:G,7.8728,0.035,Grammar,Grammar,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.1931,0.0171,dict,dict len=35152,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:initialization_kwargs,2.5585,0.0,dict,dict len=15,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:initialization_kwargs['grmr_prior'],2.5569,0.0,Grammar,Grammar,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:G._MCTS_CHILDREN,2.1348,0.0067,dict,dict len=5093,0.5118,3.1646,41.2
+2026-05-09 18:13:20,75,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4064,0.0026,dict,dict len=12490,0.5118,3.1646,41.2
+2026-05-09 18:13:48,76,l:last_X,38.9966,0.0,Population,Population,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:X,38.9966,0.0,Population,Population,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:histories,11.04,0.173,dict,dict len=37,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:histories['g_mcts_children'],9.8421,0.1408,list,list len=77,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:G,7.8879,0.0151,Grammar,Grammar,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.2099,0.0168,dict,dict len=35456,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:initialization_kwargs,2.5585,0.0,dict,dict len=15,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:initialization_kwargs['grmr_prior'],2.5569,0.0,Grammar,Grammar,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:G._MCTS_CHILDREN,2.1364,0.0016,dict,dict len=5097,0.5196,3.1724,41.2
+2026-05-09 18:13:48,76,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4077,0.0014,dict,dict len=12510,0.5196,3.1724,41.2
+2026-05-09 18:14:20,77,l:last_X,38.9953,-0.0013,Population,Population,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:X,38.9953,-0.0013,Population,Population,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:histories,11.2086,0.1685,dict,dict len=37,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:histories['g_mcts_children'],9.9828,0.1407,list,list len=78,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:G,7.9301,0.0422,Grammar,Grammar,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.2367,0.0268,dict,dict len=35940,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:initialization_kwargs,2.5585,0.0,dict,dict len=15,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:initialization_kwargs['grmr_prior'],2.5569,0.0,Grammar,Grammar,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:G._MCTS_CHILDREN,2.1427,0.0063,dict,dict len=5113,0.5191,3.1724,41.4
+2026-05-09 18:14:20,77,l:G._MCTS_EDGE_EXPLORE_COUNT,1.401,-0.0068,dict,dict len=12559,0.5191,3.1724,41.4
+2026-05-09 18:14:58,78,l:last_X,38.9966,0.0013,Population,Population,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:X,38.9966,0.0013,Population,Population,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:histories,11.3795,0.1709,dict,dict len=37,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:histories['g_mcts_children'],10.1235,0.1407,list,list len=79,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:G,7.9567,0.0265,Grammar,Grammar,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.2582,0.0216,dict,dict len=36330,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:initialization_kwargs,2.5585,0.0,dict,dict len=15,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:initialization_kwargs['grmr_prior'],2.5569,0.0,Grammar,Grammar,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:G._MCTS_CHILDREN,2.1458,0.0031,dict,dict len=5121,0.5254,3.1783,41.3
+2026-05-09 18:14:58,78,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4028,0.0018,dict,dict len=12586,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:last_X,38.9966,0.0,Population,Population,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:X,38.9966,0.0,Population,Population,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:histories,11.5506,0.1711,dict,dict len=37,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:histories['g_mcts_children'],10.2643,0.1407,list,list len=80,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:G,7.9782,0.0215,Grammar,Grammar,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.2689,0.0107,dict,dict len=36524,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:initialization_kwargs,2.5617,0.0031,dict,dict len=15,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:initialization_kwargs['grmr_prior'],2.56,0.0031,Grammar,Grammar,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:G._MCTS_CHILDREN,2.1509,0.0051,dict,dict len=5134,0.5254,3.1783,41.3
+2026-05-09 18:15:23,79,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4049,0.0021,dict,dict len=12618,0.5254,3.1783,41.3
+2026-05-09 18:15:36,80,l:last_X,38.9953,-0.0013,Population,Population,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:X,38.9953,-0.0013,Population,Population,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:histories,11.721,0.1704,dict,dict len=37,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:histories['g_mcts_children'],10.405,0.1407,list,list len=81,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:G,7.9899,0.0117,Grammar,Grammar,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.2732,0.0043,dict,dict len=36602,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:G._MCTS_CHILDREN,2.1513,0.0004,dict,dict len=5135,0.5491,3.2027,41.6
+2026-05-09 18:15:36,80,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4087,0.0038,dict,dict len=12624,0.5491,3.2027,41.6
+2026-05-09 18:16:07,81,l:last_X,38.9966,0.0013,Population,Population,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:X,38.9966,0.0013,Population,Population,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:histories,11.8922,0.1711,dict,dict len=37,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:histories['g_mcts_children'],10.5457,0.1407,list,list len=82,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:G,8.0333,0.0434,Grammar,Grammar,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.2965,0.0232,dict,dict len=37022,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:G._MCTS_CHILDREN,2.1607,0.0094,dict,dict len=5159,0.5345,3.1873,41.4
+2026-05-09 18:16:07,81,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4162,0.0075,dict,dict len=12685,0.5345,3.1873,41.4
+2026-05-09 18:16:33,82,l:last_X,38.9966,0.0,Population,Population,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:X,38.9966,0.0,Population,Population,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:histories,12.0632,0.171,dict,dict len=37,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:histories['g_mcts_children'],10.6864,0.1407,list,list len=83,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:G,8.0403,0.007,Grammar,Grammar,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.3044,0.0079,dict,dict len=37165,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:G._MCTS_CHILDREN,2.1611,0.0004,dict,dict len=5160,0.5549,3.2079,41.7
+2026-05-09 18:16:33,82,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4165,0.0003,dict,dict len=12690,0.5549,3.2079,41.7
+2026-05-09 18:17:01,83,l:last_X,38.9966,0.0,Population,Population,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:X,38.9966,0.0,Population,Population,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:histories,12.2342,0.171,dict,dict len=37,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:histories['g_mcts_children'],10.8271,0.1407,list,list len=84,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:G,8.0537,0.0134,Grammar,Grammar,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.3153,0.0109,dict,dict len=37362,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:G._MCTS_CHILDREN,2.1626,0.0016,dict,dict len=5164,0.5638,3.2177,41.9
+2026-05-09 18:17:01,83,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4175,0.001,dict,dict len=12705,0.5638,3.2177,41.9
+2026-05-09 18:17:31,84,l:last_X,38.9966,0.0,Population,Population,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:X,38.9966,0.0,Population,Population,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:histories,12.4051,0.1709,dict,dict len=37,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:histories['g_mcts_children'],10.9678,0.1407,list,list len=85,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:G,8.0691,0.0154,Grammar,Grammar,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.3205,0.0053,dict,dict len=37639,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:G._MCTS_CHILDREN,2.1665,0.0039,dict,dict len=5174,0.5368,3.1903,41.5
+2026-05-09 18:17:31,84,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4191,0.0016,dict,dict len=12729,0.5368,3.1903,41.5
+2026-05-09 18:17:59,85,l:last_X,38.9966,0.0,Population,Population,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:X,38.9966,0.0,Population,Population,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:histories,12.576,0.1709,dict,dict len=37,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:histories['g_mcts_children'],11.1085,0.1407,list,list len=86,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:G,8.0894,0.0203,Grammar,Grammar,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.3313,0.0108,dict,dict len=37835,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:G._MCTS_CHILDREN,2.1693,0.0027,dict,dict len=5181,0.5384,3.1912,41.5
+2026-05-09 18:17:59,85,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4237,0.0046,dict,dict len=12747,0.5384,3.1912,41.5
+2026-05-09 18:18:27,86,l:last_X,38.9966,0.0,Population,Population,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:X,38.9966,0.0,Population,Population,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:histories,12.747,0.171,dict,dict len=37,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:histories['g_mcts_children'],11.2492,0.1407,list,list len=87,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:G,8.112,0.0227,Grammar,Grammar,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.349,0.0177,dict,dict len=38157,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:G._MCTS_CHILDREN,2.1712,0.002,dict,dict len=5186,0.5696,3.2226,41.9
+2026-05-09 18:18:27,86,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4222,-0.0016,dict,dict len=12774,0.5696,3.2226,41.9
+2026-05-09 18:18:59,87,l:last_X,38.9966,0.0,Population,Population,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:X,38.9966,0.0,Population,Population,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:histories,12.9181,0.1711,dict,dict len=37,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:histories['g_mcts_children'],11.3899,0.1407,list,list len=88,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:G,8.1575,0.0455,Grammar,Grammar,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.3757,0.0267,dict,dict len=38642,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:G._MCTS_CHILDREN,2.183,0.0117,dict,dict len=5216,0.571,3.2245,41.9
+2026-05-09 18:18:59,87,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4316,0.0094,dict,dict len=12863,0.571,3.2245,41.9
+2026-05-09 18:19:25,88,l:last_X,38.9966,0.0,Population,Population,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:X,38.9966,0.0,Population,Population,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:histories,13.0891,0.171,dict,dict len=37,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:histories['g_mcts_children'],11.5306,0.1407,list,list len=89,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:G,8.1706,0.013,Grammar,Grammar,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.3881,0.0124,dict,dict len=38867,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:G._MCTS_CHILDREN,2.1846,0.0016,dict,dict len=5220,0.5425,3.1961,41.6
+2026-05-09 18:19:25,88,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4259,-0.0057,dict,dict len=12880,0.5425,3.1961,41.6
+2026-05-09 18:19:43,89,l:last_X,38.9954,-0.0012,Population,Population,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:X,38.9954,-0.0012,Population,Population,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:histories,13.2596,0.1705,dict,dict len=37,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:histories['g_mcts_children'],11.6713,0.1407,list,list len=90,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:G,8.1802,0.0096,Grammar,Grammar,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.3949,0.0068,dict,dict len=38991,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:G._MCTS_CHILDREN,2.1857,0.0012,dict,dict len=5223,0.5691,3.2227,41.9
+2026-05-09 18:19:43,89,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4268,0.0009,dict,dict len=12894,0.5691,3.2227,41.9
+2026-05-09 18:20:07,90,l:last_X,38.9966,0.0012,Population,Population,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:X,38.9966,0.0012,Population,Population,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:histories,13.4305,0.1709,dict,dict len=37,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:histories['g_mcts_children'],11.812,0.1407,list,list len=91,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:G,8.1948,0.0146,Grammar,Grammar,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.4033,0.0084,dict,dict len=39144,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:G._MCTS_CHILDREN,2.1892,0.0035,dict,dict len=5232,0.5453,3.199,41.6
+2026-05-09 18:20:07,90,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4319,0.0051,dict,dict len=12919,0.5453,3.199,41.6
+2026-05-09 18:20:43,91,l:last_X,38.9966,0.0,Population,Population,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:X,38.9966,0.0,Population,Population,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:histories,13.6015,0.1709,dict,dict len=37,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:histories['g_mcts_children'],11.9528,0.1407,list,list len=92,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:G,8.2164,0.0217,Grammar,Grammar,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.4197,0.0164,dict,dict len=39442,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:G._MCTS_CHILDREN,2.1932,0.0039,dict,dict len=5242,0.57,3.2231,41.9
+2026-05-09 18:20:43,91,l:G._MCTS_EDGE_EXPLORE_COUNT,1.434,0.0021,dict,dict len=12950,0.57,3.2231,41.9
+2026-05-09 18:21:11,92,l:last_X,38.9966,0.0,Population,Population,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:X,38.9966,0.0,Population,Population,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:histories,13.7766,0.1752,dict,dict len=37,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:histories['g_mcts_children'],12.0936,0.1408,list,list len=93,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:G,8.2261,0.0097,Grammar,Grammar,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.4304,0.0107,dict,dict len=39636,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:G._MCTS_CHILDREN,2.1951,0.002,dict,dict len=5247,0.5495,3.2029,41.7
+2026-05-09 18:21:11,92,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4354,0.0013,dict,dict len=12970,0.5495,3.2029,41.7
+2026-05-09 18:21:40,93,l:last_X,38.9966,0.0,Population,Population,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:X,38.9966,0.0,Population,Population,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:histories,13.9476,0.171,dict,dict len=37,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:histories['g_mcts_children'],12.2343,0.1407,list,list len=94,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:G,8.2402,0.014,Grammar,Grammar,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.4393,0.0089,dict,dict len=39798,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:G._MCTS_CHILDREN,2.1951,0.0,dict,dict len=5247,0.557,3.2107,41.7
+2026-05-09 18:21:40,93,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4356,0.0002,dict,dict len=12973,0.557,3.2107,41.7
+2026-05-09 18:22:10,94,l:last_X,38.9966,0.0,Population,Population,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:X,38.9966,0.0,Population,Population,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:histories,14.1186,0.171,dict,dict len=37,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:histories['g_mcts_children'],12.375,0.1407,list,list len=95,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:G,8.2519,0.0117,Grammar,Grammar,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.4517,0.0124,dict,dict len=40023,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:G._MCTS_CHILDREN,2.1994,0.0043,dict,dict len=5258,0.5579,3.2115,41.8
+2026-05-09 18:22:10,94,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4305,-0.0051,dict,dict len=13001,0.5579,3.2115,41.8
+2026-05-09 18:22:49,95,l:last_X,38.9966,0.0,Population,Population,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:X,38.9966,0.0,Population,Population,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:histories,14.2916,0.173,dict,dict len=37,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:histories['g_mcts_children'],12.5157,0.1407,list,list len=96,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:G,8.338,0.0861,Grammar,Grammar,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.5073,0.0557,dict,dict len=40837,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:initialization_kwargs,2.5617,0.0,dict,dict len=15,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:initialization_kwargs['grmr_prior'],2.56,0.0,Grammar,Grammar,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:G._MCTS_CHILDREN,2.2198,0.0204,dict,dict len=5310,0.5591,3.2125,41.8
+2026-05-09 18:22:49,95,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4433,0.0129,dict,dict len=13141,0.5591,3.2125,41.8
+2026-05-09 18:23:17,96,l:last_X,38.9966,0.0,Population,Population,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:X,38.9966,0.0,Population,Population,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:histories,14.4647,0.173,dict,dict len=37,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:histories['g_mcts_children'],12.6564,0.1407,list,list len=97,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:G,8.3576,0.0196,Grammar,Grammar,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.5172,0.0099,dict,dict len=41016,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:initialization_kwargs,2.5648,0.0031,dict,dict len=15,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:initialization_kwargs['grmr_prior'],2.5631,0.0031,Grammar,Grammar,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:G._MCTS_CHILDREN,2.2233,0.0035,dict,dict len=5319,0.5662,3.2203,42.0
+2026-05-09 18:23:17,96,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4414,-0.0019,dict,dict len=13165,0.5662,3.2203,42.0
+2026-05-09 18:23:45,97,l:last_X,38.9966,0.0,Population,Population,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:X,38.9966,0.0,Population,Population,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:histories,14.6378,0.1731,dict,dict len=37,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:histories['g_mcts_children'],12.7971,0.1407,list,list len=98,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:G,8.392,0.0344,Grammar,Grammar,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.5332,0.016,dict,dict len=41305,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:G._MCTS_CHILDREN,2.2315,0.0082,dict,dict len=5340,0.5625,3.2154,41.9
+2026-05-09 18:23:45,97,l:G._MCTS_EDGE_EXPLORE_COUNT,1.445,0.0036,dict,dict len=13219,0.5625,3.2154,41.9
+2026-05-09 18:24:11,98,l:last_X,38.9966,0.0,Population,Population,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:X,38.9966,0.0,Population,Population,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:histories,14.8108,0.173,dict,dict len=37,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:histories['g_mcts_children'],12.9378,0.1407,list,list len=99,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:G,8.412,0.02,Grammar,Grammar,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.5448,0.0116,dict,dict len=41514,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:G._MCTS_CHILDREN,2.2362,0.0047,dict,dict len=5352,0.5636,3.2173,41.9
+2026-05-09 18:24:11,98,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4539,0.0089,dict,dict len=13246,0.5636,3.2173,41.9
+2026-05-09 18:24:43,99,l:last_X,38.9966,0.0,Population,Population,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:X,38.9966,0.0,Population,Population,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:histories,14.9838,0.173,dict,dict len=37,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:histories['g_mcts_children'],13.0786,0.1407,list,list len=100,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:G,8.4335,0.0216,Grammar,Grammar,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.5712,0.0265,dict,dict len=41791,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:G._MCTS_CHILDREN,2.2401,0.0039,dict,dict len=5362,0.6026,3.2559,42.4
+2026-05-09 18:24:43,99,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4561,0.0022,dict,dict len=13279,0.6026,3.2559,42.4
+2026-05-09 18:25:14,100,l:last_X,38.9966,0.0,Population,Population,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:X,38.9966,0.0,Population,Population,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:histories,15.1333,0.1495,dict,dict len=37,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:histories['g_mcts_children'],13.2093,0.1308,list,list len=101,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:G,8.4595,0.0259,Grammar,Grammar,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.5902,0.0189,dict,dict len=42132,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:G._MCTS_CHILDREN,2.2437,0.0035,dict,dict len=5371,0.5731,3.2268,41.9
+2026-05-09 18:25:14,100,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4584,0.0022,dict,dict len=13312,0.5731,3.2268,41.9
+2026-05-09 18:25:45,101,l:last_X,38.9966,0.0,Population,Population,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:X,38.9966,0.0,Population,Population,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:histories,15.2828,0.1495,dict,dict len=37,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:histories['g_mcts_children'],13.3401,0.1308,list,list len=102,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:G,8.492,0.0325,Grammar,Grammar,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.6123,0.0222,dict,dict len=42531,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:G._MCTS_CHILDREN,2.248,0.0043,dict,dict len=5382,0.6059,3.2596,42.4
+2026-05-09 18:25:45,101,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4576,-0.0008,dict,dict len=13353,0.6059,3.2596,42.4
+2026-05-09 18:26:14,102,l:last_X,38.9966,0.0,Population,Population,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:X,38.9966,0.0,Population,Population,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:histories,15.4323,0.1495,dict,dict len=37,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:histories['g_mcts_children'],13.4709,0.1308,list,list len=103,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:G,8.5033,0.0113,Grammar,Grammar,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.6173,0.0049,dict,dict len=42620,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:G._MCTS_CHILDREN,2.248,0.0,dict,dict len=5382,0.5821,3.2355,42.1
+2026-05-09 18:26:14,102,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4576,0.0001,dict,dict len=13354,0.5821,3.2355,42.1
+2026-05-09 18:26:38,103,l:last_X,38.9966,0.0,Population,Population,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:X,38.9966,0.0,Population,Population,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:histories,15.5818,0.1495,dict,dict len=37,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:histories['g_mcts_children'],13.6017,0.1308,list,list len=104,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:G,8.5138,0.0105,Grammar,Grammar,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.6257,0.0084,dict,dict len=42771,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:G._MCTS_CHILDREN,2.2515,0.0035,dict,dict len=5391,0.6146,3.2684,42.6
+2026-05-09 18:26:38,103,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4594,0.0018,dict,dict len=13381,0.6146,3.2684,42.6
+2026-05-09 18:27:16,104,l:last_X,38.9966,0.0,Population,Population,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:X,38.9966,0.0,Population,Population,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:histories,15.7313,0.1495,dict,dict len=37,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:histories['g_mcts_children'],13.7324,0.1308,list,list len=105,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:G,8.5641,0.0503,Grammar,Grammar,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.6597,0.034,dict,dict len=43383,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:G._MCTS_CHILDREN,2.2601,0.0086,dict,dict len=5413,0.5853,3.2385,42.2
+2026-05-09 18:27:16,104,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4683,0.0089,dict,dict len=13460,0.5853,3.2385,42.2
+2026-05-09 18:27:40,105,l:last_X,38.9966,0.0,Population,Population,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:X,38.9966,0.0,Population,Population,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:histories,15.8808,0.1495,dict,dict len=37,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:histories['g_mcts_children'],13.8632,0.1308,list,list len=106,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:G,8.5802,0.0161,Grammar,Grammar,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,3.6674,0.0078,dict,dict len=43523,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:G._MCTS_CHILDREN,2.2625,0.0023,dict,dict len=5419,0.5929,3.2463,42.3
+2026-05-09 18:27:40,105,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4695,0.0011,dict,dict len=13477,0.5929,3.2463,42.3
+2026-05-09 18:28:07,106,l:last_X,38.9966,0.0,Population,Population,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:X,38.9966,0.0,Population,Population,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:histories,16.0303,0.1495,dict,dict len=37,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:histories['g_mcts_children'],13.994,0.1308,list,list len=107,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:G,9.842,1.2618,Grammar,Grammar,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,4.928,1.2606,dict,dict len=43714,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:initialization_kwargs,2.5648,0.0,dict,dict len=15,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:initialization_kwargs['grmr_prior'],2.5631,0.0,Grammar,Grammar,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:G._MCTS_CHILDREN,2.2656,0.0031,dict,dict len=5427,0.5945,3.2482,42.3
+2026-05-09 18:28:07,106,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4713,0.0018,dict,dict len=13504,0.5945,3.2482,42.3
+2026-05-09 18:28:36,107,l:last_X,38.9966,0.0,Population,Population,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:X,38.9966,0.0,Population,Population,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:histories,16.1798,0.1495,dict,dict len=37,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:histories['g_mcts_children'],14.1248,0.1308,list,list len=108,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:G,9.8698,0.0278,Grammar,Grammar,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,4.9454,0.0173,dict,dict len=44026,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:initialization_kwargs,3.8148,1.25,dict,dict len=15,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:initialization_kwargs['grmr_prior'],3.8132,1.25,Grammar,Grammar,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:G._MCTS_CHILDREN,2.2719,0.0063,dict,dict len=5443,0.5959,3.2492,42.3
+2026-05-09 18:28:36,107,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4707,-0.0006,dict,dict len=13549,0.5959,3.2492,42.3
+2026-05-09 18:29:12,108,l:last_X,38.9966,0.0,Population,Population,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:X,38.9966,0.0,Population,Population,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:histories,16.3345,0.1547,dict,dict len=37,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:histories['g_mcts_children'],14.2557,0.1309,list,list len=109,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:G,10.1948,0.3251,Grammar,Grammar,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,4.968,0.0227,dict,dict len=44434,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:initialization_kwargs,3.8148,0.0,dict,dict len=15,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:initialization_kwargs['grmr_prior'],3.8132,0.0,Grammar,Grammar,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:G._MCTS_CHILDREN,2.4219,0.15,dict,dict len=5467,0.5974,3.2511,42.4
+2026-05-09 18:29:12,108,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4757,0.005,dict,dict len=13624,0.5974,3.2511,42.4
+2026-05-09 18:29:27,109,l:last_X,38.9953,-0.0014,Population,Population,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:X,38.9953,-0.0014,Population,Population,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:histories,16.4842,0.1497,dict,dict len=37,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:histories['g_mcts_children'],14.3865,0.1308,list,list len=110,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:G,10.2114,0.0166,Grammar,Grammar,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,4.9763,0.0082,dict,dict len=44582,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:initialization_kwargs,4.096,0.2812,dict,dict len=15,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:initialization_kwargs['grmr_prior'],4.0944,0.2812,Grammar,Grammar,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:G._MCTS_CHILDREN,2.4274,0.0055,dict,dict len=5481,0.6041,3.257,42.5
+2026-05-09 18:29:27,109,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4779,0.0022,dict,dict len=13657,0.6041,3.257,42.5
+2026-05-09 18:29:57,110,l:last_X,38.9966,0.0014,Population,Population,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:X,38.9966,0.0014,Population,Population,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:histories,16.6337,0.1495,dict,dict len=37,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:histories['g_mcts_children'],14.5172,0.1308,list,list len=111,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:G,10.2255,0.0141,Grammar,Grammar,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,4.988,0.0118,dict,dict len=44794,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:G._MCTS_CHILDREN,2.4285,0.0012,dict,dict len=5484,0.6058,3.259,42.5
+2026-05-09 18:29:57,110,l:G._MCTS_EDGE_EXPLORE_COUNT,1.486,0.0081,dict,dict len=13669,0.6058,3.259,42.5
+2026-05-09 18:30:28,111,l:last_X,38.9966,0.0,Population,Population,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:X,38.9966,0.0,Population,Population,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:histories,16.7832,0.1495,dict,dict len=37,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:histories['g_mcts_children'],14.648,0.1308,list,list len=112,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:G,10.2434,0.0179,Grammar,Grammar,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.0025,0.0144,dict,dict len=45054,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:G._MCTS_CHILDREN,2.4321,0.0035,dict,dict len=5493,0.6076,3.2609,42.5
+2026-05-09 18:30:28,111,l:G._MCTS_EDGE_EXPLORE_COUNT,1.485,-0.001,dict,dict len=13708,0.6076,3.2609,42.5
+2026-05-09 18:30:55,112,l:last_X,38.9966,0.0,Population,Population,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:X,38.9966,0.0,Population,Population,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:histories,16.9327,0.1495,dict,dict len=37,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:histories['g_mcts_children'],14.7788,0.1308,list,list len=113,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:G,10.258,0.0146,Grammar,Grammar,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.0229,0.0205,dict,dict len=45205,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:G._MCTS_CHILDREN,2.4324,0.0004,dict,dict len=5494,0.609,3.2629,42.6
+2026-05-09 18:30:55,112,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4856,0.0006,dict,dict len=13717,0.609,3.2629,42.6
+2026-05-09 18:31:22,113,l:last_X,38.9966,0.0,Population,Population,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:X,38.9966,0.0,Population,Population,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:histories,17.0822,0.1495,dict,dict len=37,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:histories['g_mcts_children'],14.9096,0.1308,list,list len=114,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:G,10.2729,0.0149,Grammar,Grammar,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.0351,0.0122,dict,dict len=45423,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:G._MCTS_CHILDREN,2.4336,0.0012,dict,dict len=5497,0.6102,3.2638,42.5
+2026-05-09 18:31:22,113,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4863,0.0007,dict,dict len=13727,0.6102,3.2638,42.5
+2026-05-09 18:32:20,114,l:last_X,38.9966,0.0,Population,Population,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:X,38.9966,0.0,Population,Population,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:histories,17.2317,0.1495,dict,dict len=37,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:histories['g_mcts_children'],15.0404,0.1308,list,list len=115,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:G,10.3388,0.066,Grammar,Grammar,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.0812,0.0461,dict,dict len=46249,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:G._MCTS_CHILDREN,2.4395,0.0059,dict,dict len=5512,0.6108,3.2638,42.5
+2026-05-09 18:32:20,114,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4928,0.0065,dict,dict len=13769,0.6108,3.2638,42.5
+2026-05-09 18:32:52,115,l:last_X,38.9966,0.0,Population,Population,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:X,38.9966,0.0,Population,Population,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:histories,17.3812,0.1495,dict,dict len=37,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:histories['g_mcts_children'],15.1711,0.1308,list,list len=116,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:G,10.3452,0.0064,Grammar,Grammar,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.0949,0.0137,dict,dict len=46495,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:G._MCTS_CHILDREN,2.4403,0.0008,dict,dict len=5514,0.6134,3.2668,42.6
+2026-05-09 18:32:52,115,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4896,-0.0032,dict,dict len=13776,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:last_X,38.9966,0.0,Population,Population,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:X,38.9966,0.0,Population,Population,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:histories,17.5307,0.1495,dict,dict len=37,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:histories['g_mcts_children'],15.3019,0.1308,list,list len=117,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:G,10.3617,0.0165,Grammar,Grammar,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.1039,0.009,dict,dict len=46656,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:G._MCTS_CHILDREN,2.4407,0.0004,dict,dict len=5515,0.6134,3.2668,42.6
+2026-05-09 18:33:20,116,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4933,0.0037,dict,dict len=13777,0.6134,3.2668,42.6
+2026-05-09 18:34:05,117,l:last_X,38.9966,0.0,Population,Population,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:X,38.9966,0.0,Population,Population,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:histories,17.6802,0.1495,dict,dict len=37,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:histories['g_mcts_children'],15.4327,0.1308,list,list len=118,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:G,10.3893,0.0276,Grammar,Grammar,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.1309,0.027,dict,dict len=47139,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:G._MCTS_CHILDREN,2.4418,0.0012,dict,dict len=5518,0.6144,3.2677,42.6
+2026-05-09 18:34:05,117,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4939,0.0006,dict,dict len=13786,0.6144,3.2677,42.6
+2026-05-09 18:34:39,118,l:last_X,38.9966,0.0,Population,Population,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:X,38.9966,0.0,Population,Population,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:histories,17.8297,0.1495,dict,dict len=37,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:histories['g_mcts_children'],15.5635,0.1308,list,list len=119,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:G,10.4208,0.0316,Grammar,Grammar,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.147,0.0161,dict,dict len=47428,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:initialization_kwargs,4.096,0.0,dict,dict len=15,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:initialization_kwargs['grmr_prior'],4.0944,0.0,Grammar,Grammar,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:G._MCTS_CHILDREN,2.4438,0.002,dict,dict len=5523,0.6168,3.2697,42.7
+2026-05-09 18:34:39,118,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4913,-0.0027,dict,dict len=13801,0.6168,3.2697,42.7
+2026-05-09 18:35:24,119,l:last_X,38.9966,0.0,Population,Population,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:X,38.9966,0.0,Population,Population,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:histories,17.9792,0.1495,dict,dict len=37,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:histories['g_mcts_children'],15.6942,0.1308,list,list len=120,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:G,10.4409,0.02,Grammar,Grammar,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.165,0.018,dict,dict len=47750,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:initialization_kwargs,4.103,0.0069,dict,dict len=15,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:initialization_kwargs['grmr_prior'],4.1013,0.0069,Grammar,Grammar,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:G._MCTS_CHILDREN,2.4442,0.0004,dict,dict len=5524,0.6169,3.2697,42.7
+2026-05-09 18:35:24,119,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4879,-0.0034,dict,dict len=13805,0.6169,3.2697,42.7
+2026-05-09 18:35:51,120,l:last_X,38.9966,0.0,Population,Population,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:X,38.9966,0.0,Population,Population,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:histories,18.1287,0.1495,dict,dict len=37,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:histories['g_mcts_children'],15.825,0.1308,list,list len=121,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:G,10.4478,0.007,Grammar,Grammar,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.1701,0.0051,dict,dict len=47842,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:G._MCTS_CHILDREN,2.4446,0.0004,dict,dict len=5525,0.6198,3.2726,42.7
+2026-05-09 18:35:51,120,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4883,0.0004,dict,dict len=13811,0.6198,3.2726,42.7
+2026-05-09 18:36:20,121,l:last_X,38.9966,0.0,Population,Population,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:X,38.9966,0.0,Population,Population,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:histories,18.2782,0.1495,dict,dict len=37,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:histories['g_mcts_children'],15.9558,0.1308,list,list len=122,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:G,10.4608,0.0129,Grammar,Grammar,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.1805,0.0104,dict,dict len=48028,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:G._MCTS_CHILDREN,2.4458,0.0012,dict,dict len=5528,0.6215,3.2746,42.7
+2026-05-09 18:36:20,121,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4886,0.0003,dict,dict len=13816,0.6215,3.2746,42.7
+2026-05-09 18:36:51,122,l:last_X,38.9966,0.0,Population,Population,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:X,38.9966,0.0,Population,Population,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:histories,18.4277,0.1495,dict,dict len=37,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:histories['g_mcts_children'],16.0866,0.1308,list,list len=123,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:G,10.469,0.0083,Grammar,Grammar,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.1927,0.0122,dict,dict len=48247,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:G._MCTS_CHILDREN,2.4501,0.0043,dict,dict len=5539,0.6224,3.2756,42.7
+2026-05-09 18:36:51,122,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4937,0.0051,dict,dict len=13837,0.6224,3.2756,42.7
+2026-05-09 18:37:20,123,l:last_X,38.9966,0.0,Population,Population,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:X,38.9966,0.0,Population,Population,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:histories,18.5772,0.1495,dict,dict len=37,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:histories['g_mcts_children'],16.2173,0.1308,list,list len=124,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:G,10.4787,0.0097,Grammar,Grammar,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.203,0.0103,dict,dict len=48431,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:G._MCTS_CHILDREN,2.4524,0.0023,dict,dict len=5545,0.6237,3.2775,42.7
+2026-05-09 18:37:20,123,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5017,0.008,dict,dict len=13846,0.6237,3.2775,42.7
+2026-05-09 18:37:55,124,l:last_X,38.9966,0.0,Population,Population,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:X,38.9966,0.0,Population,Population,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:histories,18.7267,0.1495,dict,dict len=37,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:histories['g_mcts_children'],16.3481,0.1308,list,list len=125,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:G,10.5026,0.0239,Grammar,Grammar,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.2227,0.0197,dict,dict len=48784,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:G._MCTS_CHILDREN,2.4524,0.0,dict,dict len=5545,0.6246,3.2775,42.8
+2026-05-09 18:37:55,124,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4982,-0.0035,dict,dict len=13849,0.6246,3.2775,42.8
+2026-05-09 18:38:31,125,l:last_X,38.9966,0.0,Population,Population,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:X,38.9966,0.0,Population,Population,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:histories,18.8762,0.1495,dict,dict len=37,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:histories['g_mcts_children'],16.4789,0.1308,list,list len=126,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:G,10.5265,0.0238,Grammar,Grammar,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.2266,0.0039,dict,dict len=49089,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:G._MCTS_CHILDREN,2.4536,0.0012,dict,dict len=5548,0.6265,3.2795,42.8
+2026-05-09 18:38:31,125,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4989,0.0007,dict,dict len=13860,0.6265,3.2795,42.8
+2026-05-09 18:39:06,126,l:last_X,38.9966,0.0,Population,Population,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:X,38.9966,0.0,Population,Population,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:histories,19.0257,0.1495,dict,dict len=37,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:histories['g_mcts_children'],16.6097,0.1308,list,list len=127,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:G,10.5378,0.0113,Grammar,Grammar,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.2437,0.0172,dict,dict len=49398,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:G._MCTS_CHILDREN,2.4556,0.002,dict,dict len=5553,0.6273,3.2804,42.8
+2026-05-09 18:39:06,126,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4998,0.0008,dict,dict len=13872,0.6273,3.2804,42.8
+2026-05-09 18:39:36,127,l:last_X,38.9966,0.0,Population,Population,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:X,38.9966,0.0,Population,Population,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:histories,19.1752,0.1495,dict,dict len=37,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:histories['g_mcts_children'],16.7405,0.1308,list,list len=128,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:G,10.549,0.0112,Grammar,Grammar,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.2507,0.007,dict,dict len=49524,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:G._MCTS_CHILDREN,2.4556,0.0,dict,dict len=5553,0.6286,3.2814,42.8
+2026-05-09 18:39:36,127,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5037,0.0039,dict,dict len=13875,0.6286,3.2814,42.8
+2026-05-09 18:40:08,128,l:last_X,38.9966,0.0,Population,Population,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:X,38.9966,0.0,Population,Population,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:histories,19.3299,0.1547,dict,dict len=37,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:histories['g_mcts_children'],16.8714,0.1309,list,list len=129,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:G,10.5651,0.0161,Grammar,Grammar,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.2622,0.0115,dict,dict len=49731,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:G._MCTS_CHILDREN,2.4587,0.0031,dict,dict len=5561,0.6295,3.2824,42.8
+2026-05-09 18:40:08,128,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5012,-0.0025,dict,dict len=13893,0.6295,3.2824,42.8
+2026-05-09 18:40:42,129,l:last_X,38.9966,0.0,Population,Population,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:X,38.9966,0.0,Population,Population,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:histories,19.4795,0.1497,dict,dict len=37,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:histories['g_mcts_children'],17.0022,0.1308,list,list len=130,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:G,10.5878,0.0227,Grammar,Grammar,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.28,0.0178,dict,dict len=50051,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:G._MCTS_CHILDREN,2.4595,0.0008,dict,dict len=5563,0.6314,3.2844,42.9
+2026-05-09 18:40:42,129,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5013,0.0001,dict,dict len=13895,0.6314,3.2844,42.9
+2026-05-09 18:41:14,130,l:last_X,38.9966,0.0,Population,Population,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:X,38.9966,0.0,Population,Population,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:histories,19.629,0.1495,dict,dict len=37,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:histories['g_mcts_children'],17.1329,0.1308,list,list len=131,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:G,10.5955,0.0076,Grammar,Grammar,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.2926,0.0126,dict,dict len=50277,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:G._MCTS_CHILDREN,2.4595,0.0,dict,dict len=5563,0.6332,3.2863,42.9
+2026-05-09 18:41:14,130,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5016,0.0003,dict,dict len=13899,0.6332,3.2863,42.9
+2026-05-09 18:41:51,131,l:last_X,38.9966,0.0,Population,Population,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:X,38.9966,0.0,Population,Population,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:histories,19.7786,0.1495,dict,dict len=37,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:histories['g_mcts_children'],17.2637,0.1308,list,list len=132,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:G,10.6051,0.0097,Grammar,Grammar,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3051,0.0125,dict,dict len=50502,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:G._MCTS_CHILDREN,2.4602,0.0008,dict,dict len=5565,0.6325,3.2853,42.9
+2026-05-09 18:41:51,131,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4983,-0.0033,dict,dict len=13905,0.6325,3.2853,42.9
+2026-05-09 18:42:17,132,l:last_X,38.9966,0.0,Population,Population,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:X,38.9966,0.0,Population,Population,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:histories,19.9281,0.1495,dict,dict len=37,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:histories['g_mcts_children'],17.3945,0.1308,list,list len=133,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:G,10.6194,0.0142,Grammar,Grammar,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3157,0.0106,dict,dict len=50693,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:G._MCTS_CHILDREN,2.4622,0.002,dict,dict len=5570,0.6354,3.2883,42.9
+2026-05-09 18:42:17,132,l:G._MCTS_EDGE_EXPLORE_COUNT,1.499,0.0007,dict,dict len=13916,0.6354,3.2883,42.9
+2026-05-09 18:42:49,133,l:last_X,38.9966,0.0,Population,Population,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:X,38.9966,0.0,Population,Population,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:histories,20.0776,0.1495,dict,dict len=37,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:histories['g_mcts_children'],17.5253,0.1308,list,list len=134,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:G,10.6303,0.0109,Grammar,Grammar,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3227,0.0071,dict,dict len=50820,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:G._MCTS_CHILDREN,2.4622,0.0,dict,dict len=5570,0.6379,3.2912,42.9
+2026-05-09 18:42:49,133,l:G._MCTS_EDGE_EXPLORE_COUNT,1.503,0.004,dict,dict len=13920,0.6379,3.2912,42.9
+2026-05-09 18:43:21,134,l:last_X,38.9966,0.0,Population,Population,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:X,38.9966,0.0,Population,Population,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:histories,20.2271,0.1495,dict,dict len=37,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:histories['g_mcts_children'],17.656,0.1308,list,list len=135,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:G,10.6488,0.0185,Grammar,Grammar,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3349,0.0122,dict,dict len=51040,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:G._MCTS_CHILDREN,2.4626,0.0004,dict,dict len=5571,0.6387,3.2922,43.0
+2026-05-09 18:43:21,134,l:G._MCTS_EDGE_EXPLORE_COUNT,1.4997,-0.0033,dict,dict len=13926,0.6387,3.2922,43.0
+2026-05-09 18:43:54,135,l:last_X,38.9966,0.0,Population,Population,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:X,38.9966,0.0,Population,Population,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:histories,20.3766,0.1495,dict,dict len=37,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:histories['g_mcts_children'],17.7868,0.1308,list,list len=136,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:G,10.6595,0.0107,Grammar,Grammar,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3446,0.0096,dict,dict len=51213,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:G._MCTS_CHILDREN,2.4642,0.0016,dict,dict len=5575,0.6401,3.2931,43.1
+2026-05-09 18:43:54,135,l:G._MCTS_EDGE_EXPLORE_COUNT,1.504,0.0043,dict,dict len=13935,0.6401,3.2931,43.1
+2026-05-09 18:44:24,136,l:last_X,38.9966,0.0,Population,Population,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:X,38.9966,0.0,Population,Population,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:histories,20.5261,0.1495,dict,dict len=37,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:histories['g_mcts_children'],17.9176,0.1308,list,list len=137,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:G,10.6704,0.0109,Grammar,Grammar,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3508,0.0062,dict,dict len=51325,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:G._MCTS_CHILDREN,2.4649,0.0008,dict,dict len=5577,0.6415,3.2951,43.3
+2026-05-09 18:44:24,136,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5082,0.0042,dict,dict len=13942,0.6415,3.2951,43.3
+2026-05-09 18:44:56,137,l:last_X,38.9966,0.0,Population,Population,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:X,38.9966,0.0,Population,Population,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:histories,20.6756,0.1495,dict,dict len=37,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:histories['g_mcts_children'],18.0484,0.1308,list,list len=138,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:G,10.6844,0.014,Grammar,Grammar,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3608,0.01,dict,dict len=51505,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:G._MCTS_CHILDREN,2.4657,0.0008,dict,dict len=5579,0.6428,3.2961,43.4
+2026-05-09 18:44:56,137,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5087,0.0005,dict,dict len=13950,0.6428,3.2961,43.4
+2026-05-09 18:45:28,138,l:last_X,38.9966,0.0,Population,Population,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:X,38.9966,0.0,Population,Population,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:histories,20.8251,0.1495,dict,dict len=37,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:histories['g_mcts_children'],18.1792,0.1308,list,list len=139,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:G,10.696,0.0116,Grammar,Grammar,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3715,0.0107,dict,dict len=51698,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:G._MCTS_CHILDREN,2.4665,0.0008,dict,dict len=5581,0.6423,3.2961,43.4
+2026-05-09 18:45:28,138,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5055,-0.0033,dict,dict len=13957,0.6423,3.2961,43.4
+2026-05-09 18:46:01,139,l:last_X,38.9966,0.0,Population,Population,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:X,38.9966,0.0,Population,Population,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:histories,20.9746,0.1495,dict,dict len=37,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:histories['g_mcts_children'],18.3099,0.1308,list,list len=140,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:G,10.7127,0.0167,Grammar,Grammar,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.3799,0.0084,dict,dict len=51849,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:G._MCTS_CHILDREN,2.4673,0.0008,dict,dict len=5583,0.6452,3.298,43.2
+2026-05-09 18:46:01,139,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5134,0.0079,dict,dict len=13963,0.6452,3.298,43.2
+2026-05-09 18:46:38,140,l:last_X,38.9966,0.0,Population,Population,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:X,38.9966,0.0,Population,Population,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:histories,21.1241,0.1495,dict,dict len=37,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:histories['g_mcts_children'],18.4407,0.1308,list,list len=141,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:G,10.7275,0.0148,Grammar,Grammar,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4057,0.0258,dict,dict len=52064,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:G._MCTS_CHILDREN,2.4693,0.002,dict,dict len=5588,0.6462,3.299,43.4
+2026-05-09 18:46:38,140,l:G._MCTS_EDGE_EXPLORE_COUNT,1.514,0.0007,dict,dict len=13973,0.6462,3.299,43.4
+2026-05-09 18:47:11,141,l:last_X,38.9966,0.0,Population,Population,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:X,38.9966,0.0,Population,Population,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:histories,21.2736,0.1495,dict,dict len=37,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:histories['g_mcts_children'],18.5715,0.1308,list,list len=142,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:G,10.7295,0.002,Grammar,Grammar,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4142,0.0084,dict,dict len=52215,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:G._MCTS_CHILDREN,2.4696,0.0004,dict,dict len=5589,0.6471,3.3,43.3
+2026-05-09 18:47:11,141,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5142,0.0001,dict,dict len=13975,0.6471,3.3,43.3
+2026-05-09 18:47:56,142,l:last_X,38.9966,0.0,Population,Population,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:X,38.9966,0.0,Population,Population,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:histories,21.4231,0.1495,dict,dict len=37,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:histories['g_mcts_children'],18.7023,0.1308,list,list len=143,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:G,10.7591,0.0295,Grammar,Grammar,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4326,0.0185,dict,dict len=52546,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:G._MCTS_CHILDREN,2.4736,0.0039,dict,dict len=5599,0.6481,3.301,43.4
+2026-05-09 18:47:56,142,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5195,0.0053,dict,dict len=13998,0.6481,3.301,43.4
+2026-05-09 18:48:28,143,l:last_X,38.9966,0.0,Population,Population,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:X,38.9966,0.0,Population,Population,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:histories,21.5726,0.1495,dict,dict len=37,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:histories['g_mcts_children'],18.833,0.1308,list,list len=144,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:G,10.7665,0.0075,Grammar,Grammar,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4411,0.0084,dict,dict len=52697,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:G._MCTS_CHILDREN,2.4747,0.0012,dict,dict len=5602,0.6508,3.3039,43.3
+2026-05-09 18:48:28,143,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5238,0.0044,dict,dict len=14007,0.6508,3.3039,43.3
+2026-05-09 18:48:59,144,l:last_X,38.9953,-0.0013,Population,Population,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:X,38.9953,-0.0013,Population,Population,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:histories,21.7221,0.1495,dict,dict len=37,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:histories['g_mcts_children'],18.9638,0.1308,list,list len=145,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:G,10.7839,0.0174,Grammar,Grammar,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4551,0.0141,dict,dict len=52949,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:G._MCTS_CHILDREN,2.4763,0.0016,dict,dict len=5606,0.6633,3.3166,43.6
+2026-05-09 18:48:59,144,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5213,-0.0026,dict,dict len=14024,0.6633,3.3166,43.6
+2026-05-09 18:49:36,145,l:last_X,38.9966,0.0013,Population,Population,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:X,38.9966,0.0013,Population,Population,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:histories,21.8716,0.1495,dict,dict len=37,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:histories['g_mcts_children'],19.0946,0.1308,list,list len=146,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:G,10.8038,0.0199,Grammar,Grammar,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4682,0.0131,dict,dict len=53183,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:G._MCTS_CHILDREN,2.4798,0.0035,dict,dict len=5615,0.6636,3.3166,43.8
+2026-05-09 18:49:36,145,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5237,0.0025,dict,dict len=14060,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:last_X,38.9953,-0.0013,Population,Population,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:X,38.9953,-0.0013,Population,Population,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:histories,22.0211,0.1495,dict,dict len=37,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:histories['g_mcts_children'],19.2254,0.1308,list,list len=147,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:G,10.8136,0.0098,Grammar,Grammar,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4751,0.0069,dict,dict len=53307,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:G._MCTS_CHILDREN,2.4814,0.0016,dict,dict len=5619,0.6636,3.3166,43.8
+2026-05-09 18:49:53,146,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5249,0.0012,dict,dict len=14077,0.6636,3.3166,43.8
+2026-05-09 18:50:31,147,l:last_X,38.9966,0.0013,Population,Population,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:X,38.9966,0.0013,Population,Population,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:histories,22.1706,0.1495,dict,dict len=37,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:histories['g_mcts_children'],19.3561,0.1308,list,list len=148,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:G,10.8441,0.0305,Grammar,Grammar,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4941,0.019,dict,dict len=53648,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:G._MCTS_CHILDREN,2.4884,0.007,dict,dict len=5637,0.6642,3.3176,42.2
+2026-05-09 18:50:31,147,l:G._MCTS_EDGE_EXPLORE_COUNT,1.5288,0.0039,dict,dict len=14134,0.6642,3.3176,42.2
+2026-05-09 18:50:50,148,l:last_X,38.9953,-0.0013,Population,Population,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:X,38.9953,-0.0013,Population,Population,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:last_X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:X._X_inst,38.2046,0.0,ndarray,"ndarray shape=(100151, 100) dtype=float32",0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:histories,22.3263,0.1557,dict,dict len=37,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:histories['g_mcts_children'],19.4871,0.131,list,list len=149,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:G,10.8618,0.0178,Grammar,Grammar,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:G._MCTS_ALPHA_EDGE_EXPLORE_COUNT,5.4985,0.0044,dict,dict len=53727,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:initialization_kwargs,4.103,0.0,dict,dict len=15,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:initialization_kwargs['grmr_prior'],4.1013,0.0,Grammar,Grammar,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:G._MCTS_CHILDREN,2.4974,0.009,dict,dict len=5660,0.6656,3.3185,42.3
+2026-05-09 18:50:50,148,l:G._MCTS_EDGE_EXPLORE_COUNT,1.533,0.0042,dict,dict len=14196,0.6656,3.3185,42.3

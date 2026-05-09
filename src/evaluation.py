@@ -5526,6 +5526,17 @@ def _mcts_policy_explore_influence(q, u, base=np.e, temp=1.0, valid_mask=None):
 
     return float(0.5 * np.sum(np.abs(p_full - p_q)))
 
+def _depth_discount_policy(p, depths, valid_mask, depth_gamma=0.70):
+    w = np.zeros_like(p, dtype=np.float64)
+
+    for i in range(p.shape[0]):
+        if valid_mask[i]:
+            w[i] = p[i] * (depth_gamma ** int(depths[i]))
+
+    if w.sum() <= 0:
+        return p
+
+    return w / w.sum()
 
 def mcts_exploration_ablation_summary(G, X, legal_idx=None):
     """
@@ -5625,7 +5636,21 @@ def mcts_exploration_ablation_summary(G, X, legal_idx=None):
         valid_mask=valid_mask
     )
 
-    influence = float(0.5 * np.sum(np.abs(p_full - p_q)))
+    p_full_w = _depth_discount_policy(
+        p=p_full,
+        depths=depths,
+        valid_mask=valid_mask,
+        depth_gamma=0.85
+    )
+
+    p_q_w = _depth_discount_policy(
+        p=p_q,
+        depths=depths,
+        valid_mask=valid_mask,
+        depth_gamma=0.85
+    )
+
+    influence = float(0.5 * np.sum(np.abs(p_full_w - p_q_w)))
 
     qv = q[valid_mask]
     uv = u[valid_mask]
