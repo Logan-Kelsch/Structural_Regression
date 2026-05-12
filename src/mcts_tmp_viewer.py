@@ -246,6 +246,117 @@ def read_trace_tail(run_dir: str | Path, n_lines: int = 200) -> str:
     return read_text_tail(Path(run_dir) / "mcts_trace.jsonl", n_lines=n_lines)
 
 
+def read_plot_index(run_dir):
+    path = run_dir / "plot_index.jsonl"
+
+    if not path.exists():
+        return pd.DataFrame()
+
+    rows = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                pass
+
+    return pd.DataFrame(rows)
+
+
+def resolve_plot_path(run_dir, path_value):
+    if path_value is None:
+        return None
+
+    p = Path(str(path_value))
+
+    if p.exists():
+        return p
+
+    p2 = run_dir / p
+
+    if p2.exists():
+        return p2
+
+    return None
+
+
+def read_plot_index(run_dir):
+    path = run_dir / "plot_index.jsonl"
+
+    if not path.exists():
+        return pd.DataFrame()
+
+    rows = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                pass
+
+    return pd.DataFrame(rows)
+
+
+def resolve_plot_path(run_dir, path_value):
+    if path_value is None:
+        return None
+
+    p = Path(str(path_value))
+
+    if p.exists():
+        return p
+
+    p2 = run_dir / p
+
+    if p2.exists():
+        return p2
+
+    return None
+
+def safe_iteration_selectbox_or_slider(label, min_k, max_k, default_k=None, *, key=None):
+    """
+    Streamlit slider fails when min_k == max_k.
+    This helper returns the only available iteration directly in that case.
+    """
+    try:
+        min_k = int(min_k)
+        max_k = int(max_k)
+    except Exception:
+        min_k = 0
+        max_k = 0
+
+    if default_k is None:
+        default_k = max_k
+
+    try:
+        default_k = int(default_k)
+    except Exception:
+        default_k = max_k
+
+    default_k = min(max(default_k, min_k), max_k)
+
+    if max_k <= min_k:
+        st.caption(f"{label}: only iteration {min_k} is available so far")
+        return min_k
+
+    return st.slider(
+        label,
+        min_value=min_k,
+        max_value=max_k,
+        value=default_k,
+        step=1,
+        key=key,
+    )
+
+
 # ---------------------------------------------------------------------
 # sidebar
 # ---------------------------------------------------------------------
@@ -309,11 +420,29 @@ last_h_value = metric_value(status, latest, "last_h", "policy_h")
 top_cols = st.columns(7)
 top_cols[0].metric("status", status.get("status", "missing"))
 top_cols[1].metric("last iter", status.get("last_iteration", "NA"))
-top_cols[2].metric("edge explore n", fmt_int(edge_explore_value))
+top_cols[2].metric("edge explore n", fmt_int(latest['alpha_explore_t']))
 top_cols[3].metric("last z mean", fmt_float(metric_value(status, latest, "last_zscore_mean", "zscore_mean")))
 top_cols[4].metric("last z max", fmt_float(metric_value(status, latest, "last_zscore_max", "zscore_max")))
 top_cols[5].metric("last h", fmt_float(last_h_value))
 top_cols[6].metric("updated", status.get("updated_at", "NA"))
+
+plot_index_df = read_plot_index(run_dir)
+
+if not plot_index_df.empty and "section" in plot_index_df.columns:
+    fpc_rows = plot_index_df[
+        plot_index_df["section"].astype(str).str.contains("fpc_curve_once", na=False)
+    ]
+
+    if not fpc_rows.empty:
+        fpc_path = resolve_plot_path(run_dir, fpc_rows.iloc[-1]["path"])
+
+        if fpc_path is not None:
+            st.subheader("FPC curve")
+            st.image(str(fpc_path), caption=str(fpc_path), width="stretch")
+        else:
+            st.info("FPC curve entry exists, but the image file is not available yet.")
+    else:
+        st.info("FPC curve has not been saved yet. It will appear after fit_FPC_part_prop finishes.")
 
 if not run_dir.exists():
     st.warning(f"Run folder does not exist: {run_dir}")
@@ -455,7 +584,18 @@ with tab_curves:
 with tab_iter:
     st.subheader("iteration browser")
 
-    selected_k = st.slider("iteration", 0, latest_k, latest_k)
+    latest_k = int(latest_k)
+
+    if latest_k <= 0:
+        selected_k = 0
+        st.info("Only iteration 0 is available so far. The iteration slider will appear after iteration 1 is saved.")
+    else:
+        selected_k = safe_iteration_selectbox_or_slider(
+            "iteration",
+            0,
+            latest_k,
+            latest_k,
+        )
 
     row = metrics[metrics["k"].astype("Int64").eq(selected_k)]
     if not row.empty:
@@ -509,7 +649,13 @@ with tab_plots:
         if "k" in df_sec.columns and not df_sec.empty:
             min_k = int(df_sec["k"].min())
             max_k = int(df_sec["k"].max())
-            k_gallery = st.slider("gallery iteration", min_k, max_k, max_k)
+            k_gallery = safe_iteration_selectbox_or_slider(
+                "gallery iteration",
+                min_k,
+                max_k,
+                max_k,
+                key="gallery_k",
+            )
             df_sec = df_sec[df_sec["k"].astype("Int64").eq(k_gallery)]
 
         for p in df_sec["path"].tolist():
@@ -521,7 +667,13 @@ with tab_plots:
 with tab_arrays:
     st.subheader("stored arrays")
 
-    selected_k_arr = st.slider("array iteration", 0, latest_k, latest_k, key="arr_k")
+    selected_k_arr = safe_iteration_selectbox_or_slider(
+        "array iteration",
+        0,
+        latest_k,
+        latest_k,
+        key="arr_k",
+    )
     arrays_path = run_dir / "iterations" / f"iter_{selected_k_arr:04d}" / "arrays.npz"
 
     if not arrays_path.exists():
@@ -561,7 +713,13 @@ with tab_arrays:
 with tab_tops:
     st.subheader("top edges / alpha decisions")
 
-    selected_k_top = st.slider("tops iteration", 0, latest_k, latest_k, key="tops_k")
+    selected_k_top = safe_iteration_selectbox_or_slider(
+        "tops iteration",
+        0,
+        latest_k,
+        latest_k,
+        key="tops_k",
+    )
     tops_path = run_dir / "iterations" / f"iter_{selected_k_top:04d}" / "tops.json"
     tops = read_json(tops_path, default={})
 

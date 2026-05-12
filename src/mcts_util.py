@@ -1011,36 +1011,47 @@ def plot_mcts_policy_drift_hawkes(
     raw_hist=None,
     parent_hist=None,
     child_hist=None,
-    figsize=(12, 4),
+    support_penalty_hist=None,
+    parent_new_mass_hist=None,
+    child_new_edge_frac_hist=None,
+    figsize=(8, 4),
     show: bool = False,
 ):
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
 
     if raw_hist is not None and len(raw_hist) > 0:
-        ax.plot(raw_hist, alpha=0.35, label="raw total drift")
-
-    if parent_hist is not None and len(parent_hist) > 0:
-        ax.plot(parent_hist, alpha=0.25, label="parent drift")
-
-    if child_hist is not None and len(child_hist) > 0:
-        ax.plot(child_hist, alpha=0.25, label="child drift")
+        ax.plot(raw_hist, linewidth=2.5, label="total drift")
 
     if hp is not None and len(hp) > 0:
-        ax.plot(hp, linewidth=3, label="smoothed drift h")
+        ax.plot(hp, linewidth=3.0, label="smoothed h")
 
-    ax.axhline(0.05, linestyle="--", alpha=0.40, label="mostly stable")
-    ax.axhline(0.05, linestyle="--", alpha=0.40, label="stable")
+    if parent_hist is not None and len(parent_hist) > 0:
+        ax.plot(parent_hist, alpha=0.30, linewidth=1.2, label="parent drift")
 
-    ax.set_title("hawkes/EMA smoothing on root-weighted MCTS expected policy inference delta")
+    if child_hist is not None and len(child_hist) > 0:
+        ax.plot(child_hist, alpha=0.30, linewidth=1.2, label="child drift")
+
+    # only include this if you are using the hybrid/common-support drift version
+    if support_penalty_hist is not None and len(support_penalty_hist) > 0:
+        ax.plot(
+            support_penalty_hist,
+            alpha=0.45,
+            linewidth=1.4,
+            linestyle="--",
+            label="support penalty",
+        )
+
+    ax.axhline(0.01, linestyle="--", alpha=0.40, label="99% stable")
+
+    ax.set_title("root-weighted exploit policy drift")
     ax.set_xlabel("iteration")
     ax.set_ylabel("policy drift")
-    ax.set_ylim(1e-2, 1)
+    ax.set_ylim(1e-3, 1)
     ax.set_yscale("log")
     ax.grid(alpha=0.25)
-    ax.legend()
+    ax.legend(fontsize=8)
 
     return maybe_show(fig, show)
-
 
 def plot_fpc_gene_evaluation_from_details(
     details,
@@ -1333,6 +1344,298 @@ def apply_pw_scale_to_grammar(G, scale, *, min_scale=0.02, max_scale=1.0):
         "expand_prob": float(G._MCTS_EXPAND_PROB),
     }
 
+def normalize_policy_dict(d, eps=1e-12):
+    s = float(sum(d.values()))
+    if s <= eps or not np.isfinite(s):
+        return {}
+    return {k: float(v) / s for k, v in d.items()}
+
+
+def tv_distance_dict(a, b):
+    keys = set(a.keys()) | set(b.keys())
+    if len(keys) == 0:
+        return np.nan
+    return 0.5 * float(sum(abs(a.get(k, 0.0) - b.get(k, 0.0)) for k in keys))
+
+
+def policy_new_removed_mass(prev_policy, curr_policy):
+    prev_keys = set(prev_policy.keys())
+    curr_keys = set(curr_policy.keys())
+
+    new_keys = curr_keys - prev_keys
+    removed_keys = prev_keys - curr_keys
+
+    new_mass = float(sum(curr_policy.get(k, 0.0) for k in new_keys))
+    removed_mass = float(sum(prev_policy.get(k, 0.0) for k in removed_keys))
+
+    return new_mass, removed_mass, len(new_keys), len(removed_keys)
+
+
+def tunable_common_support_exploit_policy_drift(
+    prev_snap,
+    curr_snap,
+    *,
+    parent_child_mix=0.50,
+    novelty_weight=0.25,
+    removed_weight=0.10,
+    min_common_mass=1e-6,
+    child_weight_mode="parent_weight",
+    include_new_child_penalty=True,
+):
+    """
+    Tunable exploit-only drift.
+
+    parent_child_mix:
+        0.0 = only child drift
+        1.0 = only parent drift
+        0.5 = equal parent/child blend
+
+    novelty_weight:
+        how much new support should count against convergence.
+        higher = broader search expansion keeps drift higher.
+
+    removed_weight:
+        how much removed support should count against convergence.
+
+    min_common_mass:
+        if common support mass is too tiny, skip/NaN instead of pretending stable.
+
+    child_weight_mode:
+        "parent_weight" = weight child drift by current parent weights
+        "uniform"       = average child drift across parents equally
+
+    include_new_child_penalty:
+        if True, child novelty contributes to total novelty penalty.
+    """
+
+    if prev_snap is None:
+        return {
+            "parent_drift": np.nan,
+            "child_drift": np.nan,
+            "support_penalty": np.nan,
+            "total_drift": np.nan,
+            "parent_new_mass": np.nan,
+            "child_new_edge_frac": np.nan,
+        }
+
+    prev_parent = prev_snap["parent_policy"]
+    curr_parent = curr_snap["parent_policy"]
+
+    prev_parent_keys = set(prev_parent.keys())
+    curr_parent_keys = set(curr_parent.keys())
+    common_parents = prev_parent_keys & curr_parent_keys
+
+    parent_new_mass, parent_removed_mass, parent_new_n, parent_removed_n = policy_new_removed_mass(
+        prev_parent,
+        curr_parent,
+    )
+
+    prev_common_mass = float(sum(prev_parent.get(k, 0.0) for k in common_parents))
+    curr_common_mass = float(sum(curr_parent.get(k, 0.0) for k in common_parents))
+
+    if prev_common_mass < min_common_mass or curr_common_mass < min_common_mass:
+        parent_drift = np.nan
+    else:
+        prev_parent_common = normalize_policy_dict({
+            k: prev_parent[k] for k in common_parents
+        })
+
+        curr_parent_common = normalize_policy_dict({
+            k: curr_parent[k] for k in common_parents
+        })
+
+        parent_drift = tv_distance_dict(prev_parent_common, curr_parent_common)
+
+    child_vals = []
+    child_weights = []
+
+    child_new_edges = 0
+    child_removed_edges = 0
+    child_total_edges = 0
+
+    for parent_key in common_parents:
+        prev_child = prev_snap["child_policies"].get(parent_key, {})
+        curr_child = curr_snap["child_policies"].get(parent_key, {})
+
+        prev_child_keys = set(prev_child.keys())
+        curr_child_keys = set(curr_child.keys())
+        common_children = prev_child_keys & curr_child_keys
+
+        child_new_edges += len(curr_child_keys - prev_child_keys)
+        child_removed_edges += len(prev_child_keys - curr_child_keys)
+        child_total_edges += len(prev_child_keys | curr_child_keys)
+
+        if len(common_children) == 0:
+            continue
+
+        prev_child_common = normalize_policy_dict({
+            k: prev_child[k] for k in common_children
+        })
+
+        curr_child_common = normalize_policy_dict({
+            k: curr_child[k] for k in common_children
+        })
+
+        tv = tv_distance_dict(prev_child_common, curr_child_common)
+
+        if not np.isfinite(tv):
+            continue
+
+        if child_weight_mode == "parent_weight":
+            w = curr_snap["parent_weights"].get(
+                parent_key,
+                prev_snap["parent_weights"].get(parent_key, 0.0),
+            )
+        elif child_weight_mode == "uniform":
+            w = 1.0
+        else:
+            raise ValueError("child_weight_mode must be 'parent_weight' or 'uniform'")
+
+        child_vals.append(tv)
+        child_weights.append(w)
+
+    if len(child_vals) == 0:
+        child_drift = np.nan
+    else:
+        child_vals = np.asarray(child_vals, dtype=np.float64)
+        child_weights = np.asarray(child_weights, dtype=np.float64)
+
+        if child_weights.sum() <= 0:
+            child_drift = float(np.mean(child_vals))
+        else:
+            child_drift = float(np.sum(child_vals * child_weights) / child_weights.sum())
+
+    child_new_edge_frac = (
+        float(child_new_edges) / float(child_total_edges)
+        if child_total_edges > 0
+        else 0.0
+    )
+
+    support_penalty = 0.0
+    support_penalty += novelty_weight * parent_new_mass
+    support_penalty += removed_weight * parent_removed_mass
+
+    if include_new_child_penalty:
+        support_penalty += novelty_weight * child_new_edge_frac
+
+    vals = []
+
+    if np.isfinite(parent_drift):
+        vals.append(("parent", parent_drift))
+
+    if np.isfinite(child_drift):
+        vals.append(("child", child_drift))
+
+    if len(vals) == 0:
+        base_drift = np.nan
+    elif len(vals) == 1:
+        base_drift = vals[0][1]
+    else:
+        base_drift = (
+            parent_child_mix * parent_drift
+            + (1.0 - parent_child_mix) * child_drift
+        )
+
+    if np.isfinite(base_drift):
+        total_drift = float(base_drift + support_penalty)
+    else:
+        total_drift = np.nan
+
+    return {
+        "parent_drift": parent_drift,
+        "child_drift": child_drift,
+        "support_penalty": support_penalty,
+        "total_drift": total_drift,
+
+        "parent_new_mass": parent_new_mass,
+        "parent_removed_mass": parent_removed_mass,
+        "parent_new_n": parent_new_n,
+        "parent_removed_n": parent_removed_n,
+
+        "child_new_edges": child_new_edges,
+        "child_removed_edges": child_removed_edges,
+        "child_total_edges": child_total_edges,
+        "child_new_edge_frac": child_new_edge_frac,
+    }
+
+
+def common_support_exploit_policy_drift(prev_snap, curr_snap):
+    if prev_snap is None:
+        return {
+            "parent_drift": np.nan,
+            "child_drift": np.nan,
+            "total_drift": np.nan,
+        }
+
+    prev_parent = prev_snap["parent_policy"]
+    curr_parent = curr_snap["parent_policy"]
+
+    common_parents = set(prev_parent.keys()) & set(curr_parent.keys())
+
+    prev_parent_common = normalize_policy_dict({
+        k: prev_parent[k] for k in common_parents
+    })
+
+    curr_parent_common = normalize_policy_dict({
+        k: curr_parent[k] for k in common_parents
+    })
+
+    parent_drift = tv_distance_dict(prev_parent_common, curr_parent_common)
+
+    child_vals = []
+    child_weights = []
+
+    for parent_key in common_parents:
+        prev_child = prev_snap["child_policies"].get(parent_key, {})
+        curr_child = curr_snap["child_policies"].get(parent_key, {})
+
+        common_children = set(prev_child.keys()) & set(curr_child.keys())
+
+        if len(common_children) == 0:
+            continue
+
+        prev_child_common = normalize_policy_dict({
+            k: prev_child[k] for k in common_children
+        })
+
+        curr_child_common = normalize_policy_dict({
+            k: curr_child[k] for k in common_children
+        })
+
+        tv = tv_distance_dict(prev_child_common, curr_child_common)
+
+        if not np.isfinite(tv):
+            continue
+
+        w = curr_snap["parent_weights"].get(
+            parent_key,
+            prev_snap["parent_weights"].get(parent_key, 0.0),
+        )
+
+        child_vals.append(tv)
+        child_weights.append(w)
+
+    if len(child_vals) == 0:
+        child_drift = np.nan
+    else:
+        child_vals = np.asarray(child_vals, dtype=np.float64)
+        child_weights = np.asarray(child_weights, dtype=np.float64)
+
+        if child_weights.sum() <= 0:
+            child_drift = float(np.mean(child_vals))
+        else:
+            child_drift = float(np.sum(child_vals * child_weights) / child_weights.sum())
+
+    vals = np.asarray([parent_drift, child_drift], dtype=np.float64)
+    vals = vals[np.isfinite(vals)]
+
+    total_drift = np.nan if vals.size == 0 else float(np.mean(vals))
+
+    return {
+        "parent_drift": parent_drift,
+        "child_drift": child_drift,
+        "total_drift": total_drift,
+    }
 
 def walk_pw_scale_from_thresholds(
     G,
@@ -1430,22 +1733,10 @@ def default_solver_kwargs():
         "t_vec"    : "Close",
         "t_mode"   : "AD",
         "emission" : [
-    # numerator: P[t+offset] - MIN_delta(P[t])
-    {"ID": 5,
-     "x": "tvec", "offset": True,
-     "alpha": {"ID": 2, "x": "tvec", "offset": False, "delta1": delta}},
-
-    # divide by range: (MAX_delta(P[t]) - MIN_delta(P[t]))
+    {"ID": 3, "x": "tvec", "delta1": 9, "min_count": 2},             # future-aligned avg volume
     {"ID": "divide"},
-    {"ID": 5,
-     "x": {"ID": 1, "x": "tvec", "offset": False, "delta1": delta},
-     "alpha": {"ID": 2, "x": "tvec", "offset": False, "delta1": delta}},
-
-    # *2
-    {"ID": 6, "alpha": "emit"},
-
-    # -1
-    {"ID": 5, "alpha": 1.0},
+    {"ID": 3, "x": "tvec", "offset": False, "delta1": 9, "min_count": 2},  # current avg volume
+    {"ID": 5, "alpha": 1.0},                                          # (future/current) - 1
 ],
         "AD_cond"  : ("gt", 0),
     }
@@ -1454,8 +1745,8 @@ def default_solver_kwargs():
 def default_logwalker_kwargs():
     return {
         "start": 0,
-        "destination": 1,
-        "steps": 12,
+        "destination": 0.0025,
+        "steps": 20,
         "exhaust_mode": "steps",
         "exwhen": 100,
         "min_walk": 3,
@@ -1484,17 +1775,18 @@ def run_mcts_tmp_loop(
     save_full_snapshots: bool = False,
     store_full_mcts_dict_history: bool = True,
     mem_report_after: int = 3,
-    break_h_threshold: float = 0.01,
-    pw_freeze_threshold: float = 0.4,
-    pw_unfreeze_threshold: float = 0.2,
-    pw_threshold_decay_rate: float = 0.01,
+    break_h_threshold: float = 0.001,
+    pw_freeze_threshold: float = 1.0,
+    pw_unfreeze_threshold: float = 1.0,
+    pw_freeze_threshold_decay_rate: float = 0.01,
+    pw_unfreeze_threshold_decay_rate: float = 0.02,
     pw_threshold_floor: float = 0.02,
     pw_walk_down_step: float = 0.1,
     pw_walk_up_step: float = 0.05,
     pw_min_scale: float = 0.01,
     pw_max_scale: float = 1.0,
     pw_ema_alpha: float = 0.10,
-    pw_baseline_c: float = 0.75,
+    pw_baseline_c: float = 1.00,
     initialization_kwargs_fn: Callable[[Any], dict] = default_initialization_kwargs,
     solver_kwargs_fn: Callable[[], dict] = default_solver_kwargs,
     logwalker_kwargs_fn: Callable[[], dict] = default_logwalker_kwargs,
@@ -1553,7 +1845,7 @@ def run_mcts_tmp_loop(
     mcts_prev_policy_snapshot = None
     h = np.nan
     hp = []
-    some_kappa = -np.log(0.5)
+    some_kappa = -np.log(0.3)
 
     histories = {
         "g_mcts_sig": [],
@@ -1866,15 +2158,26 @@ def run_mcts_tmp_loop(
 
             infl_ema = float(getattr(G, "_MCTS_EXPLORE_INFLUENCE_EMA", np.nan))
 
-            decay = float(np.exp(-float(pw_threshold_decay_rate) * float(k)))
+            freeze_decay = float(np.exp(-float(pw_freeze_threshold_decay_rate) * float(k)))
+            unfreeze_decay = float(np.exp(-float(pw_unfreeze_threshold_decay_rate) * float(k)))
+
             pw_freeze_threshold_t = max(
                 float(pw_threshold_floor),
-                float(pw_freeze_threshold) * decay,
+                float(pw_freeze_threshold) * freeze_decay,
             )
+
             pw_unfreeze_threshold_t = max(
                 float(pw_threshold_floor),
-                float(pw_unfreeze_threshold) * decay,
+                float(pw_unfreeze_threshold) * unfreeze_decay,
             )
+
+            # safety: preserve hysteresis ordering
+            # unfreeze threshold should stay below freeze threshold
+            #if pw_unfreeze_threshold_t >= pw_freeze_threshold_t:
+                #pw_unfreeze_threshold_t = max(
+                #    float(pw_threshold_floor),
+                #    float(pw_freeze_threshold_t) * 0.50,
+                #)
 
             pw_info = walk_pw_scale_from_thresholds(
                 G,
@@ -1926,9 +2229,14 @@ def run_mcts_tmp_loop(
                 depth_gamma=0.70,
             )
 
-            policy_drift = mcts_root_weighted_exploit_policy_drift(
-                prev_snap=mcts_prev_policy_snapshot,
-                curr_snap=curr_snap,
+
+            policy_drift = tunable_common_support_exploit_policy_drift(
+                mcts_prev_policy_snapshot,
+                curr_snap,
+                parent_child_mix=0.50,#1to0 float parent or child/action stability
+                novelty_weight=0.00,#weight for how much new support matters
+                removed_weight=0.00,#keep < novelty weight, penalizes disappearing support
+                child_weight_mode="parent_weight",
             )
 
             mcts_prev_policy_snapshot = curr_snap
@@ -2107,6 +2415,8 @@ def run_mcts_tmp_loop(
                 "pw_scale": pw_info["pw_scale"],
                 "pw_old_scale": pw_info["pw_old_scale"],
                 "pw_new_scale": pw_info["pw_new_scale"],
+                "pw_freeze_threshold_decay_rate": pw_freeze_threshold_decay_rate,
+                "pw_unfreeze_threshold_decay_rate": pw_unfreeze_threshold_decay_rate,
                 "pw_freeze_threshold": pw_freeze_threshold_t,
                 "pw_unfreeze_threshold": pw_unfreeze_threshold_t,
                 "pw_c": pw_info["pw_c"],
