@@ -38,10 +38,24 @@ def load_results(eval_dir: str | Path):
     grammar = pd.read_csv(grammar_csv)
     pops = pd.read_csv(pop_csv)
 
+    # pandas 3+ no longer accepts errors="ignore" in pd.to_numeric.
+    # Convert only columns that are mostly numeric; leave path/name/text columns alone.
+    text_cols = {
+        "run_name", "status", "error", "run_dir", "grammar_path",
+        "arrays_path", "crash_path", "notes"
+    }
+
     for df in (grammar, pops):
         for c in df.columns:
-            if c not in ("run_name", "status", "error"):
-                df[c] = pd.to_numeric(df[c], errors="ignore")
+            if c in text_cols:
+                continue
+
+            converted = pd.to_numeric(df[c], errors="coerce")
+
+            # Keep conversion only if at least one non-null value became numeric.
+            # This prevents string/path columns from being erased to all NaN.
+            if converted.notna().sum() > 0:
+                df[c] = converted
 
     return grammar, pops
 
@@ -181,9 +195,12 @@ def plot_success_vs_score(pops, out_path):
 
 
 def plot_one_grammar(eval_dir: Path, run_name: str, out_dir: Path):
+    """Original z-score cloud plot for one grammar."""
     pop_dirs = sorted((eval_dir / "grammars" / run_name).glob("pop_*"))
     if not pop_dirs:
         return
+
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     fig, axs = plt.subplots(1, 3, figsize=(16, 4), constrained_layout=True)
 
@@ -213,6 +230,147 @@ def plot_one_grammar(eval_dir: Path, run_name: str, out_dir: Path):
     plt.close(fig)
 
 
+def _valid_gidx_for_z(z, gidx):
+    """Return valid gene indices that fit inside a z-score vector."""
+    z = np.asarray(z, dtype=float)
+    gidx = np.asarray(gidx, dtype=int).ravel()
+    keep = (gidx >= 0) & (gidx < z.size)
+    return gidx[keep]
+
+
+def _scatter_success_split(ax, x_pos, y_vals, success_mask, *, alpha=0.45, red_label=None, green_label=None):
+    """Scatter red failures first, then green successes, for one population column."""
+    y_vals = np.asarray(y_vals, dtype=float).ravel()
+    success_mask = np.asarray(success_mask, dtype=bool).ravel()
+
+    finite = np.isfinite(y_vals)
+    y_vals = y_vals[finite]
+    success_mask = success_mask[finite]
+
+    if y_vals.size == 0:
+        return
+
+    fail = ~success_mask
+    if np.any(fail):
+        ax.scatter(
+            np.full(np.sum(fail), x_pos),
+            y_vals[fail],
+            s=7,
+            alpha=alpha,
+            color="red",
+            label=red_label,
+        )
+    if np.any(success_mask):
+        ax.scatter(
+            np.full(np.sum(success_mask), x_pos),
+            y_vals[success_mask],
+            s=9,
+            alpha=min(0.95, alpha + 0.15),
+            color="green",
+            label=green_label,
+        )
+
+
+def plot_one_grammar_success_flow(eval_dir: Path, run_name: str, out_dir: Path, *, success_z: float = 2.0):
+    """
+    Sequential success-flow z cloud for one grammar.
+
+    Panel i:
+        plot all good_idx genes on chunk i.
+        green = z_i > success_z, red = not successful.
+
+    Panel j:
+        plot only genes successful on chunk i.
+        green = z_j > success_z, red = failed on j.
+
+    Panel k:
+        plot only genes successful on both chunk i and chunk j.
+        green = z_k > success_z, red = failed on k.
+    """
+    pop_dirs = sorted((eval_dir / "grammars" / run_name).glob("pop_*"))
+    if not pop_dirs:
+        return
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, axs = plt.subplots(1, 3, figsize=(16, 4), constrained_layout=True)
+
+    for p_i, pop_dir in enumerate(pop_dirs):
+        path = pop_dir / "eval_arrays.npz"
+        if not path.exists():
+            continue
+
+        data = np.load(path, allow_pickle=True)
+        z_i = np.asarray(data["z_i"], dtype=float)
+        z_j = np.asarray(data["z_j"], dtype=float)
+        z_k = np.asarray(data["z_k"], dtype=float)
+        gidx = _valid_gidx_for_z(z_i, data["good_idx"])
+        gidx = gidx[(gidx < z_j.size) & (gidx < z_k.size)]
+
+        alpha = 0.10 + 0.45 * ((p_i + 1) / len(pop_dirs))
+
+        # chunk i: all valid good_idx genes.
+        idx_i = gidx[np.isfinite(z_i[gidx])]
+        succ_i = z_i[idx_i] > success_z
+        _scatter_success_split(
+            axs[0],
+            p_i,
+            z_i[idx_i],
+            succ_i,
+            alpha=alpha,
+            red_label="failed i" if p_i == 0 else None,
+            green_label="success i" if p_i == 0 else None,
+        )
+
+        # chunk j: only genes that succeeded in i.
+        idx_j_base = idx_i[succ_i]
+        idx_j = idx_j_base[np.isfinite(z_j[idx_j_base])]
+        succ_j = z_j[idx_j] > success_z
+        _scatter_success_split(
+            axs[1],
+            p_i,
+            z_j[idx_j],
+            succ_j,
+            alpha=alpha,
+            red_label="i success, failed j" if p_i == 0 else None,
+            green_label="i+j success" if p_i == 0 else None,
+        )
+
+        # chunk k: only genes that succeeded in i and j.
+        idx_k_base = idx_j[succ_j]
+        idx_k = idx_k_base[np.isfinite(z_k[idx_k_base])]
+        succ_k = z_k[idx_k] > success_z
+        _scatter_success_split(
+            axs[2],
+            p_i,
+            z_k[idx_k],
+            succ_k,
+            alpha=alpha,
+            red_label="i+j success, failed k" if p_i == 0 else None,
+            green_label="i+j+k success" if p_i == 0 else None,
+        )
+
+    titles = [
+        "chunk i: all genes, mark i success",
+        "chunk j: i-success genes only",
+        "chunk k: i+j-success genes only",
+    ]
+
+    for ax, title in zip(axs, titles):
+        ax.axhline(success_z, linestyle="--", alpha=0.55, color="black")
+        ax.axhline(0, alpha=0.75, color="black")
+        ax.set_title(title)
+        ax.set_xlabel("population")
+        ax.set_ylabel("z-score")
+        ax.set_ylim(bottom=-3)
+        ax.grid(alpha=0.25)
+        ax.legend(fontsize=8, loc="best")
+
+    fig.suptitle(f"{run_name} sequential success flow")
+    fig.savefig(out_dir / f"z_success_flow_{run_name}.png", dpi=160, bbox_inches="tight")
+    plt.close(fig)
+
+
 def make_all_plots(eval_dir: str | Path):
     eval_dir = Path(eval_dir)
     out_dir = eval_dir / "plots_posthoc"
@@ -237,11 +395,19 @@ def make_all_plots(eval_dir: str | Path):
     plot_temperature_curves(grammar, out_dir / "score_by_depth_grouped_temp.png")
     plot_success_vs_score(pops, out_dir / "success_count_vs_score.png")
 
-    # A few per-grammar z-cloud plots. Comment this out if too many figures are unwanted.
+    z_cloud_dir = out_dir / "z_clouds_surf"
+    z_flow_dir = out_dir / "z_clouds_success_flow"
+    z_cloud_dir.mkdir(parents=True, exist_ok=True)
+    z_flow_dir.mkdir(parents=True, exist_ok=True)
+
+    # Per-grammar z-cloud plots.
     for rn in sorted(grammar["run_name"].dropna().unique().tolist()):
-        plot_one_grammar(eval_dir, rn, out_dir)
+        plot_one_grammar(eval_dir, rn, z_cloud_dir)
+        plot_one_grammar_success_flow(eval_dir, rn, z_flow_dir)
 
     print("wrote plots to", out_dir)
+    print("wrote original z clouds to", z_cloud_dir)
+    print("wrote success-flow z clouds to", z_flow_dir)
 
 
 if __name__ == "__main__":

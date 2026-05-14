@@ -71,7 +71,7 @@ OUT_NAME = time.strftime("surface_eval_%Y%m%d_%H%M%S")
 OUT_DIR = OUT_ROOT / OUT_NAME
 
 # chunks i, j, k are base_chunk + 0, +1, +2
-BASE_CHUNK_NUM = 0
+BASE_CHUNK_NUM = 2
 CHUNKS = {
     "i": BASE_CHUNK_NUM + 0,
     "j": BASE_CHUNK_NUM + 1,
