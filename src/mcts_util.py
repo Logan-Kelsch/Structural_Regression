@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import io
+import dill
 import gc
 import json
 import time
@@ -477,6 +478,71 @@ def mcts_exploit_policy_snapshot(G, X, depth_gamma=0.70):
         "parent_weights": parent_weights,
     }
 
+def save_fpc_gene_eval_plot_data(
+    store,
+    k,
+    gene_eval_details,
+    fpc_curve,
+    perm_mu,
+    *,
+    min_var=1e-18,
+    band_mult=2.0,
+    grid_n=300,
+):
+    prop_g = np.asarray(gene_eval_details.get("prop_g", []), dtype=np.float64)
+    observed_scores_g = np.asarray(gene_eval_details.get("observed_scores_g", []), dtype=np.float64)
+    fpc_std_g = np.asarray(gene_eval_details.get("fpc_std_g", []), dtype=np.float64)
+
+    keep = (
+        np.isfinite(prop_g)
+        & np.isfinite(observed_scores_g)
+        & np.isfinite(fpc_std_g)
+        & (prop_g > 0)
+    )
+
+    path = store.iter_path(k) / "fpc_gene_eval_plot_data.npz"
+
+    if not np.any(keep):
+        np.savez_compressed(
+            path,
+            keep=keep,
+            prop_keep=np.asarray([], dtype=np.float64),
+            observed_keep=np.asarray([], dtype=np.float64),
+            fpc_std_keep=np.asarray([], dtype=np.float64),
+            p_grid=np.asarray([], dtype=np.float64),
+            v_grid=np.asarray([], dtype=np.float64),
+            s_grid=np.asarray([], dtype=np.float64),
+            perm_mu=float(perm_mu),
+            band_mult=float(band_mult),
+        )
+        return str(path)
+
+    p_min = max(1e-6, float(np.nanmin(prop_g[keep])))
+    p_max = min(0.999999, float(np.nanmax(prop_g[keep])))
+
+    p_grid = np.linspace(p_min, p_max, int(grid_n))
+    v_grid = np.asarray(fpc_curve(p_grid), dtype=np.float64)
+    s_grid = np.sqrt(np.maximum(v_grid, min_var))
+
+    np.savez_compressed(
+        path,
+        keep=keep,
+        prop_g=prop_g,
+        observed_scores_g=observed_scores_g,
+        fpc_std_g=fpc_std_g,
+        prop_keep=prop_g[keep],
+        observed_keep=observed_scores_g[keep],
+        fpc_std_keep=fpc_std_g[keep],
+        p_grid=p_grid,
+        v_grid=v_grid,
+        s_grid=s_grid,
+        perm_mu=float(perm_mu),
+        band_mult=float(band_mult),
+        upper_band=float(perm_mu) + float(band_mult) * s_grid,
+        lower_band=float(perm_mu) - float(band_mult) * s_grid,
+    )
+
+    return str(path)
 
 def _softmax_dict(scores, base=np.e, temp=1.0):
     """
@@ -819,6 +885,8 @@ def plot_depth_probability_progress(
 ):
     P = stack_depth_vectors(prob_hist)
 
+    P = P[:,:-2]
+
     fig, axs = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
 
     if P.shape[0] == 0:
@@ -827,7 +895,7 @@ def plot_depth_probability_progress(
         axs[1].set_axis_off()
         return maybe_show(fig, show)
 
-    im0 = axs[0].imshow(P.T, aspect="auto", origin="lower")
+    im0 = axs[0].imshow(P.T, aspect="auto", origin="lower", cmap='Greens')
     axs[0].set_title(title_left)
     axs[0].set_xlabel("iteration")
     axs[0].set_ylabel("depth")
@@ -836,7 +904,7 @@ def plot_depth_probability_progress(
     if P.shape[0] > 1:
         D = np.abs(np.diff(P, axis=0))
 
-        im1 = axs[1].imshow(D.T, aspect="auto", origin="lower")
+        im1 = axs[1].imshow(D.T, aspect="auto", origin="lower", cmap='Greens')
         axs[1].set_title(title_right)
         axs[1].set_xlabel("iteration delta")
         axs[1].set_ylabel("depth")
@@ -1020,10 +1088,10 @@ def plot_mcts_policy_drift_hawkes(
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
 
     if raw_hist is not None and len(raw_hist) > 0:
-        ax.plot(raw_hist, linewidth=2.5, label="total drift")
+        ax.plot(raw_hist, linewidth=2.5, label="total drift", color='black')
 
     if hp is not None and len(hp) > 0:
-        ax.plot(hp, linewidth=3.0, label="smoothed h")
+        ax.plot(hp, linewidth=3.0, label="smoothed h", color='maroon')
 
     if parent_hist is not None and len(parent_hist) > 0:
         ax.plot(parent_hist, alpha=0.30, linewidth=1.2, label="parent drift")
@@ -1041,9 +1109,10 @@ def plot_mcts_policy_drift_hawkes(
             label="support penalty",
         )
 
-    ax.axhline(0.01, linestyle="--", alpha=0.40, label="99% stable")
+    ax.axhline(0.01, linestyle="--", alpha=0.40, label="99% stable", color='blue')
+    ax.axhline(0.1, linestyle="--", alpha=0.40, label="90% stable", color='blue')
 
-    ax.set_title("root-weighted exploit policy drift")
+    ax.set_title("exploit policy drift")
     ax.set_xlabel("iteration")
     ax.set_ylabel("policy drift")
     ax.set_ylim(1e-3, 1)
@@ -1166,10 +1235,21 @@ def make_summary_dashboard(histories: dict, k: int, figsize=(17, 8), show: bool 
 
     child_depth = histories.get("g_mcts_child_depth_probs", [])
     if len(child_depth) > 0:
-        latest = np.asarray(child_depth[-1], dtype=np.float64)
-        axs[4].bar(np.arange(len(latest)), latest)
-        axs[4].set_title("latest child depth probabilities")
-        axs[4].set_xlabel("depth")
+        P = stack_depth_vectors(child_depth)
+        P = P[:,:-2]
+
+        im = axs[4].imshow(
+            P.T,
+            aspect="auto",
+            origin="lower",
+            cmap='Greens'
+        )
+
+        axs[4].set_title("p(new node depth)")
+        axs[4].set_xlabel("iteration")
+        axs[4].set_ylabel("depth")
+
+        fig.colorbar(im, ax=axs[4])
 
     infl = histories.get("g_mcts_uct_explore_influence", [])
     infl_ema = histories.get("g_mcts_uct_explore_influence_ema", [])
@@ -1721,7 +1801,7 @@ def default_initialization_kwargs(G):
 
         "chunk_size"  : 1,
 
-        "wf_windows"  : 60,
+        "wf_windows"  : 20,
         "verbose"     : 0,
     }
 
@@ -1733,9 +1813,9 @@ def default_solver_kwargs():
         "t_vec"    : "Close",
         "t_mode"   : "AD",
         "emission" : [
-    {"ID": 3, "x": "tvec", "delta1": 9, "min_count": 2},             # future-aligned avg volume
+    {"ID": 3, "x": "tvec", "delta1": 6, "min_count": 2},             # future-aligned avg volume
     {"ID": "divide"},
-    {"ID": 3, "x": "tvec", "offset": False, "delta1": 9, "min_count": 2},  # current avg volume
+    {"ID": 3, "x": "tvec", "offset": False, "delta1": 6, "min_count": 2},  # current avg volume
     {"ID": 5, "alpha": 1.0},                                          # (future/current) - 1
 ],
         "AD_cond"  : ("gt", 0),
@@ -1746,7 +1826,7 @@ def default_logwalker_kwargs():
     return {
         "start": 0,
         "destination": 0.0025,
-        "steps": 20,
+        "steps": 24,
         "exhaust_mode": "steps",
         "exwhen": 100,
         "min_walk": 3,
@@ -1755,6 +1835,18 @@ def default_logwalker_kwargs():
     }
 
 
+# ---------------------------------------------------------------------
+# core loop
+# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# core loop
+# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# core loop
+# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# core loop
+# ---------------------------------------------------------------------
 # ---------------------------------------------------------------------
 # core loop
 # ---------------------------------------------------------------------
@@ -1845,7 +1937,7 @@ def run_mcts_tmp_loop(
     mcts_prev_policy_snapshot = None
     h = np.nan
     hp = []
-    some_kappa = -np.log(0.3)
+    some_kappa = -np.log(0.314)
 
     histories = {
         "g_mcts_sig": [],
@@ -1937,6 +2029,55 @@ def run_mcts_tmp_loop(
             child_drift = np.nan
             total_drift = np.nan
 
+            if k == 0:
+                print('TESTING FPC CURVE ON CHUNK I')
+                store.log("surveying proportion permutation distributions for initial destination...")
+
+                X_i, G_i = _I.initialize(**initialization_kwargs)
+
+                with capture_console(store, "fit_FPC_part_prop", k=k), capture_plots(
+                    store, "fpc_curve_once", k=k, save=save_helper_plots
+                ):
+                    pd_fpc_i, fpc_params_i, perm_mu_i = _E.fit_FPC_part_prop(
+                        X=X_i,
+                        chunk_num=chunk_num,
+                        solver_kwargs=solver_kwargs,
+                        n_sims=fpc_n_sims,
+                    )
+
+                print('RAN FUNC ON CHUNK I')
+
+                # estimate destination from FPC curve at target participation
+                target_part_prop = 0.15
+                target_sd_mult = 2.0
+
+                target_var = float(np.asarray(pd_fpc_i(np.asarray([target_part_prop]))).ravel()[0])
+                target_sd = float(np.sqrt(max(target_var, 0.0)))
+                target_destination = float(perm_mu_i + target_sd_mult * target_sd)
+
+                logwalker_kwargs["destination"] = target_destination
+
+                write_json_atomic(store.run_dir / "initial_destination_estimate.json", {
+                    "target_part_prop": target_part_prop,
+                    "target_sd_mult": target_sd_mult,
+                    "perm_mu": perm_mu_i,
+                    "fpc_var": target_var,
+                    "fpc_sd": target_sd,
+                    "destination": target_destination,
+                })
+
+                store.log(
+                    f"INITIAL DESTINATION ESTIMATE | "
+                    f"prop={target_part_prop:.4f} | "
+                    f"perm_mu={perm_mu_i:.6f} | "
+                    f"sd={target_sd:.6f} | "
+                    f"destination={target_destination:.6f}"
+                )
+
+                print('DONE WITH DESTINATION FINDING')
+                print('SELECTED DESTINATION:', {target_destination})
+                print('Sounds right?')
+
             #print('solving inner')
 
             with capture_console(store, "solver_inner", k=k):
@@ -2017,6 +2158,17 @@ def run_mcts_tmp_loop(
                     show=False,
                 )
                 store.save_fig(fig, k, "gene_fpc_eval_recreated")
+
+                fpc_plot_data_path = save_fpc_gene_eval_plot_data(
+                    store=store,
+                    k=k,
+                    gene_eval_details=gene_eval_details,
+                    fpc_curve=pd_fpc,
+                    perm_mu=perm_mu,
+                    min_var=1e-18,
+                    band_mult=2.0,
+                    grid_n=300,
+                )
             except Exception:
                 store.log("could not recreate gene FPC eval plot:\n" + traceback.format_exc())
 
@@ -2404,6 +2556,8 @@ def run_mcts_tmp_loop(
                 "alpha_exploit_t": getattr(G, "_MCTS_ALPHA_EXPLOIT_T", None),
                 "alpha_explore_t": getattr(G, "_MCTS_ALPHA_EXPLORE_T", None),
 
+                "fpc_plot_data_path": fpc_plot_data_path,
+
                 "depth_prob_delta_sum": depth_prob_delta_sum,
                 "alpha_depth_prob_delta_sum": alpha_depth_prob_delta_sum,
                 "alpha_sensor_prob": alpha_sensor_prob,
@@ -2491,8 +2645,17 @@ def run_mcts_tmp_loop(
 
             #print(f'Ending iteration {k}')
 
-            if k + 1 > 5 and np.isfinite(h) and h < break_h_threshold:
-                store.log(f"breaking because h={h:.6f} < {break_h_threshold}")
+            if k + 1 > 20 and np.isfinite(h) and h < break_h_threshold:
+                fin_g_path = store.run_dir / "fin.g"
+
+                with open(fin_g_path, "wb") as f:
+                    dill.dump(G, f)
+
+                store.log(
+                    f"saved final grammar to {fin_g_path} | "
+                    f"breaking because h={h:.6f} < {break_h_threshold}"
+                )
+
                 break
 
         store.write_status("complete", k=k, extra={"last_h": h})
