@@ -330,7 +330,7 @@ class Grammar:
                 self._MCTS_EDGE_EXPLORE_COUNT = {}
 
                 self._MCTS_CHILDREN = {}
-                self._MCTS_TRACE_ENABLED = spec_gram_args.get("trace_enabled", True)
+                self._MCTS_TRACE_ENABLED = spec_gram_args.get("trace_enabled", False)
                 self._MCTS_TRACE = None
 
                 if self._MCTS_TRACE_ENABLED:
@@ -1178,6 +1178,52 @@ class Grammar:
 
         return rng.choice(values, p=probs)
 
+    def decay_evidence(self, gamma: float = 1.0):
+        gamma = float(gamma)
+        if gamma >= 1.0:
+            return self
+        gamma = max(gamma, 0.0)
+
+        def decay_dict(d):
+            if d is None:
+                return
+            for k in list(d.keys()):
+                d[k] *= gamma
+
+        for name in [
+            "_MCTS_NODE_CUM", "_MCTS_NODE_COUNT", "_MCTS_NODE_EXPLORE_COUNT",
+            "_MCTS_EDGE_CUM", "_MCTS_EDGE_COUNT", "_MCTS_EDGE_EXPLORE_COUNT",
+            "_MCTS_ALPHA_DECISION_CUM", "_MCTS_ALPHA_DECISION_COUNT", "_MCTS_ALPHA_DECISION_EXPLORE_COUNT",
+            "_MCTS_ALPHA_NODE_CUM", "_MCTS_ALPHA_NODE_COUNT", "_MCTS_ALPHA_NODE_EXPLORE_COUNT",
+            "_MCTS_ALPHA_EDGE_CUM", "_MCTS_ALPHA_EDGE_COUNT", "_MCTS_ALPHA_EDGE_EXPLORE_COUNT",
+        ]:
+            if hasattr(self, name):
+                decay_dict(getattr(self, name))
+
+        for name in ["_MCTS_EXPLOIT_T", "_MCTS_EXPLORE_T", "_MCTS_ALPHA_EXPLOIT_T", "_MCTS_ALPHA_EXPLORE_T"]:
+            if hasattr(self, name) and getattr(self, name) is not None:
+                setattr(self, name, getattr(self, name) * gamma)
+
+        def recompute(cum_name, count_name, mu_name):
+            if not (hasattr(self, cum_name) and hasattr(self, count_name) and hasattr(self, mu_name)):
+                return
+            cum = getattr(self, cum_name)
+            cnt = getattr(self, count_name)
+            mu = getattr(self, mu_name)
+            if cum is None or cnt is None or mu is None:
+                return
+            for k in list(cum.keys()):
+                n = cnt.get(k, 0.0)
+                if n > 1e-12:
+                    mu[k] = cum[k] / n
+
+        recompute("_MCTS_NODE_CUM", "_MCTS_NODE_COUNT", "_MCTS_NODE_MU")
+        recompute("_MCTS_EDGE_CUM", "_MCTS_EDGE_COUNT", "_MCTS_EDGE_MU")
+        recompute("_MCTS_ALPHA_DECISION_CUM", "_MCTS_ALPHA_DECISION_COUNT", "_MCTS_ALPHA_DECISION_MU")
+        recompute("_MCTS_ALPHA_NODE_CUM", "_MCTS_ALPHA_NODE_COUNT", "_MCTS_ALPHA_NODE_MU")
+        recompute("_MCTS_ALPHA_EDGE_CUM", "_MCTS_ALPHA_EDGE_COUNT", "_MCTS_ALPHA_EDGE_MU")
+
+        return self
 
     def _mcts_parent_abs_idx(
         self,
@@ -7046,7 +7092,7 @@ def initialize(
     if(verbose>1):print('Population initialized')
     
     if(grmr_prior is None):
-        print('IN INITIALIZE: GRAMMAR PRIOR IS NONE\n')
+        if(verbose>1):print('IN INITIALIZE: GRAMMAR PRIOR IS NONE\n')
         #generate our grammar variable and pass all parameters
         grammar = Grammar(
             type=grmr_type,
@@ -7056,7 +7102,7 @@ def initialize(
             alpha_sensor_freq=grmr_a_sens
         )
     else:
-        print('IN INITIALIZE: GRAMMAR PRIOR EXISTS.\n')
+        if(verbose>1):print('IN INITIALIZE: GRAMMAR PRIOR EXISTS.\n')
         grammar = grmr_prior
     if(verbose>1):print('Grammar Initialized')
 

@@ -2,3 +2,6 @@
 data
 src/mcts_runs
 src/mcts_surface_eval_runs
+src/mcts_temp_surface_eval_runs
+src/chunk_walk
+src/wf_mcts_runs
