@@ -1,0 +1,2 @@
+test,score_col,group_a,group_b,n_a,n_b,n_windows,energy_distance,p_value,n_perms,mean_a,mean_b,mean_diff_b_minus_a,median_a,median_b,median_diff_b_minus_a,wasserstein,cliff_delta_a_vs_b
+stratified_permutation_energy_distance,score_k_mean_ij,gamma000000,gamma095098,24,47,3,0.20796063623440453,0.02979404119176165,5000,4.410033290640316,4.970763625847193,0.5607303352068769,4.3536685862447095,5.050572017236271,0.6969034309915614,0.5593932809781474,-0.3617021276595745

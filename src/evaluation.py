@@ -6209,3 +6209,35 @@ emission_volu_expand = [
     {"ID": 3, "x": "tvec", "offset": False, "delta1": 12, "min_count": 2},  # current avg volume
     {"ID": 5, "alpha": 1.0},                                          # (future/current) - 1
 ]
+
+em_fwd_ret_z = [
+    {"ID": 5, "alpha": "tvec", "offset": False},      # P[t+off] - P[t]
+    {"ID": 17, "delta1": 24, "min_count": 2},         # zscore of forward return series
+]
+
+em_breakout_high_z = [
+    {"ID": 5, "alpha": {"ID": 1, "x": "tvec", "delta1": 24, "offset": False}},  # P[t+off] - MAX_24(P[t])
+    {"ID": 17, "delta1": 24, "min_count": 2},
+]
+
+em_breakdown_low_z = [
+    {"ID": 5, "alpha": {"ID": 2, "x": "tvec", "delta1": 24, "offset": False}},  # P[t+off] - MIN_24(P[t])
+    {"ID": 17, "delta1": 24, "min_count": 2},
+]
+
+em_from_ema12_z = [
+    {"ID": 5, "alpha": {"ID": 14, "x": "tvec", "delta1": 12, "offset": False}},  # P[t+off] - EMA_12(P[t])
+    {"ID": 17, "delta1": 24, "min_count": 2},
+]
+
+em_future_range_expansion_z = [
+    {"ID": 12, "delta1": 12, "min_count": 2},  # RNG_12 on future-aligned stream (range over next hour-ish)
+    {"ID": 5, "alpha": {"ID": 12, "x": "tvec", "delta1": 12, "offset": False, "min_count": 2}},  # - current RNG_12
+    {"ID": 17, "delta1": 24, "min_count": 2},
+]
+
+em_doe_accel_z = [
+    {"ID": 15, "delta1": 3, "delta2": 12},  # DOE_3_12 on future-aligned stream
+    {"ID": 5, "alpha": {"ID": 15, "x": "tvec", "delta1": 3, "delta2": 12, "offset": False}},  # - current DOE_3_12
+    {"ID": 17, "delta1": 24, "min_count": 2},
+]

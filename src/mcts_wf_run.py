@@ -79,7 +79,7 @@ G = _I.Grammar(
 # Walk-forward controls
 # ---------------------------------------------------------------------
 
-RUN_NAME = "wf_tmp2"
+RUN_NAME = "wf_tmp"
 OVERWRITE = True
 
 # default number of chunks available for walk-forward windows
@@ -93,20 +93,26 @@ delta_L = 0.01
 # grammar memory decay between windows
 # 1.0 means no decay by default
 # 0.95 means previous chunk evidence is multiplied by 0.95 each chunk shift
-grammar_memory_gamma = 0.75
+grammar_memory_gamma = 0.00
 
 # max grammar-update iterations allowed for one window if delta_L is not reached
-max_iters_per_window = 250
+max_iters_per_window = 100
 
 # inference investigation after each window convergence
-infer_populations = 100
+infer_populations = 250
 success_z = 2.0
 
 # FPC curves are cached once per absolute chunk number and reused across windows
 fpc_n_sims = 2500
 
+# console verbosity
+# 0 = mostly silent/log only
+# 1 = window, iteration, and FPC hit/miss summaries
+# 2 = detailed FPC/template/logwalker progress
+verbose = 2
+
 # plotting/saving controls
-save_helper_plots = True
+save_helper_plots = False
 save_recreated_plots = True
 store_full_mcts_dict_history = False
 
@@ -126,6 +132,7 @@ result = _MU.run_mcts_walk_forward(
     run_name=RUN_NAME,
     overwrite=OVERWRITE,
     fpc_n_sims=fpc_n_sims,
+    verbose=verbose,
     save_helper_plots=save_helper_plots,
     save_recreated_plots=save_recreated_plots,
     store_full_mcts_dict_history=store_full_mcts_dict_history,

@@ -23,9 +23,10 @@ import gc
 import json
 import time
 import gzip
-import dill as pickle
+import pickle
 import shutil
 import traceback
+import hashlib
 from copy import deepcopy
 from pathlib import Path
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
@@ -1809,11 +1810,12 @@ def default_initialization_kwargs(G):
 def default_solver_kwargs():
     delta = 12
     return {
-        "offset"   : 12,
+        "offset"   : 6,
         "t_vec"    : "Close",
         "t_mode"   : "AD",
         "emission" : [
-    {"ID": 15, "delta1": 3, "delta2": 12}                                          # (future/current) - 1
+    {"ID": 5, "alpha": "tvec", "offset": False},      # P[t+off] - P[t]
+    {"ID": 17, "delta1": 24, "min_count": 6},         # zscore of forward return series
 ],
         "AD_cond"  : ("gt", 0),
     }
@@ -2782,20 +2784,16 @@ def generate_population_from_grammar(
     return X, G_out, s_idx
 
 
-
-import hashlib
-
-
 def _solver_signature_for_fpc(solver_kwargs: dict) -> str:
     """
-    Stable short hash for solver/evaluation settings.
+    Stable short signature for solver/evaluation settings.
 
-    Prevents reusing a cached FPC curve across different emissions,
-    AD conditions, offsets, etc.
+    This prevents reusing an FPC curve across different emissions, offsets,
+    AD conditions, target modes, etc.
     """
-
     s = json.dumps(jsonable(solver_kwargs), sort_keys=True)
     return hashlib.md5(s.encode("utf-8")).hexdigest()[:12]
+
 
 def _wf_cache_key(chunk_num: int, tag: str = "eval", solver_kwargs: dict | None = None) -> str:
     if solver_kwargs is None:
@@ -2803,6 +2801,27 @@ def _wf_cache_key(chunk_num: int, tag: str = "eval", solver_kwargs: dict | None 
 
     sig = _solver_signature_for_fpc(solver_kwargs)
     return f"{str(tag)}:chunk:{int(chunk_num)}:solver:{sig}"
+
+
+def _wf_verbose(store, cfg: dict, msg: str, *, level: int = 1) -> None:
+    """
+    Log and optionally print walk-forward progress messages.
+
+    cfg["verbose"] controls console printing:
+        0 = log only
+        1 = main progress
+        2 = detailed cache/evaluation progress
+    """
+    try:
+        store.log(msg)
+    except Exception:
+        pass
+
+    try:
+        if int(cfg.get("verbose", 1)) >= int(level):
+            print(msg, flush=True)
+    except Exception:
+        pass
 
 
 def get_fpc_for_chunk_cached(
@@ -2820,82 +2839,197 @@ def get_fpc_for_chunk_cached(
     initialization_kwargs_fn=default_initialization_kwargs,
 ):
     """
-    Fit or retrieve one FPC curve for an absolute chunk number.
+    Fit or retrieve one FPC curve for an absolute chunk number and solver setup.
 
-    For a 20-chunk walk-forward run, chunks 0..19 are each fit once per tag.
-    Windows reuse the same cached objects:
-        window 0: 0,1,2
-        window 1: 1,2,3
+    Cache behavior:
+        1. memory hit if key exists in fpc_cache
+        2. disk hit if matching pkl exists in run_dir/fpc_cache
+        3. cache miss fits a new FPC curve
+
+    The cache key includes:
+        tag
+        chunk_num
+        solver_kwargs signature
+
+    For eval calls, pass X_template=X after X has already been instantiated on
+    chunk_num. That prevents fitting FPC from a fresh degenerate template.
     """
     if I_module is None:
         import initialization as I_module
     if E_module is None:
         import evaluation as E_module
 
+    chunk_num = int(chunk_num)
+    n_sims = int(cfg.get("fpc_n_sims", 2500))
+    solver_sig = _solver_signature_for_fpc(solver_kwargs)
     key = _wf_cache_key(chunk_num, tag=tag, solver_kwargs=solver_kwargs)
-
-    if key in fpc_cache:
-        return fpc_cache[key]
 
     fpc_dir = store.run_dir / "fpc_cache"
     fpc_dir.mkdir(parents=True, exist_ok=True)
 
+    pkl_path = fpc_dir / f"fpc_{tag}_chunk_{chunk_num:03d}_{solver_sig}.pkl.gz"
+    json_path = fpc_dir / f"fpc_{tag}_chunk_{chunk_num:03d}_{solver_sig}.json"
+
+    if key in fpc_cache:
+        _wf_verbose(
+            store,
+            cfg,
+            f"FPC CACHE HIT memory | tag={tag} chunk={chunk_num} solver={solver_sig}",
+            level=2,
+        )
+        append_jsonl(store.run_dir / "fpc_cache_index.jsonl", {
+            "event": "hit_memory",
+            "key": key,
+            "chunk_num": chunk_num,
+            "tag": str(tag),
+            "solver_sig": solver_sig,
+            "n_sims": n_sims,
+        })
+        return fpc_cache[key]
+
+    if pkl_path.exists():
+        try:
+            with gzip.open(pkl_path, "rb") as f:
+                obj = pickle.load(f)
+            fpc_cache[key] = obj
+            _wf_verbose(
+                store,
+                cfg,
+                f"FPC CACHE HIT disk | tag={tag} chunk={chunk_num} solver={solver_sig}",
+                level=1,
+            )
+            append_jsonl(store.run_dir / "fpc_cache_index.jsonl", {
+                "event": "hit_disk",
+                "key": key,
+                "chunk_num": chunk_num,
+                "tag": str(tag),
+                "solver_sig": solver_sig,
+                "n_sims": n_sims,
+                "path": str(pkl_path),
+            })
+            return obj
+        except Exception:
+            store.log("FPC disk load failed; refitting\n" + traceback.format_exc())
+
+    _wf_verbose(
+        store,
+        cfg,
+        f"FPC CACHE MISS | fitting tag={tag} chunk={chunk_num} solver={solver_sig} n_sims={n_sims}",
+        level=1,
+    )
+
     if X_template is None:
         kwargs = deepcopy(initialization_kwargs_fn(G))
-
         if "n_chunks" in cfg:
             kwargs["wf_windows"] = int(cfg["n_chunks"])
-
         if "data_file" in cfg:
             kwargs["data_file"] = cfg["data_file"]
-
         kwargs["verbose"] = 0
 
+        _wf_verbose(
+            store,
+            cfg,
+            f"FPC TEMPLATE | fresh initialize for tag={tag} chunk={chunk_num}",
+            level=2,
+        )
         X_template, _ = I_module.initialize(**kwargs)
-
-    n_sims = int(cfg.get("fpc_n_sims", 2500))
-
-    store.log(f"FPC CACHE MISS | fitting {tag} FPC for chunk={chunk_num} n_sims={n_sims}")
-
-    with capture_console(store, f"fit_fpc_{tag}_chunk_{int(chunk_num):03d}", k=int(chunk_num)), capture_plots(
-        store, f"fit_fpc_{tag}_chunk_{int(chunk_num):03d}", k=int(chunk_num), save=bool(cfg.get("save_helper_plots", True))
-    ):
-        pd_fpc, fpc_params, perm_mu = E_module.fit_FPC_part_prop(
-            X=X_template,
-            chunk_num=int(chunk_num),
-            solver_kwargs=solver_kwargs,
-            n_sims=n_sims,
+    else:
+        _wf_verbose(
+            store,
+            cfg,
+            f"FPC TEMPLATE | using provided instantiated X for tag={tag} chunk={chunk_num}",
+            level=2,
         )
 
-    obj = {
-        "chunk_num": int(chunk_num),
-        "tag": str(tag),
-        "pd_fpc": pd_fpc,
-        "fpc_params": fpc_params,
-        "perm_mu": perm_mu,
-        "n_sims": n_sims,
-    }
-
-    fpc_cache[key] = obj
-
-    meta = {
-        "chunk_num": int(chunk_num),
-        "tag": str(tag),
-        "fpc_params": fpc_params,
-        "perm_mu": perm_mu,
-        "n_sims": n_sims,
-    }
-    write_json_atomic(fpc_dir / f"fpc_{tag}_chunk_{int(chunk_num):03d}.json", meta)
-
     try:
-        with gzip.open(fpc_dir / f"fpc_{tag}_chunk_{int(chunk_num):03d}.pkl.gz", "wb") as f:
-            pickle.dump(obj, f, protocol=pickle.HIGHEST_PROTOCOL)
-    except Exception:
-        store.log("FPC pickle failed for chunk " + str(chunk_num) + "\n" + traceback.format_exc())
+        with capture_console(store, f"fit_fpc_{tag}_chunk_{chunk_num:03d}", k=chunk_num), capture_plots(
+            store, f"fit_fpc_{tag}_chunk_{chunk_num:03d}", k=chunk_num, save=bool(cfg.get("save_helper_plots", True))
+        ):
+            pd_fpc, fpc_params, perm_mu = E_module.fit_FPC_part_prop(
+                X=X_template,
+                chunk_num=chunk_num,
+                solver_kwargs=solver_kwargs,
+                n_sims=n_sims,
+            )
 
-    append_jsonl(store.run_dir / "fpc_cache_index.jsonl", meta)
+        obj = {
+            "chunk_num": chunk_num,
+            "tag": str(tag),
+            "solver_sig": solver_sig,
+            "key": key,
+            "pd_fpc": pd_fpc,
+            "fpc_params": fpc_params,
+            "perm_mu": perm_mu,
+            "n_sims": n_sims,
+            "failed": False,
+        }
 
-    return obj
+        fpc_cache[key] = obj
+
+        meta = {
+            "event": "fit_success",
+            "key": key,
+            "chunk_num": chunk_num,
+            "tag": str(tag),
+            "solver_sig": solver_sig,
+            "fpc_params": fpc_params,
+            "perm_mu": perm_mu,
+            "n_sims": n_sims,
+            "pkl_path": str(pkl_path),
+        }
+        write_json_atomic(json_path, meta)
+
+        try:
+            with gzip.open(pkl_path, "wb") as f:
+                pickle.dump(obj, f, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception:
+            store.log("FPC pickle failed for chunk " + str(chunk_num) + "\n" + traceback.format_exc())
+
+        append_jsonl(store.run_dir / "fpc_cache_index.jsonl", meta)
+        _wf_verbose(
+            store,
+            cfg,
+            f"FPC FIT DONE | tag={tag} chunk={chunk_num} solver={solver_sig} perm_mu={perm_mu}",
+            level=1,
+        )
+        return obj
+
+    except Exception as e:
+        err = traceback.format_exc()
+        store.log(err)
+        _wf_verbose(
+            store,
+            cfg,
+            f"FPC FIT FAILED | tag={tag} chunk={chunk_num} solver={solver_sig} error={type(e).__name__}: {e}",
+            level=1,
+        )
+
+        obj = {
+            "chunk_num": chunk_num,
+            "tag": str(tag),
+            "solver_sig": solver_sig,
+            "key": key,
+            "pd_fpc": None,
+            "fpc_params": None,
+            "perm_mu": None,
+            "n_sims": n_sims,
+            "failed": True,
+            "error": repr(e),
+        }
+        fpc_cache[key] = obj
+
+        meta = {
+            "event": "fit_failed",
+            "key": key,
+            "chunk_num": chunk_num,
+            "tag": str(tag),
+            "solver_sig": solver_sig,
+            "n_sims": n_sims,
+            "error": repr(e),
+        }
+        write_json_atomic(json_path, meta)
+        append_jsonl(store.run_dir / "fpc_cache_index.jsonl", meta)
+        return obj
 
 
 def instantiate_population_for_chunk(X, chunk_num: int, *, I_module=None, OPS_module=None, chunk_B: int = 8):
@@ -2958,6 +3092,23 @@ def evaluate_genes_on_chunk_cached(
         E_module=E_module,
         initialization_kwargs_fn=initialization_kwargs_fn,
     )
+
+    if fpc.get("failed", False) or fpc.get("pd_fpc", None) is None:
+        n_total = int(np.max(good_idx)) + 1 if good_idx.size else 0
+        pvals = np.ones(n_total, dtype=np.float64)
+        zscores = np.full(n_total, np.nan, dtype=np.float64)
+        details = {
+            "fpc_failed": True,
+            "chunk_num": int(chunk_num),
+            "reason": fpc.get("error", "unknown FPC failure"),
+        }
+        _wf_verbose(
+            store,
+            cfg,
+            f"EVAL SKIPPED | FPC failed for tag={tag} chunk={int(chunk_num)} reason={details['reason']}",
+            level=1,
+        )
+        return pvals, zscores, details, fpc
 
     with capture_console(store, f"eval_chunk_{int(chunk_num):03d}", k=int(chunk_num)), capture_plots(
         store, f"eval_chunk_{int(chunk_num):03d}", k=int(chunk_num), save=bool(cfg.get("save_helper_plots", False))
@@ -3083,7 +3234,6 @@ def decay_grammar_evidence(G, gamma: float = 1.0, *, decay_totals: bool = True):
 
     return {"gamma": gamma, "decayed": True}
 
-
 def run_inference_funnel_cached(
     *,
     G,
@@ -3101,9 +3251,22 @@ def run_inference_funnel_cached(
     logwalker_kwargs_fn=default_logwalker_kwargs,
 ):
     """
-    Switch grammar to infer mode, generate infer_populations directly with
-    _I.initialize, and run the i->j->k success funnel.
+    Inference walk-forward funnel.
+
+    Important behavior:
+        This evaluates every generated gene on all three chunks i, j, k.
+        It does NOT filter before evaluating later chunks.
+
+    Then it forms masks:
+        success_i   = z_i >= success_z
+        success_j   = z_j >= success_z
+        success_k   = z_k >= success_z
+        success_ij  = success_i & success_j
+        success_ijk = success_i & success_j & success_k
+
+    The main final k distribution is z_k over success_ij genes.
     """
+
     if I_module is None:
         import initialization as I_module
     if E_module is None:
@@ -3114,15 +3277,21 @@ def run_inference_funnel_cached(
     set_grammar_mode(G, "infer")
 
     base_solver_kwargs = deepcopy(solver_kwargs_fn())
-    eval_solver_kwargs = _wf_clone_solver_kwargs_for_eval(base_solver_kwargs, deepcopy(logwalker_kwargs_fn()))
+    eval_solver_kwargs = _wf_clone_solver_kwargs_for_eval(
+        base_solver_kwargs,
+        deepcopy(logwalker_kwargs_fn())
+    )
 
     infer_populations = int(cfg.get("infer_populations", 100))
     success_z = float(cfg.get("success_z", 2.0))
+    verbose = int(cfg.get("verbose", 0))
 
     records = []
-    all_k_scores = []
+    all_k_scores_on_ij = []
+    all_k_scores_on_ijk = []
 
     for pop_n in range(infer_populations):
+
         X_inf, _, s_idx = generate_population_from_grammar(
             G,
             cfg,
@@ -3130,7 +3299,13 @@ def run_inference_funnel_cached(
             initialization_kwargs_fn=initialization_kwargs_fn,
         )
 
-        p_i, z_i, d_i, _ = evaluate_genes_on_chunk_cached(
+        s_idx = np.asarray(s_idx, dtype=np.int64)
+
+        # ------------------------------------------------------------
+        # Evaluate ALL generated genes on ALL chunks.
+        # ------------------------------------------------------------
+
+        p_i, z_i, d_i, fpc_i = evaluate_genes_on_chunk_cached(
             X=X_inf,
             good_idx=s_idx,
             chunk_num=chunk_i,
@@ -3147,53 +3322,79 @@ def run_inference_funnel_cached(
             tag="eval",
         )
 
-        success_i = select_successes_from_zscores(z_i, s_idx, success_z=success_z)
+        p_j, z_j, d_j, fpc_j = evaluate_genes_on_chunk_cached(
+            X=X_inf,
+            good_idx=s_idx,
+            chunk_num=chunk_j,
+            G=G,
+            solver_kwargs=eval_solver_kwargs,
+            fpc_cache=fpc_cache,
+            cfg=cfg,
+            store=store,
+            E_module=E_module,
+            I_module=I_module,
+            OPS_module=OPS_module,
+            initialization_kwargs_fn=initialization_kwargs_fn,
+            visualize=False,
+            tag="eval",
+        )
 
-        if success_i.size > 0:
-            p_j, z_j, d_j, _ = evaluate_genes_on_chunk_cached(
-                X=X_inf,
-                good_idx=success_i,
-                chunk_num=chunk_j,
-                G=G,
-                solver_kwargs=eval_solver_kwargs,
-                fpc_cache=fpc_cache,
-                cfg=cfg,
-                store=store,
-                E_module=E_module,
-                I_module=I_module,
-                OPS_module=OPS_module,
-                initialization_kwargs_fn=initialization_kwargs_fn,
-                visualize=False,
-                tag="eval",
-            )
-            success_ij = select_successes_from_zscores(z_j, success_i, success_z=success_z)
-        else:
-            z_j = np.asarray([])
-            success_ij = np.asarray([], dtype=np.int64)
+        p_k, z_k, d_k, fpc_k = evaluate_genes_on_chunk_cached(
+            X=X_inf,
+            good_idx=s_idx,
+            chunk_num=chunk_k,
+            G=G,
+            solver_kwargs=eval_solver_kwargs,
+            fpc_cache=fpc_cache,
+            cfg=cfg,
+            store=store,
+            E_module=E_module,
+            I_module=I_module,
+            OPS_module=OPS_module,
+            initialization_kwargs_fn=initialization_kwargs_fn,
+            visualize=False,
+            tag="eval",
+        )
 
-        if success_ij.size > 0:
-            p_k, z_k, d_k, _ = evaluate_genes_on_chunk_cached(
-                X=X_inf,
-                good_idx=success_ij,
-                chunk_num=chunk_k,
-                G=G,
-                solver_kwargs=eval_solver_kwargs,
-                fpc_cache=fpc_cache,
-                cfg=cfg,
-                store=store,
-                E_module=E_module,
-                I_module=I_module,
-                OPS_module=OPS_module,
-                initialization_kwargs_fn=initialization_kwargs_fn,
-                visualize=False,
-                tag="eval",
-            )
-            k_scores = np.asarray(z_k, dtype=np.float64)[success_ij]
-        else:
-            k_scores = np.asarray([], dtype=np.float64)
+        z_i = np.asarray(z_i, dtype=np.float64)
+        z_j = np.asarray(z_j, dtype=np.float64)
+        z_k = np.asarray(z_k, dtype=np.float64)
 
-        if k_scores.size > 0:
-            all_k_scores.append(k_scores)
+        # ------------------------------------------------------------
+        # Build masks AFTER all evaluations exist.
+        # ------------------------------------------------------------
+
+        zi_s = z_i[s_idx]
+        zj_s = z_j[s_idx]
+        zk_s = z_k[s_idx]
+
+        mask_i = np.isfinite(zi_s) & (zi_s >= success_z)
+        mask_j = np.isfinite(zj_s) & (zj_s >= success_z)
+        mask_k = np.isfinite(zk_s) & (zk_s >= success_z)
+
+        success_i = s_idx[mask_i]
+        success_j = s_idx[mask_j]
+        success_k = s_idx[mask_k]
+
+        mask_ij = mask_i & mask_j
+        mask_ijk = mask_i & mask_j & mask_k
+
+        success_ij = s_idx[mask_ij]
+        success_ijk = s_idx[mask_ijk]
+
+        # Main final test interpretation:
+        # how do i+j successful genes score on chunk k?
+        k_scores_on_ij = z_k[success_ij] if success_ij.size > 0 else np.asarray([], dtype=np.float64)
+
+        # Strict final success:
+        # how many i+j genes also pass k?
+        k_scores_on_ijk = z_k[success_ijk] if success_ijk.size > 0 else np.asarray([], dtype=np.float64)
+
+        if k_scores_on_ij.size > 0:
+            all_k_scores_on_ij.append(k_scores_on_ij)
+
+        if k_scores_on_ijk.size > 0:
+            all_k_scores_on_ijk.append(k_scores_on_ijk)
 
         rec = {
             "chunk_i": int(chunk_i),
@@ -3201,18 +3402,67 @@ def run_inference_funnel_cached(
             "chunk_k": int(chunk_k),
             "pop_n": int(pop_n),
             "n_genes": int(len(s_idx)),
-            "n_success_i": int(len(success_i)),
-            "n_success_ij": int(len(success_ij)),
-            "n_success_k_eval": int(len(k_scores)),
+
+            # single-chunk successes
+            "n_success_i": int(success_i.size),
+            "n_success_j_all": int(success_j.size),
+            "n_success_k_all": int(success_k.size),
+
+            # sequential mask successes
+            "n_success_ij": int(success_ij.size),
+            "n_success_ijk": int(success_ijk.size),
+
+            # all genes were evaluated on k
+            "n_k_eval_all": int(len(s_idx)),
+
+            # final k interpretation over i+j successful genes
+            "n_k_eval_on_ij": int(k_scores_on_ij.size),
+
+            # stats on all generated genes
+            "z_i_stats_all": _wf_z_stats(z_i, s_idx),
+            "z_j_stats_all": _wf_z_stats(z_j, s_idx),
+            "z_k_stats_all": _wf_z_stats(z_k, s_idx),
+
+            # stats on filtered subsets
+            "z_j_stats_on_i_success": _wf_z_stats(z_j, success_i),
+            "z_k_stats_on_i_success": _wf_z_stats(z_k, success_i),
+            "z_k_stats_on_ij_success": finite_stats(k_scores_on_ij),
+            "z_k_stats_on_ijk_success": finite_stats(k_scores_on_ijk),
+
+            # compatibility fields for existing dashboard code
             "z_i_stats": _wf_z_stats(z_i, s_idx),
-            "z_j_stats": _wf_z_stats(z_j, success_i) if success_i.size > 0 else _wf_z_stats([], []),
-            "z_k_stats": finite_stats(k_scores),
+            "z_j_stats": _wf_z_stats(z_j, success_i),
+            "z_k_stats": finite_stats(k_scores_on_ij),
+            "n_success_k_eval": int(k_scores_on_ij.size),
         }
 
         records.append(rec)
         append_jsonl(store.run_dir / "wf_inference_records.jsonl", rec)
 
-    k_concat = np.concatenate(all_k_scores) if len(all_k_scores) > 0 else np.asarray([], dtype=np.float64)
+        if verbose >= 1:
+            store.log(
+                "INFER FUNNEL ALL-EVAL | "
+                f"chunks=({chunk_i},{chunk_j},{chunk_k}) | "
+                f"pop={pop_n} | "
+                f"n={len(s_idx)} | "
+                f"i={success_i.size} | "
+                f"j_all={success_j.size} | "
+                f"ij={success_ij.size} | "
+                f"ijk={success_ijk.size} | "
+                f"k_on_ij_mean={rec['z_k_stats_on_ij_success']['mean']}"
+            )
+
+    k_concat_on_ij = (
+        np.concatenate(all_k_scores_on_ij)
+        if len(all_k_scores_on_ij) > 0
+        else np.asarray([], dtype=np.float64)
+    )
+
+    k_concat_on_ijk = (
+        np.concatenate(all_k_scores_on_ijk)
+        if len(all_k_scores_on_ijk) > 0
+        else np.asarray([], dtype=np.float64)
+    )
 
     summary = {
         "chunk_i": int(chunk_i),
@@ -3220,15 +3470,32 @@ def run_inference_funnel_cached(
         "chunk_k": int(chunk_k),
         "infer_populations": int(infer_populations),
         "success_z": float(success_z),
+
+        "total_genes": int(sum(r["n_genes"] for r in records)),
+
+        # single-chunk totals
         "total_success_i": int(sum(r["n_success_i"] for r in records)),
+        "total_success_j_all": int(sum(r["n_success_j_all"] for r in records)),
+        "total_success_k_all": int(sum(r["n_success_k_all"] for r in records)),
+
+        # sequential-mask totals
         "total_success_ij": int(sum(r["n_success_ij"] for r in records)),
-        "total_success_k_eval": int(sum(r["n_success_k_eval"] for r in records)),
-        "k_score_stats": finite_stats(k_concat),
+        "total_success_ijk": int(sum(r["n_success_ijk"] for r in records)),
+
+        # all k evaluations exist now
+        "total_k_eval_all": int(sum(r["n_k_eval_all"] for r in records)),
+
+        # final k performance for i+j successful genes
+        "total_success_k_eval": int(sum(r["n_k_eval_on_ij"] for r in records)),
+        "k_score_stats": finite_stats(k_concat_on_ij),
+
+        # strict triple-success final scores
+        "k_score_stats_on_ijk": finite_stats(k_concat_on_ijk),
     }
 
     append_jsonl(store.run_dir / "wf_chunk_summaries.jsonl", summary)
-    return summary, records, k_concat
 
+    return summary, records, k_concat_on_ij
 
 def _save_wf_k_score_plot(store: MCTSRunStore, window_id: int, k_scores):
     k_scores = np.asarray(k_scores, dtype=np.float64).ravel()
@@ -3262,6 +3529,7 @@ def run_mcts_walk_forward(
     run_name: str = "wf_tmp",
     overwrite: bool = True,
     fpc_n_sims: int = 2500,
+    verbose: int = 1,
     save_helper_plots: bool = False,
     save_recreated_plots: bool = True,
     store_full_mcts_dict_history: bool = False,
@@ -3313,6 +3581,7 @@ def run_mcts_walk_forward(
         "infer_populations": int(infer_populations),
         "success_z": float(success_z),
         "fpc_n_sims": int(fpc_n_sims),
+        "verbose": int(verbose),
         "save_helper_plots": bool(save_helper_plots),
         "chunk_B": 8,
     }
@@ -3343,7 +3612,12 @@ def run_mcts_walk_forward(
             chunk_j = int(window_id + 1)
             chunk_k = int(window_id + 2)
 
-            store.log(f"\n================ WF WINDOW {window_id} | i={chunk_i} j={chunk_j} k={chunk_k} ================")
+            _wf_verbose(
+                store,
+                cfg,
+                f"\n================ WF WINDOW {window_id} | i={chunk_i} j={chunk_j} k={chunk_k} ================",
+                level=1,
+            )
             store.write_status("training_window", k=global_iter, extra={
                 "window_id": window_id,
                 "chunk_i": chunk_i,
@@ -3384,6 +3658,13 @@ def run_mcts_walk_forward(
             for local_iter in range(int(max_iters_per_window)):
                 iter_start = time.time()
 
+                _wf_verbose(
+                    store,
+                    cfg,
+                    f"WF ITER START | window={window_id} local_iter={local_iter} global_iter={global_iter} chunks=({chunk_i},{chunk_j},{chunk_k})",
+                    level=2,
+                )
+
                 initialization_kwargs = deepcopy(initialization_kwargs_fn(G))
                 solver_kwargs = deepcopy(solver_kwargs_fn())
                 logwalker_kwargs = deepcopy(logwalker_kwargs_fn())
@@ -3407,6 +3688,13 @@ def run_mcts_walk_forward(
                 target_var = float(np.asarray(dest_fpc["pd_fpc"](np.asarray([target_part_prop]))).ravel()[0])
                 target_sd = float(np.sqrt(max(target_var, 0.0)))
                 logwalker_kwargs["destination"] = float(dest_fpc["perm_mu"] + target_sd_mult * target_sd)
+
+                _wf_verbose(
+                    store,
+                    cfg,
+                    f"LOGWALKER DEST | window={window_id} iter={local_iter} chunk_i={chunk_i} destination={logwalker_kwargs['destination']:.8f}",
+                    level=2,
+                )
 
                 with capture_console(store, "wf_solver_inner", k=global_iter):
                     X, G, s_idx, walker, evaluation = ep.solver_inner(
@@ -3509,6 +3797,13 @@ def run_mcts_walk_forward(
                     "elapsed_sec": float(time.time() - iter_start),
                 }
                 store.append_metrics(metrics)
+
+                _wf_verbose(
+                    store,
+                    cfg,
+                    f"WF ITER DONE | window={window_id} local_iter={local_iter} h={h} delta_L={delta_L} z_j_mean={metrics['zscore_stats_j'].get('mean')} elapsed={metrics['elapsed_sec']:.2f}s",
+                    level=1,
+                )
 
                 if save_recreated_plots:
                     try:

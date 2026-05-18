@@ -1,0 +1,327 @@
+discovering grammar windows
+paired windows: [0, 1, 2]
+output folder: wf_grammar_compare/wf_grammar_compare_20260518_171305
+
+===== window 000 | chunks i/j/k=0/1/2 =====
+[start] group=gamma000000 window=000
+  [gamma000000 w=000] population 1/30
+[start] FPC chunk 0
+[done]  FPC chunk 0 | elapsed=34.21s
+[start] FPC chunk 1
+[done]  FPC chunk 1 | elapsed=31.86s
+[start] FPC chunk 2
+[done]  FPC chunk 2 | elapsed=31.29s
+  [gamma000000 w=000] population 2/30
+  [gamma000000 w=000] population 3/30
+  [gamma000000 w=000] population 4/30
+  [gamma000000 w=000] population 5/30
+  [gamma000000 w=000] population 6/30
+  [gamma000000 w=000] population 7/30
+  [gamma000000 w=000] population 8/30
+  [gamma000000 w=000] population 9/30
+  [gamma000000 w=000] population 10/30
+  [gamma000000 w=000] population 11/30
+  [gamma000000 w=000] population 12/30
+  [gamma000000 w=000] population 13/30
+  [gamma000000 w=000] population 14/30
+  [gamma000000 w=000] population 15/30
+  [gamma000000 w=000] population 16/30
+  [gamma000000 w=000] population 17/30
+  [gamma000000 w=000] population 18/30
+  [gamma000000 w=000] population 19/30
+  [gamma000000 w=000] population 20/30
+  [gamma000000 w=000] population 21/30
+  [gamma000000 w=000] population 22/30
+  [gamma000000 w=000] population 23/30
+  [gamma000000 w=000] population 24/30
+  [gamma000000 w=000] population 25/30
+  [gamma000000 w=000] population 26/30
+  [gamma000000 w=000] population 27/30
+  [gamma000000 w=000] population 28/30
+  [gamma000000 w=000] population 29/30
+  [gamma000000 w=000] population 30/30
+[done]  group=gamma000000 window=000 | valid_frac=0.400 | score_mean=3.924476528843151
+[start] group=gamma095098 window=000
+  [gamma095098 w=000] population 1/30
+  [gamma095098 w=000] population 2/30
+  [gamma095098 w=000] population 3/30
+  [gamma095098 w=000] population 4/30
+  [gamma095098 w=000] population 5/30
+  [gamma095098 w=000] population 6/30
+  [gamma095098 w=000] population 7/30
+  [gamma095098 w=000] population 8/30
+  [gamma095098 w=000] population 9/30
+  [gamma095098 w=000] population 10/30
+  [gamma095098 w=000] population 11/30
+  [gamma095098 w=000] population 12/30
+  [gamma095098 w=000] population 13/30
+  [gamma095098 w=000] population 14/30
+  [gamma095098 w=000] population 15/30
+  [gamma095098 w=000] population 16/30
+  [gamma095098 w=000] population 17/30
+  [gamma095098 w=000] population 18/30
+  [gamma095098 w=000] population 19/30
+  [gamma095098 w=000] population 20/30
+  [gamma095098 w=000] population 21/30
+  [gamma095098 w=000] population 22/30
+  [gamma095098 w=000] population 23/30
+  [gamma095098 w=000] population 24/30
+  [gamma095098 w=000] population 25/30
+  [gamma095098 w=000] population 26/30
+  [gamma095098 w=000] population 27/30
+  [gamma095098 w=000] population 28/30
+  [gamma095098 w=000] population 29/30
+  [gamma095098 w=000] population 30/30
+[done]  group=gamma095098 window=000 | valid_frac=0.667 | score_mean=4.52662980315546
+[start] group=null window=000
+  [null w=000] population 1/30
+  [null w=000] population 2/30
+  [null w=000] population 3/30
+  [null w=000] population 4/30
+  [null w=000] population 5/30
+  [null w=000] population 6/30
+  [null w=000] population 7/30
+  [null w=000] population 8/30
+  [null w=000] population 9/30
+  [null w=000] population 10/30
+  [null w=000] population 11/30
+  [null w=000] population 12/30
+  [null w=000] population 13/30
+  [null w=000] population 14/30
+  [null w=000] population 15/30
+  [null w=000] population 16/30
+  [null w=000] population 17/30
+  [null w=000] population 18/30
+  [null w=000] population 19/30
+  [null w=000] population 20/30
+  [null w=000] population 21/30
+  [null w=000] population 22/30
+  [null w=000] population 23/30
+  [null w=000] population 24/30
+  [null w=000] population 25/30
+  [null w=000] population 26/30
+  [null w=000] population 27/30
+  [null w=000] population 28/30
+  [null w=000] population 29/30
+  [null w=000] population 30/30
+[done]  group=null window=000 | valid_frac=0.300 | score_mean=4.164617866326502
+[energy] window=000 gamma000000_vs_gamma095098 | ED=0.29688951505132777 | p=0.05094905094905095 | better=gamma095098
+[energy] window=000 gamma000000_vs_null | ED=0.11469037532792625 | p=0.6143856143856143 | better=null
+[energy] window=000 gamma095098_vs_null | ED=0.14718923433991749 | p=0.3696303696303696 | better=gamma095098
+===== done window 000 | elapsed=4.38 min =====
+
+===== window 001 | chunks i/j/k=1/2/3 =====
+[start] group=gamma000000 window=001
+  [gamma000000 w=001] population 1/30
+[start] FPC chunk 3
+[done]  FPC chunk 3 | elapsed=31.75s
+  [gamma000000 w=001] population 2/30
+  [gamma000000 w=001] population 3/30
+  [gamma000000 w=001] population 4/30
+  [gamma000000 w=001] population 5/30
+  [gamma000000 w=001] population 6/30
+  [gamma000000 w=001] population 7/30
+  [gamma000000 w=001] population 8/30
+  [gamma000000 w=001] population 9/30
+  [gamma000000 w=001] population 10/30
+  [gamma000000 w=001] population 11/30
+  [gamma000000 w=001] population 12/30
+  [gamma000000 w=001] population 13/30
+  [gamma000000 w=001] population 14/30
+  [gamma000000 w=001] population 15/30
+  [gamma000000 w=001] population 16/30
+  [gamma000000 w=001] population 17/30
+  [gamma000000 w=001] population 18/30
+  [gamma000000 w=001] population 19/30
+  [gamma000000 w=001] population 20/30
+  [gamma000000 w=001] population 21/30
+  [gamma000000 w=001] population 22/30
+  [gamma000000 w=001] population 23/30
+  [gamma000000 w=001] population 24/30
+  [gamma000000 w=001] population 25/30
+  [gamma000000 w=001] population 26/30
+  [gamma000000 w=001] population 27/30
+  [gamma000000 w=001] population 28/30
+  [gamma000000 w=001] population 29/30
+  [gamma000000 w=001] population 30/30
+[done]  group=gamma000000 window=001 | valid_frac=0.400 | score_mean=4.89559005243748
+[start] group=gamma095098 window=001
+  [gamma095098 w=001] population 1/30
+  [gamma095098 w=001] population 2/30
+  [gamma095098 w=001] population 3/30
+  [gamma095098 w=001] population 4/30
+  [gamma095098 w=001] population 5/30
+  [gamma095098 w=001] population 6/30
+  [gamma095098 w=001] population 7/30
+  [gamma095098 w=001] population 8/30
+  [gamma095098 w=001] population 9/30
+  [gamma095098 w=001] population 10/30
+  [gamma095098 w=001] population 11/30
+  [gamma095098 w=001] population 12/30
+  [gamma095098 w=001] population 13/30
+  [gamma095098 w=001] population 14/30
+  [gamma095098 w=001] population 15/30
+  [gamma095098 w=001] population 16/30
+  [gamma095098 w=001] population 17/30
+  [gamma095098 w=001] population 18/30
+  [gamma095098 w=001] population 19/30
+  [gamma095098 w=001] population 20/30
+  [gamma095098 w=001] population 21/30
+  [gamma095098 w=001] population 22/30
+  [gamma095098 w=001] population 23/30
+  [gamma095098 w=001] population 24/30
+  [gamma095098 w=001] population 25/30
+  [gamma095098 w=001] population 26/30
+  [gamma095098 w=001] population 27/30
+  [gamma095098 w=001] population 28/30
+  [gamma095098 w=001] population 29/30
+  [gamma095098 w=001] population 30/30
+[done]  group=gamma095098 window=001 | valid_frac=0.367 | score_mean=5.251878855255395
+[start] group=null window=001
+  [null w=001] population 1/30
+  [null w=001] population 2/30
+  [null w=001] population 3/30
+  [null w=001] population 4/30
+  [null w=001] population 5/30
+  [null w=001] population 6/30
+  [null w=001] population 7/30
+  [null w=001] population 8/30
+  [null w=001] population 9/30
+  [null w=001] population 10/30
+  [null w=001] population 11/30
+  [null w=001] population 12/30
+  [null w=001] population 13/30
+  [null w=001] population 14/30
+  [null w=001] population 15/30
+  [null w=001] population 16/30
+  [null w=001] population 17/30
+  [null w=001] population 18/30
+  [null w=001] population 19/30
+  [null w=001] population 20/30
+  [null w=001] population 21/30
+  [null w=001] population 22/30
+  [null w=001] population 23/30
+  [null w=001] population 24/30
+  [null w=001] population 25/30
+  [null w=001] population 26/30
+  [null w=001] population 27/30
+  [null w=001] population 28/30
+  [null w=001] population 29/30
+  [null w=001] population 30/30
+[done]  group=null window=001 | valid_frac=0.433 | score_mean=5.220413536373035
+[energy] window=001 gamma000000_vs_gamma095098 | ED=0.15020896631633418 | p=0.3156843156843157 | better=gamma095098
+[energy] window=001 gamma000000_vs_null | ED=0.1266083171884127 | p=0.3306693306693307 | better=null
+[energy] window=001 gamma095098_vs_null | ED=0.06567886455353156 | p=0.7072927072927073 | better=gamma095098
+===== done window 001 | elapsed=3.44 min =====
+
+===== window 002 | chunks i/j/k=2/3/4 =====
+[start] group=gamma000000 window=002
+  [gamma000000 w=002] population 1/30
+[start] FPC chunk 4
+[done]  FPC chunk 4 | elapsed=32.90s
+  [gamma000000 w=002] population 2/30
+  [gamma000000 w=002] population 3/30
+  [gamma000000 w=002] population 4/30
+  [gamma000000 w=002] population 5/30
+  [gamma000000 w=002] population 6/30
+  [gamma000000 w=002] population 7/30
+  [gamma000000 w=002] population 8/30
+  [gamma000000 w=002] population 9/30
+  [gamma000000 w=002] population 10/30
+  [gamma000000 w=002] population 11/30
+  [gamma000000 w=002] population 12/30
+  [gamma000000 w=002] population 13/30
+  [gamma000000 w=002] population 14/30
+  [gamma000000 w=002] population 15/30
+  [gamma000000 w=002] population 16/30
+  [gamma000000 w=002] population 17/30
+  [gamma000000 w=002] population 18/30
+  [gamma000000 w=002] population 19/30
+  [gamma000000 w=002] population 20/30
+  [gamma000000 w=002] population 21/30
+  [gamma000000 w=002] population 22/30
+  [gamma000000 w=002] population 23/30
+  [gamma000000 w=002] population 24/30
+  [gamma000000 w=002] population 25/30
+  [gamma000000 w=002] population 26/30
+  [gamma000000 w=002] population 27/30
+  [gamma000000 w=002] population 28/30
+  [gamma000000 w=002] population 29/30
+  [gamma000000 w=002] population 30/30
+[done]  group=gamma000000 window=002 | valid_frac=0.000 | score_mean=nan
+[start] group=gamma095098 window=002
+  [gamma095098 w=002] population 1/30
+  [gamma095098 w=002] population 2/30
+  [gamma095098 w=002] population 3/30
+  [gamma095098 w=002] population 4/30
+  [gamma095098 w=002] population 5/30
+  [gamma095098 w=002] population 6/30
+  [gamma095098 w=002] population 7/30
+  [gamma095098 w=002] population 8/30
+  [gamma095098 w=002] population 9/30
+  [gamma095098 w=002] population 10/30
+  [gamma095098 w=002] population 11/30
+  [gamma095098 w=002] population 12/30
+  [gamma095098 w=002] population 13/30
+  [gamma095098 w=002] population 14/30
+  [gamma095098 w=002] population 15/30
+  [gamma095098 w=002] population 16/30
+  [gamma095098 w=002] population 17/30
+  [gamma095098 w=002] population 18/30
+  [gamma095098 w=002] population 19/30
+  [gamma095098 w=002] population 20/30
+  [gamma095098 w=002] population 21/30
+  [gamma095098 w=002] population 22/30
+  [gamma095098 w=002] population 23/30
+  [gamma095098 w=002] population 24/30
+  [gamma095098 w=002] population 25/30
+  [gamma095098 w=002] population 26/30
+  [gamma095098 w=002] population 27/30
+  [gamma095098 w=002] population 28/30
+  [gamma095098 w=002] population 29/30
+  [gamma095098 w=002] population 30/30
+[done]  group=gamma095098 window=002 | valid_frac=0.533 | score_mean=5.332664183993716
+[start] group=null window=002
+  [null w=002] population 1/30
+  [null w=002] population 2/30
+  [null w=002] population 3/30
+  [null w=002] population 4/30
+  [null w=002] population 5/30
+  [null w=002] population 6/30
+  [null w=002] population 7/30
+  [null w=002] population 8/30
+  [null w=002] population 9/30
+  [null w=002] population 10/30
+  [null w=002] population 11/30
+  [null w=002] population 12/30
+  [null w=002] population 13/30
+  [null w=002] population 14/30
+  [null w=002] population 15/30
+  [null w=002] population 16/30
+  [null w=002] population 17/30
+  [null w=002] population 18/30
+  [null w=002] population 19/30
+  [null w=002] population 20/30
+  [null w=002] population 21/30
+  [null w=002] population 22/30
+  [null w=002] population 23/30
+  [null w=002] population 24/30
+  [null w=002] population 25/30
+  [null w=002] population 26/30
+  [null w=002] population 27/30
+  [null w=002] population 28/30
+  [null w=002] population 29/30
+  [null w=002] population 30/30
+[done]  group=null window=002 | valid_frac=0.500 | score_mean=5.265446730678666
+[energy] window=002 gamma000000_vs_gamma095098 | ED=nan | p=nan | better=gamma095098
+[energy] window=002 gamma000000_vs_null | ED=nan | p=nan | better=null
+[energy] window=002 gamma095098_vs_null | ED=0.046330836116996954 | p=0.9110889110889111 | better=gamma095098
+===== done window 002 | elapsed=3.76 min =====
+
+complete
+output folder: wf_grammar_compare/wf_grammar_compare_20260518_171305
+key outputs:
+  wf_grammar_compare/wf_grammar_compare_20260518_171305/population_scores.csv
+  wf_grammar_compare/wf_grammar_compare_20260518_171305/summary_by_window_group.csv
+  wf_grammar_compare/wf_grammar_compare_20260518_171305/energy_tests_by_window.csv
+  wf_grammar_compare/wf_grammar_compare_20260518_171305/plots

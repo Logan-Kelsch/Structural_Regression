@@ -1,0 +1,20 @@
+{
+  "eval_dir": "wf_grammar_compare/wf_grammar_compare_20260518_171305",
+  "out_dir": "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test",
+  "score_col": "score_k_mean_ij",
+  "groups": [
+    "gamma000000",
+    "gamma095098"
+  ],
+  "n_perms": 5000,
+  "seed": 42,
+  "global_tests_csv": "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test/gamma_distribution_global_tests.csv",
+  "per_window_tests_csv": "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test/gamma_distribution_per_window_tests.csv",
+  "effects_csv": "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test/gamma_distribution_effects_by_window.csv",
+  "plots": [
+    "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test/plots/global_ecdf_gamma000000_vs_gamma095098.png",
+    "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test/plots/global_hist_gamma000000_vs_gamma095098.png",
+    "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test/plots/per_window_violin_gamma000000_vs_gamma095098.png",
+    "wf_grammar_compare/wf_grammar_compare_20260518_171305/gamma_distribution_test/plots/mean_difference_by_window.png"
+  ]
+}

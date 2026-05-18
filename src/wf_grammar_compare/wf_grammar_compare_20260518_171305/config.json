@@ -1,0 +1,14 @@
+{
+  "root": "mcts_runs",
+  "group_dirs": {
+    "gamma000000": "mcts_runs/wf_gamma000000/grammars",
+    "gamma095098": "mcts_runs/wf_gamma095098/grammars"
+  },
+  "out_dir": "wf_grammar_compare/wf_grammar_compare_20260518_171305",
+  "n_populations": 30,
+  "fpc_n_sims": 2500,
+  "success_z": 2.0,
+  "infer_softmax_temp": 1.0,
+  "energy_permutations": 1000,
+  "rng_seed": 123
+}
