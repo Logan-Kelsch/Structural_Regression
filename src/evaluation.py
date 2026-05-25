@@ -65,6 +65,11 @@ class Solver:
         ],
         offset      :   int=    6,
         AD_cond		:	tuple=	('gt', 2),
+        ATR_window  :   int = None,
+        ATR_min_count:  int = None,
+        ATR_coef    :   float = None,
+        RR_max_rng  :   int = None,
+        RRR         :   float = None
     ):
         '''emission is interpreted as functions applied to t_vec from left to right.'''
 
@@ -72,6 +77,12 @@ class Solver:
         self._emission	= emission
         self._AD_cond 	= AD_cond
         self._offset 	= offset
+        self._ATR_window= ATR_window
+        self._ATR_min_count = ATR_min_count
+        self._ATR_coef  = ATR_coef
+        self._RR_max_rng= RR_max_rng
+        self._RRR       = RRR
+
 
         #match case for transforming t_vec string into a column index in population variable
         target_idx = -1
@@ -104,7 +115,7 @@ class Solver:
         
     def solve(
         self,
-        Population: _I.Population,
+        population: _I.Population,
         chunk_num: int | None = None,
     ):
         '''
@@ -114,7 +125,7 @@ class Solver:
         '''
         if self._tmode == 'AD' or self._tmode == 'RE':
             raw_emission = generate_raw_emission(
-                Population,
+                population,
                 self._tidx,
                 self._emission,
                 self._offset,
@@ -126,16 +137,32 @@ class Solver:
                     raw_emission *= -1
 
             evaluation_mask = generate_evaluation_mask(
-                Population,
+                population,
                 offset=self._offset,
                 emission=self._emission,
                 chunk_num=chunk_num,
             )
             anomaly_mask = generate_anomaly_mask(raw_emission, self._AD_cond)
+        
+        elif (self._tmode == 'RR'):
+            #case for risk to reward ratio solving
+            # we will take in two parameters:
+            #      atr_len OR eatr_kappa, atr_coef OR eatr_coef, RRR
+            #things we need to do in order
+            #go get raw emissions array
+            #this would contain the action of getting the ATR array
+            #then we solve for raw emissions
+            raw_atr = generate_raw_atr_RR(population, chunk_num, self._ATR_window, self._ATR_min_count)
+            raw_emission = generate_raw_emission_RR(population, raw_atr, self._ATR_coef, self._RRR, self._RR_max_rng, chunk_num)
+            evaluation_mask = generate_evaluation_mask_RR(population, self._RR_max_rng, self._ATR_min_count, chunk_num)
+            anomaly_mask = raw_emission > 0
+
+
         else:
             raise NotImplementedError(f'Target Mode of "{self._tmode}" is not supported at this moment.')
 
         return raw_emission, evaluation_mask, anomaly_mask
+
 
         
 
@@ -175,6 +202,282 @@ def evaluate(
 
 import numpy as np
 import transform_ops
+import bottleneck as bn
+
+import numpy as np
+
+
+def generate_raw_emission_RR(population, atr, atr_coef, RRR, max_rng, chunk_num, *, fill_tail=0):
+    """
+    Generate RR-style walk-forward raw emission.
+
+    For each time t:
+      - lb[t] and ub[t] define fixed exit bounds for that entry.
+      - Walk forward from t+1 through t+max_rng.
+      - If close first hits/exceeds ub[t], emission[t] = ub[t] - close[t].
+      - If close first hits/falls below lb[t], emission[t] = lb[t] - close[t].
+      - If neither bound is hit by t+max_rng, emission[t] = close[t+max_rng] - close[t].
+      - If t+max_rng is outside the array, emission[t] = fill_tail.
+
+    Parameters
+    ----------
+    close : array-like
+        Close price array.
+    lb : array-like
+        Lower exit bound. Must satisfy lb[t] < close[t] for all t.
+    ub : array-like
+        Upper exit bound. Must satisfy ub[t] > close[t] for all t.
+    max_rng : int
+        Maximum number of future bars to scan.
+    fill_tail : float, default np.nan
+        Value used where a full forward horizon is unavailable.
+
+    Returns
+    -------
+    np.ndarray
+        Raw emission array with same length as close.
+    """
+
+    X, _, _ = _get_chunk_view(population, chunk_num)
+
+    close = X[:, 3]
+    high = X[:, 1]
+    low = X[:, 2]
+
+    match(np.sign(RRR)):
+        case 0:
+            raise ValueError('Cannot have RRR = 0. Try again.')
+        case 1:
+            on_tie='lower'
+            em_sign = 1
+            lb = close - atr * atr_coef
+            ub = close + atr * atr_coef * RRR
+        case -1:
+            on_tie='upper'
+            em_sign = -1
+            lb = close - atr * atr_coef * RRR
+            ub = close + atr * atr_coef
+
+    if not (close.ndim == high.ndim == low.ndim == lb.ndim == ub.ndim == 1):
+        raise ValueError("close, high, low, lb, and ub must all be 1D arrays")
+
+    if not (close.shape == high.shape == low.shape == lb.shape == ub.shape):
+        raise ValueError(
+            "shape mismatch: "
+            f"close={close.shape}, high={high.shape}, low={low.shape}, "
+            f"lb={lb.shape}, ub={ub.shape}"
+        )
+
+    if not isinstance(max_rng, (int, np.integer)) or max_rng <= 0:
+        raise ValueError("max_rng must be a positive integer")
+
+    on_tie = str(on_tie).lower()
+    if on_tie not in {"upper", "lower"}:
+        raise ValueError("on_tie must be either 'upper' or 'lower'")
+
+    # allow np.nan, but reject inf / -inf
+    bad_inf = (
+        np.isinf(close)
+        | np.isinf(high)
+        | np.isinf(low)
+        | np.isinf(lb)
+        | np.isinf(ub)
+    )
+    if np.any(bad_inf):
+        bad_idx = np.where(bad_inf)[0][:10]
+        raise ValueError(f"inputs cannot contain inf. bad indices: {bad_idx}")
+
+    valid_entry = (
+        ~np.isnan(close)
+        & ~np.isnan(high)
+        & ~np.isnan(low)
+        & ~np.isnan(lb)
+        & ~np.isnan(ub)
+    )
+
+    bad_lb = valid_entry & (lb >= close)
+    bad_ub = valid_entry & (ub <= close)
+
+    if np.any(bad_lb):
+        bad_idx = np.where(bad_lb)[0][:10]
+        raise ValueError(f"lb must be strictly less than close. bad indices: {bad_idx}")
+
+    if np.any(bad_ub):
+        bad_idx = np.where(bad_ub)[0][:10]
+        raise ValueError(f"ub must be strictly greater than close. bad indices: {bad_idx}")
+
+    n = close.shape[0]
+    emission = np.full(n, fill_tail, dtype=np.float64)
+
+    last_start = n - max_rng
+
+    for t in range(last_start):
+
+        if not valid_entry[t]:
+            continue
+
+        # need future close for timeout, and future high/low for crossings
+        if np.isnan(close[t + max_rng]):
+            continue
+
+        if np.any(np.isnan(high[t + 1:t + max_rng + 1])):
+            continue
+
+        if np.any(np.isnan(low[t + 1:t + max_rng + 1])):
+            continue
+
+        c0 = close[t]
+        lower = lb[t]
+        upper = ub[t]
+
+        out = close[t + max_rng] - c0
+
+        for j in range(t + 1, t + max_rng + 1):
+            upper_hit = high[j] >= upper
+            lower_hit = low[j] <= lower
+
+            if upper_hit and lower_hit:
+                if on_tie == "upper":
+                    out = upper - c0
+                else:
+                    out = lower - c0
+                break
+
+            if upper_hit:
+                out = upper - c0
+                break
+
+            if lower_hit:
+                out = lower - c0
+                break
+
+        emission[t] = out
+
+    return emission * em_sign
+
+def generate_raw_atr_RR(Population, chunk_num, window, min_count=3):
+    X, _, _ = _get_chunk_view(Population, chunk_num)
+    hldiff = X[:,1]-X[:,2]
+    atr = bn.move_mean(hldiff, window=window, min_count=min_count)
+    return atr
+
+def generate_evaluation_mask_RR(
+    Population: _I.Population,
+    max_rng: int,
+    ATR_min_count: int,
+    chunk_num: int | None = None,
+    fallback_tod_idx: int = 5,
+):
+    """
+    Build a boolean evaluation mask for RR-style intraday targets.
+
+    RR-specific behavior:
+
+    1. Embargo:
+       Removes the final max_rng rows of each day, because the RR target
+       may need to walk forward up to max_rng bars.
+
+    2. Purge:
+       Removes the first ATR_min_count rows of each day, because RR bounds
+       are assumed to depend on ATR-style rolling logic.
+
+    Parameters
+    ----------
+    Population
+        Population object containing _X_inst and time information.
+
+    max_rng
+        Forward RR search horizon. Controls end-of-day embargo.
+
+    ATR_min_count
+        ATR rolling minimum count / lookback. Controls beginning-of-day purge.
+
+    chunk_num
+        None returns the full-data mask. An int returns the mask for that chunk.
+
+    fallback_tod_idx
+        Fallback time-of-day column. Your current structure uses column 5.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean mask of shape (N,), where True means the row is valid
+        for evaluation and False means it should be excluded.
+    """
+    if not hasattr(Population, "_X_inst"):
+        raise AttributeError("Population must have attribute '_X_inst'")
+
+    if not hasattr(Population, "_T_idx"):
+        raise AttributeError("Population must have attribute '_T_idx'")
+
+    X_full = Population._X_inst
+
+    if not isinstance(X_full, np.ndarray):
+        raise TypeError("Population._X_inst must be a numpy ndarray")
+
+    if X_full.ndim != 2:
+        raise ValueError("Population._X_inst must be 2D")
+
+    X, _, _ = _get_chunk_view(Population, chunk_num)
+
+    N, G = X.shape
+
+    if N == 0:
+        return np.zeros(0, dtype=bool)
+
+    try:
+        if hasattr(Population, "_tod_idx") and Population._tod_idx is not None:
+            tod_idx = int(Population._tod_idx)
+        elif getattr(Population, "_time_terminals", False):
+            tod_idx = int(Population._T_idx[-2])
+        else:
+            tod_idx = int(fallback_tod_idx)
+    except Exception as e:
+        raise ValueError("Could not resolve time-of-day column index") from e
+
+    if tod_idx < 0 or tod_idx >= G:
+        raise IndexError(f"time-of-day column index {tod_idx} out of bounds for G={G}")
+
+    embargo_bars = int(max_rng)
+    purge_bars = int(ATR_min_count)
+
+    if embargo_bars < 0:
+        raise ValueError("max_rng must be >= 0")
+
+    if purge_bars < 0:
+        raise ValueError("ATR_min_count must be >= 0")
+
+    tod = np.asarray(X[:, tod_idx])
+
+    mask = np.ones(N, dtype=bool)
+
+    # ------------------------------------------------------------
+    # Embargo end-of-day rows where t + max_rng would cross a day.
+    # ------------------------------------------------------------
+    if embargo_bars > 0:
+        if embargo_bars >= N:
+            return np.zeros(N, dtype=bool)
+
+        mask[-embargo_bars:] = False
+        mask[:-embargo_bars] &= tod[embargo_bars:] >= tod[:-embargo_bars]
+
+    # ------------------------------------------------------------
+    # Purge beginning-of-day rows for ATR availability.
+    # ------------------------------------------------------------
+    if purge_bars > 0:
+        reset_starts = np.flatnonzero(tod[1:] < tod[:-1]) + 1
+        zero_starts = np.flatnonzero(tod == 0)
+
+        day_starts = np.unique(np.r_[0, reset_starts, zero_starts])
+        day_starts.sort()
+
+        day_ends = np.r_[day_starts[1:], N]
+
+        for s, e in zip(day_starts, day_ends):
+            purge_end = min(e, s + purge_bars)
+            mask[s:purge_end] = False
+
+    return mask
 
 def generate_raw_emission(Population, target_idx, emissions, offset, chunk_num: int | None = None):
     """
@@ -2340,13 +2643,22 @@ from copy import deepcopy
 def set_ad_proxy(solver_kwargs, proxy_value):
     sk = deepcopy(solver_kwargs)
 
-    cond = list(sk["AD_cond"])
-    cond[1] = proxy_value
+    if (sk["t_mode"] == 'AD' or sk["t_mode"] == 'RE'):
 
-    if isinstance(solver_kwargs["AD_cond"], tuple):
-        sk["AD_cond"] = tuple(cond)
+        cond = list(sk["AD_cond"])
+        cond[1] = proxy_value
+
+        if isinstance(solver_kwargs["AD_cond"], tuple):
+            sk["AD_cond"] = tuple(cond)
+        else:
+            sk["AD_cond"] = cond
+
+    elif (sk["t_mode"] == 'RR'):
+        #this addition is for the riskreward ratio addition to emission generation
+        sk["RRR"] = proxy_value
+
     else:
-        sk["AD_cond"] = cond
+        raise ValueError(f'When setting ad for proxy search, found solver kwargs with invalid mode of "{sk["t_mode"]}".')
 
     return sk
 
@@ -2379,11 +2691,10 @@ def cheap_survey_proxy_value(
     lightest available method that gives you masks.
     """
 
+
     sk = set_ad_proxy(solver_kwargs, proxy_value)
 
-    pass
-    pass
-    pass
+    #print("IN cheap survey proxy value sk", sk)
 
     # needed from this function:
     # em = evaluation_mask as bool array
@@ -2522,11 +2833,19 @@ def build_null_for_proxy(
 
     sk = set_ad_proxy(solver_kwargs, proxy_value)
 
+    print(sk)
+
+    solver = Solver(population, **sk)
+    RE, EM, AM = solver.solve(population, chunk_num)
+
     null_context, null_build_details = build_opg_null_bank_fast(
         population=population,
         chunk_num=chunk_num,
         solver_kwargs=sk,
         solver_class=solver_class,
+        raw_emission=RE,
+        evaluation_mask=EM,
+        anomaly_mask=AM,
         n_sims=n_sims,
         score_mode=score_mode,
         rng=rng,
@@ -2535,8 +2854,8 @@ def build_null_for_proxy(
         return_details=True,
     )
 
-    em = np.asarray(null_context["evaluation_mask"], dtype=bool)
-    am = np.asarray(null_context["anomaly_mask"], dtype=bool)
+    em = EM#np.asarray(null_context["evaluation_mask"], dtype=bool)
+    am = AM#np.asarray(null_context["anomaly_mask"], dtype=bool)
 
     N = int(em.sum())
     m = int((am & em).sum())
@@ -2716,13 +3035,31 @@ def fit_FPC_part_prop(
     solver_kwargs,
     n_sims
 ):
-    target_props = make_target_props(
-        p_max=0.9,
-        p_min=0.01,
-        n_targets=20,
-    )
+    
 
     proxy_results = []
+
+    match(solver_kwargs["t_mode"]):
+        case "AD":
+            proxy_lo = 0.0
+            proxy_hi_start = 0.01
+            target_props = make_target_props(
+                p_max=0.9,
+                p_min=0.01,
+                n_targets=20,
+            )
+
+        case "RR":
+            proxy_lo = 0.5
+            proxy_hi_start = 0.6
+            target_props = make_target_props(
+                p_max=0.8,
+                p_min=0.3,
+                n_targets=20,
+            )
+            
+        case _:
+            raise NotImplementedError(f"t mode if '{solver_kwargs["t_mode"]}' not accepted in fit FPC part prop")
 
     for tp in target_props:
         print(f"searching proxy for target prop: {tp:.4f}")
@@ -2734,9 +3071,9 @@ def fit_FPC_part_prop(
             solver_kwargs=solver_kwargs,
             solver_class=Solver,
             prop_survey_fn=cheap_survey_proxy_value,
-            proxy_lo=0.0,
-            proxy_hi_start=0.01,
-            hi_growth=2.0,
+            proxy_lo=proxy_lo,
+            proxy_hi_start=proxy_hi_start,
+            hi_growth=1.1,
             max_expand=20,
             max_bisect=12,
         )
@@ -4418,9 +4755,9 @@ def build_opg_null_bank_fast(
             chunk_num=chunk_num,
         )
 
-    raw_emission = np.asarray(raw_emission, dtype=np.float64).reshape(-1)
-    evaluation_mask = np.asarray(evaluation_mask, dtype=bool).reshape(-1)
-    anomaly_mask = np.asarray(anomaly_mask, dtype=bool).reshape(-1)
+    raw_emission = np.asarray(raw_emission, dtype=np.float64)#.reshape(-1)
+    evaluation_mask = np.asarray(evaluation_mask, dtype=bool)#.reshape(-1)
+    anomaly_mask = np.asarray(anomaly_mask, dtype=bool)#.reshape(-1)
 
     if raw_emission.size != evaluation_mask.size:
         raise ValueError("raw_emission and evaluation_mask must have the same length")
@@ -4482,6 +4819,8 @@ def build_opg_null_bank_fast(
         "template_mode": template_mode,
         "temperature": temperature,
     }
+
+    #print(null_context)
 
     details = {
         "null_context": null_context,
@@ -6138,6 +6477,7 @@ def mem_report(scope, top=20, min_mb=1.0):
     for mb, name, extra in rows[:top]:
         print(f"{mb:9.2f} MB | {name:<30} | {extra}")
     print("---------------------\n")
+
 
 
 

@@ -9,7 +9,7 @@ import evaluation as _E
 import visualization as _V
 import initialization as _I
 import transform_ops as _OPS
-import mcts_util as _MU
+import legacy.mcts_util as _MU
 import numpy as np
 
 reload(_E)

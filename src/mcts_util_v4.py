@@ -2035,23 +2035,24 @@ def default_initialization_kwargs(G):
 
 
 def default_solver_kwargs():
-    delta = 12
     return {
         "offset"   : 6,
         "t_vec"    : "Close",
-        "t_mode"   : "AD",
-        "emission" : [
-    {"ID": 5, "alpha": "tvec", "offset": False},      # P[t+off] - P[t]
-    {"ID": 17, "delta1": 24, "min_count": 2},         # zscore of forward return series
-],
+        "t_mode"   : "RR",
+        "emission" : [],
         "AD_cond"  : ("gt", 0),
+        "ATR_window": 20,
+        "ATR_min_count": 1,
+        "ATR_coef" : 2,
+        "RR_max_rng": 30,
+        "RRR"      : 1
     }
 
 
 def default_logwalker_kwargs():
     return {
-        "start": 0,
-        "destination": 0.0025,
+        "start": 1,
+        "destination": 3,
         "steps": 24,
         "exhaust_mode": "steps",
         "exwhen": 100,
@@ -3119,12 +3120,19 @@ def _wf_clone_solver_kwargs_for_eval(solver_kwargs: dict, logwalker_kwargs: dict
     """
     out = deepcopy(solver_kwargs)
 
-    if isinstance(out.get("emission", None), list) and len(out["emission"]) > 0:
-        out["emission"] = deepcopy(out["emission"])
-        out["emission"].pop()
+    if(out["t_mode"] == "AD"):
+        if isinstance(out.get("emission", None), list) and len(out["emission"]) > 0:
+            out["emission"] = deepcopy(out["emission"])
+            out["emission"].pop()
 
-    if logwalker_kwargs is not None and "AD_cond" in out:
-        out["AD_cond"] = (out["AD_cond"][0], logwalker_kwargs.get("start", 0))
+        if logwalker_kwargs is not None and "AD_cond" in out:
+            out["AD_cond"] = (out["AD_cond"][0], logwalker_kwargs.get("start", 0))
+
+    elif(out["t_mode"] == "RR" and logwalker_kwargs is not None):
+        out["RRR"] = logwalker_kwargs.get("start", 0)
+
+    else:
+        raise ValueError(f"No listed t mode case for '{out["t_mode"]}' in _wf_clone_solver_kwargs_for_eval.")
 
     return out
 
@@ -4658,11 +4666,12 @@ def run_mcts_walk_forward(
 
                 train_eval_sig = _wf_solver_signature_light(eval_solver_kwargs)
 
-                store.log(
-                    "TRAIN EVAL SOLVER SIGNATURE | "
-                    f"window={window_id} | chunks=({chunk_i},{chunk_j},{chunk_k}) | "
-                    f"{json.dumps(jsonable(train_eval_sig), sort_keys=True)}"
-                )
+                if(solver_kwargs["t_mode"] == "AD" or solver_kwargs["t_mode"]):
+                    store.log(
+                        "TRAIN EVAL SOLVER SIGNATURE | "
+                        f"window={window_id} | chunks=({chunk_i},{chunk_j},{chunk_k}) | "
+                        f"{json.dumps(jsonable(train_eval_sig), sort_keys=True)}"
+                    )
 
                 pvals, zscores, gene_eval_details, fpc_j = evaluate_genes_on_chunk_cached(
                     X=X,

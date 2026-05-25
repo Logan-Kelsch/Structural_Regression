@@ -79,7 +79,7 @@ G = _I.Grammar(
 # Walk-forward controls
 # ---------------------------------------------------------------------
 
-RUN_NAME = "wf_gamma095098"
+RUN_NAME = "wf_tmp"
 OVERWRITE = True
 
 # default number of chunks available for walk-forward windows
@@ -93,8 +93,8 @@ delta_L = 0.01
 # grammar memory decay between windows
 # 1.0 means no decay by default
 # 0.95 means previous chunk evidence is multiplied by 0.95 each chunk shift
-grammar_memory_gamma = 0.95
-grammar_explore_gamma = 0.98
+grammar_memory_gamma = 0.00
+grammar_explore_gamma = 0.00
 
 # max grammar-update iterations allowed for one window if delta_L is not reached
 max_iters_per_window = 100

@@ -662,7 +662,13 @@ def solver_inner(
     i = 0
 
     # dynamic walker-controlled threshold term
-    solver_kwargs["emission"].append({"ID": 5, "alpha": walker.start})
+    match(solver_kwargs["t_mode"]):
+        case "AD":
+            solver_kwargs["emission"].append({"ID": 5, "alpha": walker.start})
+        case "RR":
+            solver_kwargs["RRR"] = walker.start
+        case _:
+            raise ValueError(f'got tmode in solverkwargs for solver inner that is invalid when trying to assign walker.start')
 
     X, G, evaluation = ep.evolve_population(
         G=G,
@@ -690,9 +696,16 @@ def solver_inner(
             break
 
         target = walker.current_target()
-        solver_kwargs["emission"][-1]["alpha"] = target
-        #tuples are immutable so little clunky
-        solver_kwargs["AD_cond"] = (solver_kwargs["AD_cond"][0], target)
+
+        match(solver_kwargs["t_mode"]):
+            case "AD":
+                solver_kwargs["emission"][-1]["alpha"] = target
+                #tuples are immutable so little clunky
+                solver_kwargs["AD_cond"] = (solver_kwargs["AD_cond"][0], target)
+            case "RR":
+                solver_kwargs["RRR"] = target
+            case _:
+               raise ValueError(f'got tmode in solverkwargs for solver inner that is invalid when trying to assign target to walker')
 
         # keep previous state so failed attempts can be discarded
         X_prev = deepcopy(X)

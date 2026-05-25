@@ -58,12 +58,12 @@
       "Name": "Grammar Fin"
     },
     {
-      "Time": null,
+      "Time": "6.20:29:16.5381397",
       "Name": "auto prep"
     },
     {
       "Time": null,
-      "Name": "Reproduction Fin"
+      "Name": "RRR addition"
     },
     {
       "Time": null,
@@ -122,7 +122,7 @@
       "Name": "Compile Results"
     }
   ],
-  "CurrentSplitIndex": 14,
+  "CurrentSplitIndex": 15,
   "CurrentSplitTime": null,
-  "CurrentTime": "6.20:29:14.9752440"
+  "CurrentTime": "7.06:32:38.3522571"
 }
