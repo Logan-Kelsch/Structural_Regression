@@ -1,238 +1,1298 @@
 # Stochastic Grammar Optimization of Financial Market Behavior
 
-A research project in self-supervised symbolic regression for financial time series, centered on evolving interpretable programs that model market behavior while simultaneously optimizing the grammatical structure used to generate those programs.
-
-## Overview
-
-This project explores a two-level learning framework for modeling financial markets:
-
-- **Inner loop:** symbolic regression searches for programs that explain or anticipate market behavior from intraday data
-- **Outer loop:** a stochastic grammar is optimized to improve the rate at which useful symbolic models are discovered
-
-Rather than treating symbolic search as a fixed grammar problem, this project studies whether the **generator of candidate models** can itself be improved. The result is a system that does not only search for good equations, but also learns how to search more effectively.
-
-## Core Idea
-
-Financial market data is noisy, nonstationary, path-dependent, and often difficult to model with conventional fixed-form methods. This project approaches the problem by combining:
-
-- **self-supervised target construction**
-- **symbolic regression over market-derived features**
-- **stochastic grammatical evolution**
-- **walk-forward evaluation**
-- **distribution-aware statistical validation**
-
-The central hypothesis is that market behavior may be better captured by a system that evolves:
-1. **interpretable symbolic structures**
-2. **the grammar that produces those structures**
-
-## Project Objective
-
-The overarching goal is to build a framework that improves the **solving rate of effective modeling** in financial time series.
-
-In practice, that means:
-
-- generating symbolic programs that describe meaningful market structure
-- favoring models that survive out-of-sample testing
-- learning grammar distributions that produce useful candidate structures more often
-- improving search efficiency without collapsing interpretability
-
-## Methodology
-
-### 1. Self-Supervised Symbolic Regression
-
-The system constructs targets from market data without requiring human labels. These targets may represent:
-
-- directional behavior
-- volatility expansion or compression
-- anomaly-like events
-- normalized future-relative movement
-- other interpretable emissions derived from price/volume structure
-
-These targets are intentionally designed to tell a market story rather than only optimize a raw prediction metric.
-
-### 2. Inner Loop: Symbolic Program Search
-
-The inner loop searches over symbolic programs composed from:
-
-- terminals derived from market data
-- transformations and rolling operators
-- temporal offsets and intraday structure
-- arithmetic and logical compositions
-- parameterized operations
-
-Programs are evaluated as candidate explanations or predictive structures over financial time series. The aim is not only fit, but robustness and behavioral relevance.
-
-### 3. Outer Loop: Stochastic Grammar Optimization
-
-The outer loop updates the grammar that generates candidate symbolic programs.
-
-Instead of using a static symbolic search space, the system learns which structural motifs are more likely to produce effective models. This includes learning preferences over:
-
-- operator usage
-- parameter patterns
-- structural depth
-- compositional forms
-- program topology
-
-This turns the project into a meta-optimization problem:
-**optimize the model generator, not only the models.**
-
-### 4. Walk-Forward Evaluation
-
-Because financial data is temporally dependent, the framework is designed around walk-forward logic rather than naive random splits.
-
-Typical evaluation uses:
-
-- chunked time windows
-- forward-only testing
-- intraday-aware masking
-- prevention of future leakage
-- repeated solve/evaluate cycles across unseen segments
-
-This is meant to better reflect how a discovered model would behave in a live setting.
-
-### 5. Statistical Validation
-
-To avoid over-interpreting noisy symbolic discoveries, the project uses distribution-based validation ideas such as Monte Carlo style null testing.
-
-A major focus is distinguishing:
-
-- true structural edge
-- accidental pattern capture
-- participation geometry artifacts
-- noise-driven score inflation
-
-This helps frame discovered models in terms of statistical rarity, not only raw score.
-
-## Why Symbolic Regression?
-
-Unlike many black-box approaches, symbolic regression offers:
-
-- **interpretability**
-- **structural transparency**
-- **compact market hypotheses**
-- **easier failure analysis**
-- **potentially reusable motifs across regimes**
-
-For financial research, this matters because good performance alone is often not enough. A model should also suggest *why* it works and under what market conditions it may fail.
-
-## Research Themes
-
-This project sits at the intersection of:
-
-- symbolic AI
-- evolutionary computation
-- time series modeling
-- quantitative finance
-- self-supervised learning
-- search-space design
-- statistical robustness testing
-
-Some of the main research questions include:
-
-- Can a stochastic grammar be learned that improves symbolic discovery in markets?
-- Which symbolic structures repeatedly emerge across walk-forward segments?
-- What types of self-supervised market targets are most solvable?
-- Can interpretable symbolic motifs survive out-of-sample validation?
-- How much of symbolic search performance is due to grammar design rather than solver strength alone?
-
-## High-Level System Design
-
-The framework can be thought of as the following pipeline:
-
-1. **Load intraday market data**
-2. **Construct self-supervised emissions / targets**
-3. **Instantiate symbolic population from a stochastic grammar**
-4. **Run inner-loop solving over candidate programs**
-5. **Evaluate programs on forward segments**
-6. **Validate findings against null behavior**
-7. **Update grammatical structure based on effective discoveries**
-8. **Repeat**
-
-## Design Principles
-
-This project is built around a few core principles:
-
-- **Interpretability over opaque performance**
-- **Walk-forward realism over random-split optimism**
-- **Self-supervision over hand-labeled targets**
-- **Grammar learning over fixed search spaces**
-- **Statistical skepticism over score chasing**
-
-## Intended Outcomes
-
-The project is not simply trying to predict price with a single model. It is trying to discover:
-
-- symbolic behaviors that consistently matter
-- target constructions that are truly solvable
-- grammars that accelerate useful model generation
-- robust modeling structures that generalize better than naive search
-
-## Example Use Cases
-
-Potential uses of this framework include:
-
-- discovering interpretable short-horizon market behaviors
-- studying directional or volatility-state transitions
-- generating candidate trading signals for later validation
-- identifying symbolic motifs that recur across market regimes
-- comparing target definitions by actual solvability
-
-## Limitations
-
-This is a research framework, not a guarantee of tradable edge.
-
-Important limitations include:
-
-- financial markets are noisy and regime-dependent
-- symbolic discovery can overfit if not carefully validated
-- interpretable models can still be statistically fragile
-- a strong in-sample equation is not the same as a deployable strategy
-- profitable deployment requires execution, slippage, cost, and risk modeling beyond symbolic fit alone
-
-## Project Status
-
-This project is an active research effort focused on methodology, solver design, grammar optimization, and robustness validation.
-
-The current emphasis is on:
-- improving symbolic solving quality
-- improving outer-loop grammar effectiveness
-- testing self-supervised market targets
-- strengthening out-of-sample and null-based validation
-
-## Future Directions
-
-Planned or natural extensions include:
-
-- adaptive grammar updates across market regimes
-- richer self-supervised emissions for volatility and state transitions
-- stronger null models for symbolic participation behavior
-- ensemble methods over discovered symbolic motifs
-- integration with execution-aware strategy testing
-- comparison against standard ML baselines
-
-## Who This Is For
-
-This repository may be useful for people interested in:
-
-- symbolic regression
-- grammatical evolution
-- financial time series research
-- interpretable quantitative modeling
-- self-supervised learning for markets
-- search-space optimization
-
-## Disclaimer
-
-This project is for research and educational purposes. It does not constitute financial advice, investment advice, or a recommendation to trade any asset.
+**Author:** Logan Kelsch  
+**Project Type:** Structural Regression / Symbolic Regression / Stochastic Grammar Optimization  
+**Primary Domain:** Intraday financial market behavior  
+**Repository Purpose:** Research infrastructure for discovering, validating, and reusing interpretable symbolic structures over financial time series
 
 ---
 
-## Summary
+## Abstract
 
-**Stochastic Grammar Optimization of Financial Market Behavior** is a symbolic market research framework that treats model discovery as a two-level problem:
+This project studies whether useful and interpretable structure can be discovered in financial market time series through a self-supervised symbolic regression process guided by a learned stochastic grammar. The system generates candidate symbolic expressions, evaluates them over walk-forward market chunks, statistically validates their behavior against permutation-based null models, and uses the resulting feedback to update a grammar that becomes increasingly efficient at generating promising future expressions.
 
-- evolve symbolic models that explain market behavior
-- evolve the grammar that makes discovering good models more likely
+The core research idea is that market behavior may contain local, conditional, and temporally structured regularities that are difficult to represent with a single fixed model but can be explored through a large space of symbolic transformations. Instead of training a neural network to directly map inputs to targets, this project builds a search engine over formula-like programs. Each candidate program is represented as a compact directed acyclic computation graph, evaluated as an emission over time, and scored using statistically controlled validation methods.
 
-The result is a self-supervised, walk-forward, interpretable, and statistically cautious approach to financial modeling aimed at improving the discovery process itself.
+The system combines symbolic regression, genetic programming, Monte Carlo Tree Search, UCB/UCT exploration theory, permutation testing, finite-population correction, optimal participation geometry, and energy-style distributional validation. The purpose is not only to discover individual expressions but to learn a generative grammar that improves the rate at which statistically meaningful expressions are produced.
+
+---
+
+## Keywords
+
+Symbolic regression; structural regression; stochastic grammar; genetic programming; Monte Carlo Tree Search; UCB; UCT; permutation testing; finite population correction; optimal participation geometry; energy distance; financial time series; walk-forward validation; interpretable machine learning.
+
+---
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Research Objective](#research-objective)
+3. [Conceptual Overview](#conceptual-overview)
+4. [Data Representation](#data-representation)
+5. [Symbolic Program Representation](#symbolic-program-representation)
+6. [Transformation Grammar](#transformation-grammar)
+7. [Emission Construction](#emission-construction)
+8. [Evaluation Masks, Embargo, and Purge](#evaluation-masks-embargo-and-purge)
+9. [Candidate Evaluation](#candidate-evaluation)
+10. [Permutation and Null Distribution Theory](#permutation-and-null-distribution-theory)
+11. [Optimal Participation Geometry MCPT](#optimal-participation-geometry-mcpt)
+12. [Finite Population Correction Proxy](#finite-population-correction-proxy)
+13. [Energy Statistical Validation](#energy-statistical-validation)
+14. [Stochastic Grammar Learning](#stochastic-grammar-learning)
+15. [MCTS, UCB, UCT, and Progressive Widening](#mcts-ucb-uct-and-progressive-widening)
+16. [Walk-Forward Training and Inference](#walk-forward-training-and-inference)
+17. [Implementation Architecture](#implementation-architecture)
+18. [Algorithmic Pipeline](#algorithmic-pipeline)
+19. [Results](#results)
+20. [Reproducibility Notes](#reproducibility-notes)
+21. [Limitations and Intended Use](#limitations-and-intended-use)
+22. [Future Work](#future-work)
+23. [Citation and Contact](#citation-and-contact)
+
+---
+
+## Introduction
+
+Financial markets are complex adaptive systems in which observable behavior is generated by many interacting agents, time scales, liquidity regimes, volatility regimes, and structural constraints. Traditional predictive modeling often attempts to learn a direct mapping from market features to future returns. This project approaches the problem differently.
+
+The central assumption is that some market behaviors may be more naturally described as conditional symbolic structures rather than as opaque parametric mappings. A symbolic structure can represent ideas such as:
+
+- A moving average relationship becoming extreme.
+- A volatility-adjusted displacement crossing a threshold.
+- A time-of-day-sensitive transformation becoming active.
+- A derived sensor interacting with another derived sensor.
+- A family of expressions repeatedly appearing useful across windows.
+
+This project therefore treats financial modeling as a search problem over interpretable computational structures.
+
+A candidate structure is not merely a prediction label. It is a formula-like computation graph that transforms raw market features into an emission over time. That emission is evaluated statistically to determine whether its observed behavior is unlikely under a carefully constructed null model. The search process then uses the statistical outcome to update a grammar that controls future structure generation.
+
+In this sense, the project has two coupled learning problems:
+
+1. **Inner symbolic regression problem:** generate and evaluate candidate expressions.
+2. **Outer grammar optimization problem:** learn which symbolic construction patterns generate useful expressions efficiently.
+
+The broader goal is to develop a reusable framework for discovering interpretable, statistically validated structures in noisy time-series domains.
+
+---
+
+## Research Objective
+
+The primary research question is:
+
+> Can a stochastic grammar learn to generate symbolic financial-market expressions that pass rigorous out-of-sample statistical validation more efficiently than unguided symbolic search?
+
+The working hypothesis is:
+
+> Interpretable behavior of financial markets may be related to interpretable historical and recent behavior of financial markets, and a learned grammar can improve the probability of discovering such behavior by reusing statistically successful symbolic construction patterns.
+
+This objective is intentionally different from simply maximizing backtest return. The emphasis is on structure discovery, statistical validity, and process-level search efficiency.
+
+The system is designed to answer questions such as:
+
+- Which transformations produce useful market emissions?
+- Which symbolic parent structures repeatedly contribute to validated expressions?
+- Can expression families generalize across walk-forward chunks?
+- Can a grammar learn to generate useful expressions faster than random generation?
+- Can null-model validation distinguish true structure from overfit participation patterns?
+
+---
+
+## Conceptual Overview
+
+The full process can be summarized as:
+
+1. Load intraday market data.
+2. Build terminal features from raw market observations.
+3. Generate symbolic candidate programs from a stochastic grammar.
+4. Instantiate each candidate program as a directed acyclic computation graph.
+5. Compute each program's emission over time.
+6. Apply evaluation masks to prevent leakage and invalid observations.
+7. Convert emissions into event participation, raw scores, or anomaly masks.
+8. Compare observed scores against null distributions.
+9. Estimate p-values, z-scores, finite-population-adjusted scores, and energy validation statistics.
+10. Backpropagate candidate quality into grammar statistics.
+11. Use the updated grammar to generate future candidate populations.
+12. Perform walk-forward inference on unseen chunks.
+
+The defining feature of the project is that the grammar itself learns. The system is not only searching for formulas; it is learning how to search for formulas.
+
+---
+
+## Data Representation
+
+The project operates primarily on intraday financial time-series data, often represented as 5-minute bars. A raw observation may contain fields such as:
+
+- Open
+- High
+- Low
+- Close
+- Volume
+- Time-of-day index
+- Derived price features
+- Derived volatility features
+- Derived displacement features
+
+Let the market observation at time index $t$ be represented as a vector:
+
+$$
+X_t \in \mathbb{R}^{d}
+$$
+
+where $d$ is the number of terminal features available to the symbolic system.
+
+A full chunk of data is represented as:
+
+$$
+X_{1:T} = \{X_1, X_2, \dots, X_T\}
+$$
+
+where $T$ is the number of rows in the current chunk.
+
+The project uses chunked evaluation because financial time series are non-stationary. A formula that appears useful in one market regime may fail in another. Therefore, the data is not treated as one globally exchangeable sample. It is divided into sequential walk-forward windows.
+
+A chunk can be written as:
+
+$$
+C_i = \{X_{t_i}, X_{t_i+1}, \dots, X_{t_i+L-1}\}
+$$
+
+where $C_i$ is chunk $i$, $t_i$ is the starting row, and $L$ is the chunk length.
+
+The walk-forward structure preserves time ordering:
+
+$$
+C_0 \rightarrow C_1 \rightarrow C_2 \rightarrow \cdots \rightarrow C_K
+$$
+
+The system avoids random train/test splitting because random splitting can leak future regime information into earlier model selection decisions.
+
+---
+
+## Symbolic Program Representation
+
+Each symbolic candidate is represented as a compact instruction row inside a population-level instruction matrix.
+
+A single instruction row has the general format:
+
+$$
+I_j = [p_j, f_j, u_j, c_j, s_j, x_j, a_j, d_j, dd_j, k_j]
+$$
+
+where:
+
+- $p_j$ is the population index or gene index.
+- $f_j$ is the transformation function identifier.
+- $u_j$ stores used-argument flags.
+- $c_j$ stores constant-argument flags.
+- $s_j$ stores sensor-argument flags.
+- $x_j$ stores the primary input argument.
+- $a_j$ stores an alpha or secondary sensor argument.
+- $d_j$ stores a first window, displacement, or parameter value.
+- $dd_j$ stores a second window, displacement, or parameter value.
+- $k_j$ stores a threshold, scale, or other scalar parameter.
+
+The resulting instruction matrix is:
+
+$$
+I \in \mathbb{R}^{G \times 10}
+$$
+
+or, in implementations with an additional metadata column:
+
+$$
+I \in \mathbb{R}^{G \times 11}
+$$
+
+where $G$ is the number of terminal and generated genes in the population.
+
+Each non-terminal gene is a symbolic transformation of one or more previous genes. The computation can be written as:
+
+$$
+g_j(t) = \phi_{f_j}\left(x_j(t), \alpha_j(t), \delta_{1,j}, \delta_{2,j}, \kappa_j\right)
+$$
+
+where:
+
+- $g_j(t)$ is the value of gene $j$ at time $t$.
+- $\phi_{f_j}$ is the transformation function selected by function id $f_j$.
+- $x_j(t)$ is the required primary input sensor.
+- $\alpha_j(t)$ is an optional secondary sensor.
+- $\delta_{1,j}$ and $\delta_{2,j}$ are optional window or displacement parameters.
+- $\kappa_j$ is an optional threshold, scale, or shape parameter.
+
+Not every function uses every slot. Each function has a signature that determines which of the slots are active.
+
+For example, one transformation may require only $x$ and $\delta_1$:
+
+$$
+g_j(t) = \text{EMA}_{\delta_1}(x_j)(t)
+$$
+
+Another may require two sensors and one scalar parameter:
+
+$$
+g_j(t) = \phi(x_j(t), \alpha_j(t), \kappa_j)
+$$
+
+The instruction flags encode which arguments are used, which are constants, and which are sensors.
+
+---
+
+## Directed Acyclic Computation Graph
+
+The symbolic population forms a directed acyclic graph. A generated gene can depend on previous genes or terminal features, but it cannot depend on a future gene. This makes the computation single-assignment and topologically ordered.
+
+If gene $j$ depends on gene $i$, then:
+
+$$
+i < j
+$$
+
+The project commonly encodes sensor parents as negative displacements. For example, if a parent field stores $-\Delta$, then the parent index is:
+
+$$
+\text{parent}(j) = j - \Delta
+$$
+
+This representation allows compact storage of graph connectivity without storing explicit edge lists for every generated population.
+
+The ancestry depth of a gene is defined recursively:
+
+$$
+D(j) = 1 + \max_{i \in \text{Parents}(j)} D(i)
+$$
+
+with terminal features having depth:
+
+$$
+D(j)=0 \quad \text{for terminal } j
+$$
+
+Depth is important because it controls expression complexity. A maximum depth constraint prevents the grammar from producing expressions that are too nested, too slow to compute, or too difficult to interpret.
+
+---
+
+## Transformation Grammar
+
+The transformation grammar defines the legal operations that can create new symbolic genes. Each function has:
+
+- A function id.
+- A required argument signature.
+- A set of valid parameter ranges.
+- A numerical implementation.
+- A semantic interpretation.
+
+The grammar is stochastic because it assigns probabilities to symbolic construction choices. A candidate expression is sampled through a sequence of decisions such as:
+
+1. Select a parent gene.
+2. Select a transformation function.
+3. Select optional secondary parents.
+4. Select constants or parameter values.
+5. Instantiate the new gene.
+6. Repeat until the population is complete.
+
+A candidate population can therefore be understood as a sampled symbolic program:
+
+$$
+P \sim \mathcal{G}_\theta
+$$
+
+where:
+
+- $P$ is a generated population of symbolic expressions.
+- $\mathcal{G}_\theta$ is the stochastic grammar.
+- $\theta$ represents learned grammar parameters.
+
+The grammar can be initialized close to uniform, then updated based on the empirical success of symbolic choices.
+
+The central grammar-learning objective is:
+
+$$
+\theta^* = \arg\max_\theta \; \mathbb{E}_{P \sim \mathcal{G}_\theta}\left[J(P)\right]
+$$
+
+where $J(P)$ is a statistical quality score derived from evaluation, validation, and walk-forward behavior.
+
+This objective is not optimized by direct gradient descent. Instead, the system uses reinforcement-like credit assignment through UCB/UCT-style exploration and exploitation updates.
+
+---
+
+## Emission Construction
+
+A symbolic expression becomes useful only after it is converted into an emission over time.
+
+An emission is a time-indexed output:
+
+$$
+e_g(t) = g(t)
+$$
+
+or, after a condition is applied:
+
+$$
+A_g(t) = \mathbb{1}\{e_g(t) \in \mathcal{C}\}
+$$
+
+where:
+
+- $e_g(t)$ is the raw emission value for gene $g$ at time $t$.
+- $A_g(t)$ is an anomaly or event mask.
+- $\mathcal{C}$ is a condition such as greater-than, less-than, between, outside-band, sign agreement, or threshold crossing.
+
+The project supports both raw-emission evaluation and anomaly-detection-style evaluation.
+
+### Raw Emission Mode
+
+In raw emission mode, the expression itself is evaluated as a continuous signal:
+
+$$
+e_g(t) \in \mathbb{R}
+$$
+
+This mode is useful when the score function directly consumes the magnitude or direction of the symbolic output.
+
+### Anomaly Detection Mode
+
+In anomaly detection mode, the emission is converted into a participation mask:
+
+$$
+A_g(t) = \mathbb{1}\{e_g(t) > \tau\}
+$$
+
+or more generally:
+
+$$
+A_g(t) = \mathbb{1}\{c_1(e_g(t), \tau_1, \tau_2, \dots)=1\}
+$$
+
+where $c_1$ is a user-defined condition.
+
+Participation is then:
+
+$$
+m_g = \sum_{t=1}^{T} A_g(t)M(t)
+$$
+
+where $M(t)$ is the valid evaluation mask.
+
+The participation proportion is:
+
+$$
+\rho_g = \frac{m_g}{n}
+$$
+
+with:
+
+$$
+n = \sum_{t=1}^{T} M(t)
+$$
+
+Participation is critical because a strategy that participates in only a few rows has a very different null distribution from one that participates in thousands of rows.
+
+---
+
+## Evaluation Masks, Embargo, and Purge
+
+Financial time-series evaluation is vulnerable to leakage. This project uses evaluation masks to prevent invalid or contaminated rows from entering score calculations.
+
+The evaluation mask is a Boolean vector:
+
+$$
+M(t) \in \{0,1\}
+$$
+
+where $M(t)=1$ means row $t$ is valid for evaluation.
+
+The final mask combines several constraints:
+
+$$
+M(t) = M_{chunk}(t) \land M_{finite}(t) \land M_{embargo}(t) \land M_{purge}(t)
+$$
+
+### Chunk Mask
+
+The chunk mask restricts evaluation to the current walk-forward window:
+
+$$
+M_{chunk}(t)=\mathbb{1}\{t \in C_i\}
+$$
+
+### Finite Mask
+
+The finite mask removes rows where required values are NaN, infinite, or numerically invalid:
+
+$$
+M_{finite}(t)=\mathbb{1}\{e_g(t) \in \mathbb{R}\}
+$$
+
+### Embargo
+
+Forward-looking targets cannot evaluate the final rows of a trading day if those targets would require information from the next day. If the forward offset is $o$, the embargo mask is:
+
+$$
+M_{embargo}(t)=\mathbb{1}\{t+o \leq \text{day\_end}(t)\}
+$$
+
+This prevents a forward target from wrapping across a day boundary.
+
+### Purge
+
+Rolling and lookback-based transformations cannot safely evaluate the first rows of a day if their lookback window would use previous-day data. If the maximum required lookback is $L$, the purge mask is:
+
+$$
+M_{purge}(t)=\mathbb{1}\{t-L \geq \text{day\_start}(t)\}
+$$
+
+The combination of purge and embargo makes the evaluation conservative. It deliberately sacrifices rows in order to preserve the logical independence of intraday observations.
+
+---
+
+## Candidate Evaluation
+
+For each candidate expression, the system computes an observed score. The exact score function is configurable, but the general form is:
+
+$$
+S_g = \sum_{t=1}^{T} M(t)A_g(t)R(t)
+$$
+
+where:
+
+- $S_g$ is the observed score for gene $g$.
+- $M(t)$ is the valid evaluation mask.
+- $A_g(t)$ is the expression's participation mask.
+- $R(t)$ is the target, return, raw emission, or reward-like quantity being evaluated.
+
+A mean-style score can be written as:
+
+$$
+\bar{S}_g = \frac{\sum_{t=1}^{T} M(t)A_g(t)R(t)}{\sum_{t=1}^{T} M(t)A_g(t)}
+$$
+
+A signed directional score can be written as:
+
+$$
+S_g^{dir} = \sum_{t=1}^{T} M(t)A_g(t)\operatorname{sign}(R(t))
+$$
+
+A custom expected-value-style score can be written as:
+
+$$
+S_g^{EV} = \sum_{t=1}^{T} M(t)A_g(t)\cdot q(R(t))
+$$
+
+where $q$ is a scoring transform.
+
+The project treats score functions as modular. The search infrastructure does not require a single fixed definition of success. Instead, the validation layer asks whether the observed score is extreme relative to an appropriate null model.
+
+---
+
+## Permutation and Null Distribution Theory
+
+A raw score is not meaningful by itself. A symbolic expression may appear strong simply because it participates at an unusual number of times, clusters into lucky time periods, or accidentally aligns with a regime.
+
+The project therefore evaluates expressions against a null distribution.
+
+For a candidate expression $g$, the observed score is:
+
+$$
+S_{obs} = S(A_g, R, M)
+$$
+
+The null hypothesis is:
+
+$$
+H_0: \text{the expression's participation structure has no special relationship to the evaluated market outcome}
+$$
+
+A Monte Carlo permutation test generates null participation masks:
+
+$$
+A_g^{*(1)}, A_g^{*(2)}, \dots, A_g^{*(B)}
+$$
+
+and corresponding null scores:
+
+$$
+S_b^* = S(A_g^{*(b)}, R, M)
+$$
+
+for $b=1,2,\dots,B$.
+
+A one-sided upper-tail p-value is:
+
+$$
+p_{upper} = \frac{1 + \sum_{b=1}^{B} \mathbb{1}\{S_b^* \geq S_{obs}\}}{B+1}
+$$
+
+A one-sided lower-tail p-value is:
+
+$$
+p_{lower} = \frac{1 + \sum_{b=1}^{B} \mathbb{1}\{S_b^* \leq S_{obs}\}}{B+1}
+$$
+
+A two-sided p-value can be computed by comparing absolute deviations from the null mean:
+
+$$
+p_{two} = \frac{1 + \sum_{b=1}^{B} \mathbb{1}\{|S_b^* - \mu_*| \geq |S_{obs}-\mu_*|\}}{B+1}
+$$
+
+where:
+
+$$
+\mu_* = \frac{1}{B}\sum_{b=1}^{B}S_b^*
+$$
+
+The corresponding z-score is:
+
+$$
+z = \frac{S_{obs}-\mu_*}{\sigma_*}
+$$
+
+with:
+
+$$
+\sigma_* = \sqrt{\frac{1}{B}\sum_{b=1}^{B}(S_b^* - \mu_*)^2}
+$$
+
+The key principle is that validation must respect the participation structure of the expression. Randomly shuffling without preserving meaningful participation geometry can produce invalid null comparisons.
+
+---
+
+## Optimal Participation Geometry MCPT
+
+Optimal Participation Geometry Monte Carlo Permutation Testing, abbreviated here as OPG MCPT, is the project's primary validation method for event-style symbolic expressions.
+
+The problem OPG solves is that event masks are not just sets of independent rows. They often contain structure:
+
+- Consecutive runs of participation.
+- Gaps between runs.
+- Intraday boundary constraints.
+- Purged and embargoed regions.
+- Different valid row counts per chunk.
+- Participation proportions that strongly affect variance.
+
+A naive permutation test may destroy this structure. OPG instead preserves the observed participation geometry.
+
+Let the observed event mask contain $K$ contiguous participation segments with lengths:
+
+$$
+\ell_1, \ell_2, \dots, \ell_K
+$$
+
+The total participation is:
+
+$$
+m = \sum_{k=1}^{K}\ell_k
+$$
+
+The OPG null sampler generates random masks that preserve these segment lengths while placing them into valid regions of the evaluation mask.
+
+A null mask is:
+
+$$
+A^{*(b)}(t) = \sum_{k=1}^{K}\mathbb{1}\{t \in [s_k^{(b)}, s_k^{(b)}+\ell_k-1]\}
+$$
+
+where $s_k^{(b)}$ is a sampled valid start location for segment $k$ in simulation $b$.
+
+The sampler must satisfy:
+
+$$
+A^{*(b)}(t)=0 \quad \text{whenever} \quad M(t)=0
+$$
+
+and must avoid invalid overlap unless the selected null design explicitly permits it.
+
+This creates a null distribution that asks:
+
+> If the same event geometry occurred somewhere else in the valid chunk, how unusual would the observed score be?
+
+This is stronger than asking whether a random set of independent rows would score well, because it preserves the duration and clustering behavior of the discovered expression.
+
+### Fast Prefix-Sum Evaluation
+
+The project uses prefix sums to evaluate many null segment placements efficiently.
+
+For a raw emission or reward vector $R(t)$, define the prefix sum:
+
+$$
+P(u) = \sum_{t=1}^{u-1}R(t)
+$$
+
+Then the score contribution of a segment starting at $s$ with length $\ell$ is:
+
+$$
+\sum_{t=s}^{s+\ell-1}R(t) = P(s+\ell)-P(s)
+$$
+
+This reduces repeated segment scoring from an explicit loop over all segment rows to constant-time interval lookup.
+
+For a null mask with $K$ segments:
+
+$$
+S_b^* = \sum_{k=1}^{K}\left[P(s_k^{(b)}+\ell_k)-P(s_k^{(b)})\right]
+$$
+
+This is one of the core computational accelerations that makes repeated MCPT feasible.
+
+---
+
+## Finite Population Correction Proxy
+
+Full Monte Carlo validation for every candidate can be computationally expensive. The project therefore uses a finite-population-correction-style proxy for faster ranking and filtering.
+
+The key observation is that the variance of a null score depends strongly on participation proportion.
+
+Let:
+
+$$
+\rho = \frac{m}{N}
+$$
+
+where:
+
+- $m$ is the number of participating rows.
+- $N$ is the number of valid rows.
+- $\rho$ is participation proportion.
+
+In classical finite population sampling, the variance of a sample mean without replacement is adjusted by a finite population correction term:
+
+$$
+\operatorname{Var}(\bar{X}) = \frac{\sigma^2}{m}\left(1-\frac{m}{N}\right)
+$$
+
+or, using the exact finite population form:
+
+$$
+\operatorname{Var}(\bar{X}) = \frac{\sigma^2}{m}\left(\frac{N-m}{N-1}\right)
+$$
+
+The intuition is that variance is largest at intermediate participation and collapses near degenerate participation boundaries.
+
+In this project, the FPC proxy is fit empirically. Instead of assuming a closed-form variance for every score type, proxy emissions are used to estimate a curve:
+
+$$
+\widehat{v}_{FPC}(\rho) \approx \operatorname{Var}_{H_0}(S \mid \rho)
+$$
+
+The resulting fast z-score is:
+
+$$
+z_g = \frac{S_g - \mu_{perm}}{\sqrt{\max(\widehat{v}_{FPC}(\rho_g), v_{min})}}
+$$
+
+where:
+
+- $S_g$ is the observed score.
+- $\mu_{perm}$ is the estimated permutation mean.
+- $\widehat{v}_{FPC}(\rho_g)$ is the fitted null variance at participation proportion $\rho_g$.
+- $v_{min}$ prevents division by zero.
+
+This proxy is useful for fast screening. It is not treated as a replacement for final validation. The intended workflow is:
+
+1. Use the FPC proxy to rank or filter many candidates quickly.
+2. Use full OPG MCPT or direct null evaluation for candidates that survive screening.
+3. Use walk-forward behavior to determine whether the structure is stable outside the selection chunk.
+
+### Degenerate Participation Handling
+
+Participation edge cases must be handled explicitly.
+
+If $m=0$, the expression never participates. It has no meaningful observed event distribution.
+
+If $m=N$, the expression participates everywhere. It has no meaningful alternative placement distribution.
+
+For those cases, the project uses neutral statistical outputs:
+
+$$
+z=0
+$$
+
+and:
+
+$$
+p=0.5
+$$
+
+This prevents NaN propagation and correctly treats degenerate participation as statistically uninformative.
+
+---
+
+## Energy Statistical Validation
+
+The project includes an energy-style statistical validation layer to evaluate whether observed behavior is distributionally separated from null behavior, not merely extreme under a single scalar score.
+
+The word **energy** here refers to statistical energy distance, a distance between probability distributions. It is not physical energy. It is useful because it can compare two samples without assuming normality, linearity, or equal variances.
+
+Let:
+
+$$
+X = \{x_1, x_2, \dots, x_n\}
+$$
+
+represent observed score vectors, behavior vectors, chunk-level diagnostics, or candidate-level summaries, and let:
+
+$$
+Y = \{y_1, y_2, \dots, y_m\}
+$$
+
+represent null-generated equivalents.
+
+The squared energy distance estimator is:
+
+$$
+\mathcal{E}_{n,m}(X,Y) = \frac{2}{nm}\sum_{i=1}^{n}\sum_{j=1}^{m}\lVert x_i-y_j\rVert - \frac{1}{n^2}\sum_{i=1}^{n}\sum_{k=1}^{n}\lVert x_i-x_k\rVert - \frac{1}{m^2}\sum_{j=1}^{m}\sum_{\ell=1}^{m}\lVert y_j-y_\ell\rVert
+$$
+
+A common finite-sample test statistic is:
+
+$$
+T_{n,m} = \frac{nm}{n+m}\mathcal{E}_{n,m}(X,Y)
+$$
+
+The null hypothesis is:
+
+$$
+H_0: X \sim Y
+$$
+
+meaning the observed behavior sample and the null behavior sample are drawn from the same distribution.
+
+The alternative hypothesis is:
+
+$$
+H_A: X \not\sim Y
+$$
+
+meaning the observed behavior distribution differs from the null behavior distribution.
+
+A permutation p-value is computed by pooling $X$ and $Y$, randomly splitting the pooled sample into two groups of sizes $n$ and $m$, recomputing the statistic, and comparing the observed statistic against the permuted statistics:
+
+$$
+p_{energy} = \frac{1 + \sum_{b=1}^{B}\mathbb{1}\{T_b^{\pi} \geq T_{obs}\}}{B+1}
+$$
+
+where:
+
+- $T_{obs}$ is the observed energy statistic.
+- $T_b^{\pi}$ is the statistic after permutation $b$.
+- $B$ is the number of permutations.
+
+### Why Energy Validation Is Useful Here
+
+Single-score validation can miss distributional problems. For example, two candidates may have similar p-values but very different behavior across windows. One may be driven by one extreme event, while another may show consistent moderate separation across many chunks.
+
+Energy validation helps detect whether the observed behavior distribution is globally different from the null behavior distribution.
+
+It can be applied to:
+
+- Candidate score distributions.
+- Chunk-level validation summaries.
+- Families of related symbolic expressions.
+- Walk-forward inference results.
+- Null-vs-observed diagnostic vectors.
+- Sequential success-flow summaries.
+
+A candidate-level behavior vector might be:
+
+$$
+x_g = [z_i, z_j, z_k, p_i, p_j, p_k, \rho_i, \rho_j, \rho_k]
+$$
+
+where $i,j,k$ are walk-forward chunks or validation stages.
+
+The null equivalent $y_g$ is generated from permutation or OPG null procedures.
+
+Energy validation then asks whether the collection of observed candidate behaviors is distributionally distinct from what would be expected under null symbolic participation.
+
+### Relationship to OPG MCPT and FPC
+
+The three validation layers serve different purposes.
+
+| Validation Layer | Purpose | Cost | Role |
+|---|---:|---:|---|
+| FPC proxy | Fast score normalization by participation proportion | Low | Screening and ranking |
+| OPG MCPT | Geometry-preserving null score estimation | Medium to high | Candidate-level validation |
+| Energy validation | Distributional separation between observed and null behavior | Medium to high | Family/chunk/system-level validation |
+
+The intended validation hierarchy is:
+
+1. Use FPC to avoid wasting computation on clearly unpromising candidates.
+2. Use OPG MCPT to validate candidate-specific score extremity.
+3. Use energy statistics to test whether observed behavior distributions differ from null behavior distributions at a broader structural level.
+
+This layered validation design reduces the chance that the system mistakes search artifacts for genuine structure.
+
+---
+
+## Stochastic Grammar Learning
+
+The stochastic grammar learns from the outcomes of generated symbolic populations.
+
+Each generated expression has a family tree. If a final gene scores well, the system can assign credit not only to the final function but also to the parent structures that contributed to it.
+
+Let a candidate family be:
+
+$$
+\mathcal{F}_g = \{i : i \text{ is an ancestor of } g\}\cup\{g\}
+$$
+
+A family score can be written as:
+
+$$
+Q(\mathcal{F}_g) = h(S_g, z_g, p_g, \rho_g, \text{stability}_g)
+$$
+
+where $h$ is a scoring function that combines statistical and structural diagnostics.
+
+The grammar update step distributes credit across actions involved in creating the family.
+
+For a grammar action $a$, maintain:
+
+- $N(a)$: number of times action $a$ was selected.
+- $W(a)$: cumulative reward assigned to action $a$.
+- $Q(a)$: empirical mean reward.
+
+The empirical value is:
+
+$$
+Q(a) = \frac{W(a)}{N(a)}
+$$
+
+The purpose is to increase the probability of actions that repeatedly contribute to statistically promising symbolic structures while still preserving exploration.
+
+---
+
+## MCTS, UCB, UCT, and Progressive Widening
+
+The search space is enormous. A symbolic expression can vary by parent selection, transformation choice, parameter choice, secondary sensor choice, depth, and downstream evaluation behavior.
+
+The project uses Monte Carlo Tree Search style logic to manage this exploration.
+
+### UCB
+
+Upper Confidence Bound balances exploitation and exploration. For an action $a$ at a state $s$, the UCB score can be written as:
+
+$$
+UCB(s,a) = Q(s,a) + c\sqrt{\frac{\ln N(s)}{N(s,a)+\epsilon}}
+$$
+
+where:
+
+- $Q(s,a)$ is the empirical value of action $a$ from state $s$.
+- $N(s)$ is the number of visits to state $s$.
+- $N(s,a)$ is the number of times action $a$ was chosen from state $s$.
+- $c$ controls exploration strength.
+- $\epsilon$ prevents division by zero.
+
+The first term exploits actions that have worked. The second term explores actions that have not been tried enough.
+
+### UCT
+
+UCT applies UCB to tree search. A parent or state selection rule can be written as:
+
+$$
+UCT(v) = Q(v) + c\sqrt{\frac{\ln N(parent(v))}{N(v)+\epsilon}}
+$$
+
+where $v$ is a node in the search tree.
+
+In this project, UCT-like logic is used to decide which symbolic construction states deserve further expansion.
+
+### Softmax Policy
+
+Instead of always selecting the maximum UCB/UCT action, the project can sample actions using a softmax policy:
+
+$$
+\pi(a \mid s) = \frac{\exp(q(s,a)/\tau)}{\sum_{a'}\exp(q(s,a')/\tau)}
+$$
+
+where:
+
+- $q(s,a)$ is a score such as UCB, UCT, log prior plus value, or a transition-matrix score.
+- $\tau$ is temperature.
+
+Low temperature makes the policy greedier. High temperature makes it more exploratory.
+
+### Progressive Widening
+
+Progressive widening controls how quickly new actions are introduced.
+
+A common widening rule is:
+
+$$
+K(N) = c_{pw}N^{\alpha_{pw}}
+$$
+
+where:
+
+- $K(N)$ is the number of allowed children after $N$ visits.
+- $c_{pw}$ controls the widening scale.
+- $\alpha_{pw}$ controls the widening rate.
+
+A new child can be expanded only if:
+
+$$
+|Children(s)| < c_{pw}N(s)^{\alpha_{pw}}
+$$
+
+This matters because the symbolic search space is too large to expand fully. Progressive widening allows the search to start narrow, exploit what appears useful, and gradually introduce more possibilities.
+
+### Alpha Parent Selection
+
+The project also supports alpha-style parent selection as a second MCTS channel. This means the grammar can separately learn which primary parent structures and which alpha or secondary structures are useful.
+
+Conceptually, the system can maintain separate memory for:
+
+- Primary x-parent decisions.
+- Alpha-parent decisions.
+- Function choices.
+- Edge statistics.
+- Node statistics.
+- Trace diagnostics.
+
+This separation helps diagnose whether the grammar is learning useful transformation choices, useful parent choices, or useful secondary-sensor relationships.
+
+---
+
+## Walk-Forward Training and Inference
+
+The project uses walk-forward evaluation to reduce temporal leakage and test stability.
+
+A simplified three-stage walk-forward setup can be written as:
+
+$$
+C_i \rightarrow C_j \rightarrow C_k
+$$
+
+where:
+
+- $C_i$ is an initial training or discovery chunk.
+- $C_j$ is a validation or continuation chunk.
+- $C_k$ is an inference or forward test chunk.
+
+The correct inference design is:
+
+1. Generate fresh populations from the learned grammar.
+2. Evaluate every generated gene on chunk $i$.
+3. Evaluate every generated gene on chunk $j$.
+4. Evaluate every generated gene on chunk $k$.
+5. Only after all evaluations are complete, apply success masks.
+
+This is an all-evaluate-then-mask design.
+
+The success masks may include:
+
+$$
+M_i^{success}, \quad M_j^{success}, \quad M_k^{success}
+$$
+
+and combined masks:
+
+$$
+M_{ij}^{success}=M_i^{success}\land M_j^{success}
+$$
+
+$$
+M_{ijk}^{success}=M_i^{success}\land M_j^{success}\land M_k^{success}
+$$
+
+This design avoids the logical error of evaluating only candidates that already passed earlier chunks. Every candidate receives complete chunk-level evaluation first. Filtering happens afterward.
+
+This distinction is important for producing honest sequential success-flow plots.
+
+---
+
+## Implementation Architecture
+
+The repository is organized around a few core conceptual objects.
+
+### Population
+
+The `Population` object stores:
+
+- Terminal features.
+- Generated gene values.
+- Instruction matrix.
+- Terminal indices.
+- Legal gene indices.
+- Excluded indices.
+- Chunking metadata.
+- Time-of-day markers.
+- Gene ancestry information.
+
+Conceptually, it represents the current symbolic program bank.
+
+### Solver
+
+The `Solver` object evaluates a population against a target or emission definition.
+
+It is responsible for:
+
+- Building raw emissions.
+- Applying target logic.
+- Applying anomaly conditions.
+- Generating evaluation masks.
+- Handling chunk-specific evaluation.
+- Returning raw emissions, masks, and anomaly masks.
+
+A conceptual solver call is:
+
+```python
+raw_emission, evaluation_mask, anomaly_mask = Solver.solve(population, chunk_num)
+```
+
+### Grammar
+
+The grammar object generates symbolic populations and updates its probabilities from observed outcomes.
+
+It is responsible for:
+
+- Sampling parent choices.
+- Sampling function choices.
+- Sampling constants and parameters.
+- Maintaining UCB/UCT statistics.
+- Applying progressive widening.
+- Updating transition statistics.
+- Separating training behavior from inference behavior.
+
+In training mode, grammar statistics update. In inference mode, the grammar is fixed.
+
+### Validation Engine
+
+The validation engine computes:
+
+- Observed scores.
+- OPG null scores.
+- Monte Carlo p-values.
+- Null means and variances.
+- FPC proxy scores.
+- Energy statistics.
+- Sequential success masks.
+
+### Diagnostics
+
+The project includes diagnostics for:
+
+- Depth-wise UCB and UCT terms.
+- Exploitation versus exploration influence.
+- Policy drift.
+- Function usage proportions.
+- Alpha-parent memory.
+- Edge memory.
+- Node memory.
+- Inference success-flow summaries.
+- Null distribution behavior.
+- Participation proportions.
+- NaN and finite-value checks.
+
+---
+
+## Algorithmic Pipeline
+
+### Algorithm 1: Grammar-Guided Symbolic Discovery
+
+```text
+Input:
+    Market data X
+    Terminal feature set T
+    Initial grammar G_theta
+    Transformation function library Phi
+    Chunk schedule C_0, ..., C_K
+    Validation configuration V
+
+For each walk-forward training step:
+
+    1. Generate a symbolic population P ~ G_theta.
+
+    2. For each generated gene g in P:
+        a. Decode instruction row I_g.
+        b. Resolve parent sensors.
+        c. Compute g(t) over the active chunk.
+        d. Convert g(t) into raw emission or event mask.
+        e. Apply purge, embargo, finite, and chunk masks.
+        f. Compute observed score S_g.
+        g. Estimate fast FPC-normalized score.
+        h. If promising, run OPG MCPT.
+        i. Store p-value, z-score, participation, and diagnostics.
+
+    3. Select successful or informative expression families.
+
+    4. Backpropagate family-level quality into grammar memory.
+
+    5. Update UCB/UCT statistics and transition probabilities.
+
+    6. Save diagnostics and population records.
+
+During inference:
+
+    1. Freeze grammar updates.
+    2. Generate fresh populations from the trained grammar.
+    3. Evaluate all genes on all required chunks.
+    4. Apply success masks only after evaluation.
+    5. Summarize sequential success flow and statistical validation.
+```
+
+---
+
+## Results
+
+**CONTACT ME ABOUT STATISTICAL AND APPLICABLE RESULTS.**
+
+---
+
+## Reproducibility Notes
+
+This project is stochastic. Reproducibility requires tracking both data and random state.
+
+Important reproducibility fields include:
+
+- Dataset symbol or source.
+- Bar size.
+- Chunk size.
+- Chunk index schedule.
+- Terminal feature definitions.
+- Transformation function library version.
+- Grammar type.
+- Random seed.
+- Number of generated populations.
+- Number of genes per population.
+- Maximum depth.
+- Progressive widening parameters.
+- UCB/UCT constants.
+- Softmax temperature.
+- Purge length.
+- Embargo length.
+- Offset length.
+- OPG MCPT simulation count.
+- FPC proxy configuration.
+- Energy validation configuration.
+
+A meaningful run should save not only final candidate scores but also the metadata required to reconstruct how those candidates were generated.
+
+---
+
+## Limitations and Intended Use
+
+This repository is research infrastructure. It is not financial advice, not a production trading system, and not a guarantee of profitable market behavior.
+
+Important limitations include:
+
+1. Financial time series are non-stationary.
+2. Symbolic search spaces are extremely large.
+3. Multiple testing pressure is substantial.
+4. Backtest-like validation can be misleading if masks are incorrect.
+5. Low p-values do not automatically imply deployable trading value.
+6. Statistical structure may fail under transaction costs, slippage, changing liquidity, or regime shifts.
+7. Interpretable formulas can still overfit.
+
+The project addresses these issues through walk-forward evaluation, geometry-preserving null models, finite-population-aware scoring, and distributional validation. However, no statistical method can fully remove the risk of false discovery in adaptive search.
+
+---
+
+## Future Work
+
+Potential extensions include:
+
+- More formal multiple-comparison correction across symbolic search trajectories.
+- Stronger family-level ablation testing.
+- Explicit transaction-cost-aware objective functions.
+- Macro discovery from repeated symbolic substructures.
+- Cross-asset transfer testing.
+- Regime-conditioned grammar memory.
+- Better visualization of grammar evolution.
+- Comparison against standard genetic programming baselines.
+- Comparison against neural sequence models.
+- Enhanced energy-distance validation across multivariate diagnostic vectors.
+- Distributed computation for large null-bank generation.
+
+---
+
+## Citation and Contact
+
+This project was developed as part of an undergraduate data science capstone and an ongoing research effort in structural regression, symbolic regression, and stochastic grammar optimization.
+
+For questions, collaboration, statistical results, or applicable results, contact the project author.
+
+---
+
+## Appendix A: Core Mathematical Objects
+
+| Object | Meaning |
+|---|---|
+| $X_t$ | Market observation vector at time $t$ |
+| $C_i$ | Walk-forward chunk $i$ |
+| $g_j(t)$ | Value of symbolic gene $j$ at time $t$ |
+| $\phi_f$ | Transformation function with id $f$ |
+| $I_j$ | Instruction row for gene $j$ |
+| $M(t)$ | Valid evaluation mask |
+| $A_g(t)$ | Event or anomaly participation mask |
+| $S_g$ | Observed score for gene $g$ |
+| $S_b^*$ | Null score for simulation $b$ |
+| $p$ | Monte Carlo p-value |
+| $z$ | Null-standardized z-score |
+| $\rho$ | Participation proportion |
+| $\widehat{v}_{FPC}$ | Fitted finite-population correction variance proxy |
+| $\mathcal{E}_{n,m}$ | Energy distance estimator |
+| $Q(s,a)$ | Empirical value of grammar action $a$ from state $s$ |
+| $N(s,a)$ | Visit count for action $a$ from state $s$ |
+
+---
+
+## Appendix B: Practical Interpretation of the System
+
+A useful way to understand the system is to view it as a self-improving symbolic laboratory.
+
+A normal symbolic regression system asks:
+
+> Which formula works best?
+
+This project asks a broader question:
+
+> Which symbolic construction process repeatedly generates statistically validated formulas?
+
+That distinction is central. The final output of the project is not only a set of candidate formulas. It is also a learned grammar that encodes which kinds of symbolic structures appear worth exploring.
+
+The grammar is therefore a research object in its own right. Its learned probabilities, transition strengths, UCB/UCT memories, parent-selection tendencies, and depth-wise diagnostics all provide information about the structure of the search space.
+
+---
+
+## Appendix C: Process-Level Summary
+
+The complete process is:
+
+1. Represent market data as terminal features.
+2. Represent symbolic formulas as compact instruction rows.
+3. Construct formulas as directed acyclic graphs.
+4. Generate formulas from a stochastic grammar.
+5. Convert formula outputs into emissions or event masks.
+6. Apply purge and embargo to prevent leakage.
+7. Score observed formula behavior.
+8. Compare behavior against null distributions.
+9. Normalize fast candidate scores using an FPC proxy.
+10. Validate important candidates with OPG MCPT.
+11. Validate broader distributional behavior with energy statistics.
+12. Backpropagate expression-family quality into grammar memory.
+13. Use UCB/UCT and progressive widening to balance exploration and exploitation.
+14. Freeze the grammar for inference.
+15. Evaluate fresh inference populations across walk-forward chunks.
+16. Apply sequential success masks after all evaluations are complete.
+17. Interpret statistically validated structures cautiously and transparently.
+
+---
+
+## Appendix D: Repository Philosophy
+
+The philosophy of this repository is that interpretability and statistical validation should be part of the discovery process, not afterthoughts.
+
+A formula is not considered interesting merely because it looks good on historical data. It becomes interesting only when it survives increasingly strict tests:
+
+1. It must be computable without leakage.
+2. It must produce finite and interpretable emissions.
+3. It must have non-degenerate participation.
+4. It must score well relative to participation-aware null behavior.
+5. It must maintain behavior across walk-forward chunks.
+6. It must contribute to a grammar that improves search efficiency.
+
+This is the structural regression view: discover structure, validate structure, and learn how structure is generated.
